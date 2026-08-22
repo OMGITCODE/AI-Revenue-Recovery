@@ -7,13 +7,13 @@ webhook events and convert them into typed RevenueRisk objects.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 
 from .detector import RevenueRisk, RiskSeverity, RiskType
 from ..models.upi_models import UPIAutopayEvent, UPIFailureCode, MandateState
+from ..utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── Razorpay event type → (RiskType, base severity) ──────────────────────────
 _EVENT_RISK_MAP: dict[str, tuple[RiskType, RiskSeverity]] = {

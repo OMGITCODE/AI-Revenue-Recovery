@@ -4,12 +4,12 @@ Coordinates the full recovery workflow:
 detect → diagnose → intervene → track.
 """
 
-import structlog
 from .detector import RevenueRiskDetector, RevenueRisk
 from .diagnoser import RootCauseDiagnoser
 from .interventions import BaseIntervention, InterventionResult
+from ..utils.logger import get_logger
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class RecoveryOrchestrator:

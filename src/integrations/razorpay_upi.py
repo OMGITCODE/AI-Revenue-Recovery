@@ -23,8 +23,9 @@ from ..models.upi_models import (
     UPIFailureCode,
     UPIMandate,
 )
+from ..utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Razorpay webhook event types we care about
 WATCHED_EVENTS = {

@@ -22,8 +22,9 @@ from enum import Enum
 from .detector import RevenueRisk
 from .retry_scheduler import UPIRetryScheduler, RetryDecision
 from ..models.upi_models import UPIAutopayEvent, UPIFailureCode
+from ..utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ── Result & Type ─────────────────────────────────────────────────────────────
