@@ -11,11 +11,12 @@ from datetime import datetime
 
 class RiskType(Enum):
     """Types of revenue risk detected."""
-    PAYMENT_FAILURE = "payment_failure"
-    CHECKOUT_ABANDONMENT = "checkout_abandonment"
-    SUBSCRIPTION_FAILURE = "subscription_failure"
-    INVOICE_OVERDUE = "invoice_overdue"
-    MANDATE_FAILURE = "mandate_failure"
+    PAYMENT_FAILURE             = "payment_failure"
+    CHECKOUT_ABANDONMENT        = "checkout_abandonment"
+    SUBSCRIPTION_FAILURE        = "subscription_failure"
+    INVOICE_OVERDUE             = "invoice_overdue"
+    MANDATE_FAILURE             = "mandate_failure"
+    UPI_AUTOPAY_MANDATE_FAILURE = "upi_autopay_mandate_failure"  # UPI Autopay / e-Mandate specific
 
 
 class RiskSeverity(Enum):
