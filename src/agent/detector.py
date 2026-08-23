@@ -65,36 +65,8 @@ class RevenueRiskDetector:
         Returns:
             RevenueRisk if risk detected, None otherwise.
         """
-        event_type = event.get("event_type")
-        if not event_type:
-            return None
-
-        risk_type_map = {
-            "payment.failed": RiskType.PAYMENT_FAILURE,
-            "checkout.abandoned": RiskType.CHECKOUT_ABANDONMENT,
-            "subscription.failed": RiskType.SUBSCRIPTION_FAILURE,
-            "invoice.overdue": RiskType.INVOICE_OVERDUE,
-            "mandate.failed": RiskType.MANDATE_FAILURE,
-            "upi_autopay.failed": RiskType.UPI_AUTOPAY_MANDATE_FAILURE,
-        }
-
-        risk_type = risk_type_map.get(event_type)
-        if not risk_type:
-            return None
-
-        amount = float(event.get("amount", 0))
-        severity = RiskSeverity.HIGH if amount >= 5000 else RiskSeverity.MEDIUM
-        
-        return RevenueRisk(
-            id=event.get("id", f"evt_{int(datetime.utcnow().timestamp())}"),
-            risk_type=risk_type,
-            severity=severity,
-            amount=amount,
-            currency=event.get("currency", "INR"),
-            customer_id=event.get("customer_id", "cust_unknown"),
-            detected_at=datetime.utcnow(),
-            metadata=event.get("metadata", {})
-        )
+        # TODO: Implement risk detection logic
+        raise NotImplementedError("Risk detection logic not yet implemented")
 
     async def process_risk(self, risk: RevenueRisk):
         """Process a detected risk through registered handlers."""
