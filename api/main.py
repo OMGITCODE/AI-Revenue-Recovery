@@ -117,46 +117,6 @@ async def reset():
     return {"status": "reset"}
 
 
-@app.post("/api/custom")
-async def custom_case(request: Request):
-    """Single custom UPI event from form. Body: {vpa, bank, amount, failure_code, retry_attempt}"""
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    from api.simulator import run_custom_form
-    ev = await run_custom_form(body)
-    if not ev:
-        raise HTTPException(status_code=422, detail="Could not process — check failure code")
-    return ev.to_dict()
-
-
-@app.post("/api/upload")
-async def upload_cases(request: Request):
-    """Bulk JSON upload. Accepts a JSON array (or single object) of custom events."""
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON file")
-    from api.simulator import run_custom_form
-    items = body if isinstance(body, list) else [body]
-    if len(items) > 100:
-        raise HTTPException(status_code=400, detail="Max 100 events per upload")
-    results, errors = [], []
-    for i, item in enumerate(items):
-        try:
-            ev = await run_custom_form(item)
-            if ev:
-                results.append(ev.to_dict())
-            else:
-                errors.append({"index": i, "error": "no risk detected"})
-        except Exception as e:
-            errors.append({"index": i, "error": str(e)})
-        await asyncio.sleep(0.15)
-    return {"processed": len(results), "errors": errors, "events": results}
-
-
-
 # ── SSE Stream ────────────────────────────────────────────────────────────────
 
 @app.get("/api/stream")
