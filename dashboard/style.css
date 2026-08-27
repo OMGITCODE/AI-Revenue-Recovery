@@ -12,6 +12,7 @@
 ────────────────────────────────────────────────────────────────────────────── */
 :root {
   --nav-h:     52px;
+  /* light palette */
   --canvas:    #F4F5F7;
   --white:     #FFFFFF;
   --blue:      #3366FF;
@@ -33,6 +34,41 @@
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.06);
   --shadow-sm: 0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
   --shadow:    0 2px 8px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
+  /* table head bg */
+  --tbl-head:  #F9F9FB;
+  /* iv-block bg */
+  --iv-bg:     #FAFBFF;
+  /* code-tag bg */
+  --code-bg:   #F0F0F8;
+}
+
+/* ── Dark mode token overrides ───────────────────────────────────────────────
+   Dark surface palette inspired by GitHub dark default:
+   - Base #0D1117 · Surface #161B22 · Elevated #21262D
+────────────────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --canvas:    #0D1117;
+  --white:     #161B22;
+  --blue:      #4D8EFF;
+  --blue-dk:   #3A72E6;
+  --blue-lt:   #1A2744;
+  --text-1:    #E6EDF3;
+  --text-2:    #8B949E;
+  --text-3:    #6E7681;
+  --border:    #30363D;
+  --hover:     #1C2128;
+  --green:     #3FB884;
+  --green-lt:  #0D2E20;
+  --red:       #F85149;
+  --red-lt:    #2D1117;
+  --amber:     #E3B341;
+  --amber-lt:  #2D200A;
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow:    0 2px 8px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+  --tbl-head:  #21262D;
+  --iv-bg:     #1C2128;
+  --code-bg:   #2D333B;
 }
 
 html, body {
@@ -45,6 +81,12 @@ html, body {
   background: var(--canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* apply transition to all major surfaces */
+.nav, .card, .kpi, .drawer, .iv-block, .tbl thead, .tbl td, .tbl th {
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 
 /* ── Top Navigation ──────────────────────────────────────────────────────────
@@ -174,6 +216,29 @@ html, body {
 
 .btn-nav:hover { background: var(--blue-dk); border-color: var(--blue-dk); }
 
+/* ── Theme toggle button ───────────────────────────────────────────────────────────────────── */
+.btn-theme {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-theme:hover {
+  background: var(--hover);
+  border-color: var(--blue);
+}
+
 /* ── Main layout ─────────────────────────────────────────────────────────────
    Razorpay dashboard: content starts below fixed nav, fills remaining height
 ────────────────────────────────────────────────────────────────────────────── */
@@ -299,7 +364,7 @@ html, body {
 .tbl thead {
   position: sticky;
   top: 0;
-  background: #F9F9FB;
+  background: var(--tbl-head);
   z-index: 1;
 }
 
@@ -379,7 +444,7 @@ html, body {
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #F0F0F8;
+  background: var(--code-bg);
   color: var(--text-2);
   letter-spacing: 0.02em;
 }
@@ -675,7 +740,7 @@ html, body {
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   margin-bottom: 8px;
-  background: #FAFBFF;
+  background: var(--iv-bg);
 }
 
 .iv-block-type {
