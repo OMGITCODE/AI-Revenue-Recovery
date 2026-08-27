@@ -71,6 +71,15 @@
   --code-bg:   #2D333B;
 }
 
+/* Dark mode: fix bottom-fade gradient so it uses dark card surface */
+[data-theme="dark"] .table-scroll-wrap::after {
+  background: linear-gradient(to bottom, transparent, #161B22);
+}
+[data-theme="dark"] .table-scroll::-webkit-scrollbar-track { background: #0D1117; }
+[data-theme="dark"] .table-scroll::-webkit-scrollbar-thumb { background: #3D4450; border-color: #0D1117; }
+[data-theme="dark"] .table-scroll::-webkit-scrollbar-thumb:hover { background: #5A6070; }
+[data-theme="dark"] .table-scroll { scrollbar-color: #3D4450 #0D1117; }
+
 html, body {
   height: 100%;
   overflow: hidden;
@@ -350,8 +359,8 @@ html, body {
    Razorpay table style: sticky header on #F9F9FB, tight rows, hover #FAFBFF
 ────────────────────────────────────────────────────────────────────────────── */
 .table-scroll {
-  flex: 1;
   overflow-y: auto;
+  flex: 1;
   min-height: 0;
 }
 
@@ -1046,8 +1055,49 @@ html, body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+/* ── Scrollbar ─────────────────────────────────────────────────────────────────────── */
+
+/* Global — thin, for modals/drawers */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D0D0E0; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #B0B0CC; }
+::-webkit-scrollbar-thumb { background: #C8C8DC; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #A0A0BC; }
+
+/* Events table — wider & clearly visible */
+.table-scroll::-webkit-scrollbar { width: 8px; }
+.table-scroll::-webkit-scrollbar-track {
+  background: var(--canvas);
+  border-radius: 0 0 var(--radius) 0;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #B0B8D0;
+  border-radius: 99px;
+  border: 2px solid var(--canvas);
+}
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #8890B0; }
+
+/* Scroll hint: fading shadow at bottom of table when content overflows */
+.table-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-scroll-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 8px; /* don't cover scrollbar */
+  height: 48px;
+  background: linear-gradient(to bottom, transparent, var(--white));
+  pointer-events: none;
+  border-radius: 0 0 var(--radius) 0;
+  transition: opacity 0.2s;
+}
+
+/* Firefox scrollbar */
+.table-scroll { scrollbar-width: thin; scrollbar-color: #B0B8D0 var(--canvas); }
