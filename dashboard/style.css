@@ -80,9 +80,15 @@
 [data-theme="dark"] .table-scroll::-webkit-scrollbar-thumb:hover { background: #5A6070; }
 [data-theme="dark"] .table-scroll { scrollbar-color: #3D4450 #0D1117; }
 
-html, body {
+html {
   height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   line-height: 1.5;
@@ -249,22 +255,22 @@ html, body {
 }
 
 /* ── Scenario button shimmer sweep on hover ──────────────────────────────────── */
-.sc-btn {
-  position: relative;
-  overflow: hidden;
-}
-
+/* Note: sc-btn already has position:relative + overflow:hidden from the base rule */
 .sc-btn::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 0;        /* below the flex children */
   background: linear-gradient(90deg, transparent 0%, rgba(51,102,255,0.07) 50%, transparent 100%);
-  transform: translateX(-100%);
+  transform: translateX(-110%);
   pointer-events: none;
 }
 
+/* push all direct children above the shimmer */
+.sc-btn > * { position: relative; z-index: 1; }
+
 .sc-btn:hover::before {
-  transform: translateX(100%);
+  transform: translateX(110%);
   transition: transform 0.5s ease;
 }
 
@@ -351,10 +357,10 @@ html, body {
 ────────────────────────────────────────────────────────────────────────────── */
 .page {
   margin-top: var(--nav-h);
-  height: calc(100vh - var(--nav-h));
+  min-height: calc(100vh - var(--nav-h));
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  padding-bottom: 24px;
 }
 
 /* ── Metrics strip ───────────────────────────────────────────────────────────
@@ -411,10 +417,8 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 300px;
   gap: 12px;
-  padding: 12px 24px 16px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  padding: 12px 24px 0;
+  align-items: start;
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────────
@@ -427,8 +431,6 @@ html, body {
   box-shadow: var(--shadow-xs);
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .card-header {
@@ -458,8 +460,7 @@ html, body {
 ────────────────────────────────────────────────────────────────────────────── */
 .table-scroll {
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  max-height: 60vh;   /* tall enough to show many rows, still scrollable */
 }
 
 .tbl {
@@ -604,15 +605,12 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 0;
-  overflow: hidden;
+  /* no overflow:hidden — let it be natural height */
 }
 
 .simulator-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 /* ── Scenario buttons ────────────────────────────────────────────────────────
@@ -620,13 +618,11 @@ html, body {
    No heavy borders. Very subtle background on hover
 ────────────────────────────────────────────────────────────────────────────── */
 .scenarios {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  /* natural height — no overflow clipping */
 }
 
 .sc-btn {
@@ -1189,11 +1185,6 @@ html, body {
 /* Scroll hint: fading shadow at bottom of table when content overflows */
 .table-scroll-wrap {
   position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
 .table-scroll-wrap::after {
