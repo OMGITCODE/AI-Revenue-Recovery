@@ -1,0 +1,362 @@
+[
+  {
+    "scenario_name": "Rahul SBI — Salary crunch, missed OTT",
+    "failure_code": "U30",
+    "vpa": "rahul.sharma@oksbi",
+    "bank": "SBI",
+    "amount": 649,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Priya HDFC — Revoked mandate, Netflix",
+    "failure_code": "BT01",
+    "vpa": "priya.mehta@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 499,
+    "mandate_state": "revoked",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Arjun ICICI — Timeout, third EMI retry",
+    "failure_code": "TM",
+    "vpa": "arjun.nair@okicici",
+    "bank": "ICICI",
+    "amount": 8500,
+    "mandate_state": "active",
+    "retry_attempt": 3
+  },
+  {
+    "scenario_name": "Meera Axis — Daily limit, Swiggy Instamart",
+    "failure_code": "U69",
+    "vpa": "meera.iyer@okaxis",
+    "bank": "Axis",
+    "amount": 2999,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Vikram Yes Bank — Expired mandate, insurance",
+    "failure_code": "BT02",
+    "vpa": "vikram.patel@ybl",
+    "bank": "Yes Bank",
+    "amount": 3200,
+    "mandate_state": "expired",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Anita Paytm — Paused mandate, gym membership",
+    "failure_code": "U13",
+    "vpa": "anita.roy@paytm",
+    "bank": "Paytm Payments Bank",
+    "amount": 1499,
+    "mandate_state": "paused",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Deepak Kotak — Account frozen, car EMI",
+    "failure_code": "BA",
+    "vpa": "deepak.joshi@kotak",
+    "bank": "Kotak",
+    "amount": 14250,
+    "mandate_state": "active",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Sunita Axis — Weekly limit, mutual fund SIP",
+    "failure_code": "U66",
+    "vpa": "sunita.gupta@okaxis",
+    "bank": "Axis",
+    "amount": 5000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Ravi SBI — Amount exceeds mandate, Zepto",
+    "failure_code": "U29",
+    "vpa": "ravi.kumar@oksbi",
+    "bank": "SBI",
+    "amount": 1200,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Kavita HDFC — Account blocked, home loan EMI",
+    "failure_code": "XB",
+    "vpa": "kavita.singh@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 22000,
+    "mandate_state": "active",
+    "retry_attempt": 2
+  },
+  {
+    "scenario_name": "Amit ICICI — Bank declined, education EMI",
+    "failure_code": "RB",
+    "vpa": "amit.verma@okicici",
+    "bank": "ICICI",
+    "amount": 7500,
+    "mandate_state": "active",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Neha IDFC — Transaction expired, Hotstar",
+    "failure_code": "TE",
+    "vpa": "neha.reddy@idfcbank",
+    "bank": "IDFC First",
+    "amount": 299,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Rajesh SBI — Monthly limit, multiple subscriptions",
+    "failure_code": "U64",
+    "vpa": "rajesh.rao@oksbi",
+    "bank": "SBI",
+    "amount": 999,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Pooja PNB — Revoked mandate, Spotify",
+    "failure_code": "BT01",
+    "vpa": "pooja.sharma@pnb",
+    "bank": "Punjab National Bank",
+    "amount": 119,
+    "mandate_state": "revoked",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Suresh Yes Bank — Insufficient funds, two-wheeler EMI",
+    "failure_code": "U30",
+    "vpa": "suresh.pillai@ybl",
+    "bank": "Yes Bank",
+    "amount": 4800,
+    "mandate_state": "active",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Lakshmi Airtel — Account mismatch, health insurance",
+    "failure_code": "AM",
+    "vpa": "lakshmi.v@airtel",
+    "bank": "Airtel Payments Bank",
+    "amount": 2100,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Nikhil Kotak — Tech timeout, Reliance Jio bill",
+    "failure_code": "TM",
+    "vpa": "nikhil.mehta@kotak",
+    "bank": "Kotak",
+    "amount": 699,
+    "mandate_state": "active",
+    "retry_attempt": 2
+  },
+  {
+    "scenario_name": "Shreya HDFC — Expired mandate, Amazon Prime",
+    "failure_code": "BT02",
+    "vpa": "shreya.kapoor@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 179,
+    "mandate_state": "expired",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Kiran SBI — Daily limit, Blinkit groceries",
+    "failure_code": "U69",
+    "vpa": "kiran.babu@oksbi",
+    "bank": "SBI",
+    "amount": 1800,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Divya ICICI — Paused mandate, personal loan EMI",
+    "failure_code": "U13",
+    "vpa": "divya.soni@okicici",
+    "bank": "ICICI",
+    "amount": 9200,
+    "mandate_state": "paused",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Manish Axis — Insufficient funds, Zerodha SIP",
+    "failure_code": "U30",
+    "vpa": "manish.tiwari@okaxis",
+    "bank": "Axis",
+    "amount": 10000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Ananya IDFC — Bank declined, YouTube Premium",
+    "failure_code": "RB",
+    "vpa": "ananya.ghosh@idfcbank",
+    "bank": "IDFC First",
+    "amount": 189,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Sanjay SBI — Account frozen, credit card auto-pay",
+    "failure_code": "BA",
+    "vpa": "sanjay.mishra@oksbi",
+    "bank": "SBI",
+    "amount": 18000,
+    "mandate_state": "active",
+    "retry_attempt": 2
+  },
+  {
+    "scenario_name": "Priyanka Paytm — Revoked mandate, Zomato Gold",
+    "failure_code": "BT01",
+    "vpa": "priyanka.das@paytm",
+    "bank": "Paytm Payments Bank",
+    "amount": 299,
+    "mandate_state": "revoked",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Rohan HDFC — Amount exceeds limit, MF SIP top-up",
+    "failure_code": "U29",
+    "vpa": "rohan.jain@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 25000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Aditi ICICI — Salary crunch, mobile bill auto-pay",
+    "failure_code": "U30",
+    "vpa": "aditi.kulkarni@okicici",
+    "bank": "ICICI",
+    "amount": 399,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Vijay Yes Bank — Tech timeout, NPS contribution",
+    "failure_code": "TM",
+    "vpa": "vijay.nambiar@ybl",
+    "bank": "Yes Bank",
+    "amount": 5000,
+    "mandate_state": "active",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Sonal Kotak — Weekly limit, delivery app wallet top-up",
+    "failure_code": "U66",
+    "vpa": "sonal.shah@kotak",
+    "bank": "Kotak",
+    "amount": 3000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Arun SBI — Expired mandate, electricity bill",
+    "failure_code": "BT02",
+    "vpa": "arun.krishna@oksbi",
+    "bank": "SBI",
+    "amount": 1450,
+    "mandate_state": "expired",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Bhavna Axis — Account blocked, ELSS SIP",
+    "failure_code": "XB",
+    "vpa": "bhavna.trivedi@okaxis",
+    "bank": "Axis",
+    "amount": 15000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Gaurav HDFC — Transaction expired, Coursera",
+    "failure_code": "TE",
+    "vpa": "gaurav.pandey@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 4500,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Tejal ICICI — Monthly limit breach, multiple EMIs",
+    "failure_code": "U64",
+    "vpa": "tejal.desai@okicici",
+    "bank": "ICICI",
+    "amount": 12000,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Harish IDFC — Paused mandate, Cleartrip membership",
+    "failure_code": "U13",
+    "vpa": "harish.varma@idfcbank",
+    "bank": "IDFC First",
+    "amount": 2499,
+    "mandate_state": "paused",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Nidhi Paytm — Account mismatch, EV charging subscription",
+    "failure_code": "AM",
+    "vpa": "nidhi.agarwal@paytm",
+    "bank": "Paytm Payments Bank",
+    "amount": 999,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Chirag SBI — Insufficient funds, PPF auto-debit",
+    "failure_code": "U30",
+    "vpa": "chirag.patel@oksbi",
+    "bank": "SBI",
+    "amount": 12500,
+    "mandate_state": "active",
+    "retry_attempt": 2
+  },
+  {
+    "scenario_name": "Pallavi Yes Bank — Revoked mandate, FitPass",
+    "failure_code": "BT01",
+    "vpa": "pallavi.bose@ybl",
+    "bank": "Yes Bank",
+    "amount": 1299,
+    "mandate_state": "revoked",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Santosh Kotak — Bank declined, stock broker fees",
+    "failure_code": "RB",
+    "vpa": "santosh.rao@kotak",
+    "bank": "Kotak",
+    "amount": 799,
+    "mandate_state": "active",
+    "retry_attempt": 1
+  },
+  {
+    "scenario_name": "Deepika HDFC — Tech timeout, health app premium",
+    "failure_code": "TM",
+    "vpa": "deepika.menon@okhdfcbank",
+    "bank": "HDFC",
+    "amount": 549,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Siddharth Axis — Daily limit, gaming subscription",
+    "failure_code": "U69",
+    "vpa": "siddharth.k@okaxis",
+    "bank": "Axis",
+    "amount": 999,
+    "mandate_state": "active",
+    "retry_attempt": 0
+  },
+  {
+    "scenario_name": "Tanvi SBI — Expired mandate, life insurance premium",
+    "failure_code": "BT02",
+    "vpa": "tanvi.srivastava@oksbi",
+    "bank": "SBI",
+    "amount": 6800,
+    "mandate_state": "expired",
+    "retry_attempt": 0
+  }
+]
