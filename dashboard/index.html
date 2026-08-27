@@ -234,6 +234,119 @@
     </div><!-- /right-col -->
   </div><!-- /content -->
 
+  <!-- ── Second row: Promise-to-Pay + Checkout Drop-off ────────────────────── -->
+  <div class="content content-2col" style="margin-top:12px;">
+
+    <!-- Promise-to-Pay Tracker -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🤝 Promise-to-Pay Tracker</div>
+          <div class="card-sub">Customer commitments — guardrails suppress nudges while active</div>
+        </div>
+        <div class="module-stats" id="p2p-stats-bar">
+          <span class="stat-chip chip-blue"  id="p2p-pending">0 pending</span>
+          <span class="stat-chip chip-green" id="p2p-fulfilled">0 fulfilled</span>
+          <span class="stat-chip chip-red"   id="p2p-broken">0 broken</span>
+        </div>
+      </div>
+      <div class="module-table-wrap">
+        <table class="tbl" id="p2p-tbl">
+          <thead>
+            <tr>
+              <th>ID</th><th>Customer VPA</th><th>Amount</th><th>Deadline</th><th>Channel</th><th>Status</th><th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="p2p-tbody">
+            <tr><td colspan="7"><div class="empty-state"><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Checkout Drop-off Recovery -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🛒 Checkout Drop-off Recovery</div>
+          <div class="card-sub">Abandoned checkouts recovered via Hinglish nudges</div>
+        </div>
+        <div class="module-stats" id="checkout-stats-bar">
+          <span class="stat-chip chip-blue"  id="chk-total">0 sessions</span>
+          <span class="stat-chip chip-green" id="chk-recovered">0 recovered</span>
+          <span class="stat-chip chip-amber" id="chk-nudges">0 nudges</span>
+        </div>
+      </div>
+      <div class="module-table-wrap">
+        <table class="tbl" id="chk-tbl">
+          <thead>
+            <tr>
+              <th>Session</th><th>VPA</th><th>Cart ₹</th><th>Reason</th><th>Status</th><th>Hinglish Message</th>
+            </tr>
+          </thead>
+          <tbody id="chk-tbody">
+            <tr><td colspan="6"><div class="empty-state"><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content-2col -->
+
+  <!-- ── Third row: B2B Receivables Chaser (full width) ───────────────────── -->
+  <div class="content content-full" style="margin-top:12px;">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🏢 B2B Receivables Chaser</div>
+          <div class="card-sub">Aging buckets · Tiered escalation · Hinglish IVR for Tier C</div>
+        </div>
+        <div class="module-stats" id="b2b-stats-bar">
+          <span class="stat-chip chip-blue"  id="b2b-total">0 invoices</span>
+          <span class="stat-chip chip-red"   id="b2b-outstanding">₹0 outstanding</span>
+          <span class="stat-chip chip-amber" id="b2b-escalated">0 escalated</span>
+        </div>
+      </div>
+
+      <!-- Aging bucket bars -->
+      <div class="aging-buckets" id="aging-buckets">
+        <div class="aging-bucket" id="bucket-0-30">
+          <div class="aging-label"><span class="aging-dot dot-green"></span>0–30 days</div>
+          <div class="aging-bar-wrap"><div class="aging-bar bar-green" id="aging-bar-0-30" style="width:0%"></div></div>
+          <div class="aging-meta" id="aging-meta-0-30">0 invoices · ₹0</div>
+        </div>
+        <div class="aging-bucket" id="bucket-31-60">
+          <div class="aging-label"><span class="aging-dot dot-amber"></span>31–60 days</div>
+          <div class="aging-bar-wrap"><div class="aging-bar bar-amber" id="aging-bar-31-60" style="width:0%"></div></div>
+          <div class="aging-meta" id="aging-meta-31-60">0 invoices · ₹0</div>
+        </div>
+        <div class="aging-bucket" id="bucket-61-90">
+          <div class="aging-label"><span class="aging-dot dot-orange"></span>61–90 days</div>
+          <div class="aging-bar-wrap"><div class="aging-bar bar-orange" id="aging-bar-61-90" style="width:0%"></div></div>
+          <div class="aging-meta" id="aging-meta-61-90">0 invoices · ₹0</div>
+        </div>
+        <div class="aging-bucket" id="bucket-90plus">
+          <div class="aging-label"><span class="aging-dot dot-red"></span>90+ days</div>
+          <div class="aging-bar-wrap"><div class="aging-bar bar-red" id="aging-bar-90plus" style="width:0%"></div></div>
+          <div class="aging-meta" id="aging-meta-90plus">0 invoices · ₹0</div>
+        </div>
+      </div>
+
+      <div class="module-table-wrap">
+        <table class="tbl" id="b2b-tbl">
+          <thead>
+            <tr>
+              <th>Invoice</th><th>Debtor</th><th>Amount</th><th>Days Overdue</th><th>Bucket</th><th>Tier</th><th>Interest</th><th>Status</th><th>Last Action</th>
+            </tr>
+          </thead>
+          <tbody id="b2b-tbody">
+            <tr><td colspan="9"><div class="empty-state"><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /content-full -->
+
 </div><!-- /page -->
 
 <!-- ── Drawer ─────────────────────────────────────────────────────────────── -->

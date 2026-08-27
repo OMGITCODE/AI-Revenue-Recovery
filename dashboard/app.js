@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadInitial();
   connectSSE();
+  loadModules();                         // load P2P, Checkout, B2B
+  setInterval(loadModules, 15_000);      // refresh every 15s
 });
 
 // ── Initial load ──────────────────────────────────────────────────────────────
@@ -501,4 +503,187 @@ async function fireNextAutoDemo() {
   if (_autoDemoActive) {
     _autoDemoTimer = setTimeout(fireNextAutoDemo, AUTO_DEMO_INTERVAL);
   }
+}
+
+// ── Module Panels: Promise-to-Pay, Checkout, B2B ─────────────────────────────
+
+async function loadModules() {
+  await Promise.allSettled([loadP2P(), loadCheckout(), loadB2B()]);
+}
+
+// ── Promise-to-Pay ────────────────────────────────────────────────────────────
+
+async function loadP2P() {
+  try {
+    const res  = await fetch('/api/promises');
+    const data = await res.json();
+    renderP2PStats(data.stats);
+    renderP2PTable(data.promises);
+  } catch (e) { console.warn('P2P load failed', e); }
+}
+
+function renderP2PStats(s) {
+  set('p2p-pending',   `${s.pending}   pending`);
+  set('p2p-fulfilled', `${s.fulfilled} fulfilled`);
+  set('p2p-broken',    `${s.broken}    broken`);
+}
+
+function renderP2PTable(promises) {
+  const tbody = document.getElementById('p2p-tbody');
+  if (!tbody) return;
+  if (!promises.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No promises recorded yet</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = promises.map(p => {
+    const deadline = new Date(p.deadline).toLocaleString('en-IN', {
+      day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true
+    });
+    const overdue  = p.is_overdue ? ' ⚠️' : '';
+    const statusCls = `p2p-${p.status}`;
+    return `<tr>
+      <td class="mono fw6">${p.promise_id}</td>
+      <td>${p.vpa}</td>
+      <td class="fw6">${fmtInr(p.amount)}</td>
+      <td class="${p.is_overdue ? 'status-err' : 'muted'}">${deadline}${overdue}</td>
+      <td class="muted">${p.channel}</td>
+      <td class="${statusCls}">${p.status.toUpperCase()}</td>
+      <td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.notes}">${p.notes || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Checkout Drop-off ─────────────────────────────────────────────────────────
+
+async function loadCheckout() {
+  try {
+    const res  = await fetch('/api/checkout');
+    const data = await res.json();
+    renderCheckoutStats(data.stats);
+    renderCheckoutTable(data.sessions);
+  } catch (e) { console.warn('Checkout load failed', e); }
+}
+
+function renderCheckoutStats(s) {
+  set('chk-total',     `${s.total_sessions} sessions`);
+  set('chk-recovered', `${s.recovered} recovered`);
+  set('chk-nudges',    `${s.nudges_sent} nudges sent`);
+}
+
+const REASON_LABELS = {
+  payment_page_exit:    'Payment exit',
+  otp_timeout:          'OTP timeout',
+  bank_error_exit:      'Bank error',
+  upi_intent_abandoned: 'UPI abandoned',
+  address_form_exit:    'Address exit',
+  session_expired:      'Session expired',
+  unknown:              'Unknown',
+};
+
+const CHK_STATUS_CLS = {
+  open:      'muted',
+  contacted: 'p2p-pending',
+  recovered: 'status-ok',
+  expired:   'status-err',
+};
+
+function renderCheckoutTable(sessions) {
+  const tbody = document.getElementById('chk-tbody');
+  if (!tbody) return;
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No drop-off sessions yet</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = sessions.map(s => {
+    const reason = REASON_LABELS[s.drop_off_reason] || s.drop_off_reason;
+    const stCls  = CHK_STATUS_CLS[s.status] || 'muted';
+    return `<tr>
+      <td class="mono fw6">${s.session_id}</td>
+      <td>${s.customer_vpa}</td>
+      <td class="fw6">${fmtInr(s.cart_amount)}</td>
+      <td><span class="reason-badge">${reason}</span></td>
+      <td class="${stCls}">${s.status.toUpperCase()}</td>
+      <td><span class="chk-msg" title="${s.recovery_message}">${s.recovery_message || '—'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── B2B Receivables ───────────────────────────────────────────────────────────
+
+async function loadB2B() {
+  try {
+    const res  = await fetch('/api/b2b');
+    const data = await res.json();
+    renderB2BStats(data.stats);
+    renderAgingBuckets(data.stats.buckets);
+    renderB2BTable(data.receivables);
+  } catch (e) { console.warn('B2B load failed', e); }
+}
+
+function renderB2BStats(s) {
+  set('b2b-total',       `${s.total} invoices`);
+  set('b2b-outstanding', fmtInr(s.total_outstanding));
+  set('b2b-escalated',   `${s.escalated} escalated`);
+}
+
+function renderAgingBuckets(buckets) {
+  if (!buckets) return;
+  const maxAmt = Math.max(...Object.values(buckets).map(b => b.amount), 1);
+  const maps   = {
+    '0-30d':  { barId: 'aging-bar-0-30',  metaId: 'aging-meta-0-30' },
+    '31-60d': { barId: 'aging-bar-31-60', metaId: 'aging-meta-31-60' },
+    '61-90d': { barId: 'aging-bar-61-90', metaId: 'aging-meta-61-90' },
+    '90d+':   { barId: 'aging-bar-90plus',metaId: 'aging-meta-90plus' },
+  };
+  for (const [key, {barId, metaId}] of Object.entries(maps)) {
+    const b    = buckets[key] || {count:0, amount:0};
+    const pct  = Math.round(b.amount / maxAmt * 100);
+    const bar  = document.getElementById(barId);
+    const meta = document.getElementById(metaId);
+    if (bar)  bar.style.width  = pct + '%';
+    if (meta) meta.textContent = `${b.count} invoice${b.count !== 1 ? 's' : ''} · ${fmtInr(b.amount)}`;
+  }
+}
+
+const BUCKET_CLS = {
+  '0-30d':  'bucket-0-30',
+  '31-60d': 'bucket-31-60',
+  '61-90d': 'bucket-61-90',
+  '90d+':   'bucket-90plus',
+};
+
+const B2B_STATUS_CLS = {
+  active:    'muted',
+  promised:  'p2p-pending',
+  escalated: 'status-err',
+  settled:   'status-ok',
+  written_off: 'muted',
+};
+
+function renderB2BTable(receivables) {
+  const tbody = document.getElementById('b2b-tbody');
+  if (!tbody) return;
+  if (!receivables.length) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><p>No receivables loaded</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = receivables.map(r => {
+    const bucketCls = BUCKET_CLS[r.aging_bucket] || '';
+    const tierCls   = `tier-${r.debtor_tier.toLowerCase()}`;
+    const stCls     = B2B_STATUS_CLS[r.status] || 'muted';
+    const lastAct   = r.actions && r.actions.length
+      ? `<span class="muted" title="${r.actions[r.actions.length-1].message}">${r.actions[r.actions.length-1].channel}</span>`
+      : '<span class="muted">—</span>';
+    return `<tr>
+      <td class="mono fw6">${r.invoice_number}</td>
+      <td>${r.debtor_name}</td>
+      <td class="fw6">${fmtInr(r.amount)}</td>
+      <td class="${r.days_overdue > 60 ? 'status-err' : r.days_overdue > 30 ? 'p2p-pending' : 'muted'}">${r.days_overdue}d</td>
+      <td><span class="bucket-badge ${bucketCls}">${r.aging_bucket}</span></td>
+      <td class="${tierCls}">Tier ${r.debtor_tier}</td>
+      <td class="muted">${fmtInr(r.interest_accrued)}</td>
+      <td class="${stCls}">${r.status.toUpperCase()}</td>
+      <td>${lastAct}</td>
+    </tr>`;
+  }).join('');
 }
