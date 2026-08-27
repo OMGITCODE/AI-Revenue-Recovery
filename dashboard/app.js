@@ -59,13 +59,13 @@ function connectSSE() {
 
 // ── Stats sync ────────────────────────────────────────────────────────────────
 function syncStats(s) {
-  set('kpi-recovered',     fmtInr(s.total_recovered));
-  set('kpi-events',        `${s.total_events} events processed`);
-  set('kpi-rate',          s.total_events ? s.success_rate + '%' : '—');
-  set('kpi-success-detail',`${s.successful} handled · ${s.failed} failed`);
-  set('kpi-retries',       s.retries_scheduled);
-  set('kpi-renewals',      s.renewals_sent);
-  set('kpi-escalations',   s.escalations);
+  animCount('kpi-recovered',     s.total_recovered, true);
+  set('kpi-events',              `${s.total_events} events processed`);
+  set('kpi-rate',                s.total_events ? s.success_rate + '%' : '—');
+  set('kpi-success-detail',      `${s.successful} handled · ${s.failed} failed`);
+  animCount('kpi-retries',       s.retries_scheduled);
+  animCount('kpi-renewals',      s.renewals_sent);
+  animCount('kpi-escalations',   s.escalations);
 
   const tot = s.total_events || 1;
   bar('retry',     s.retries_scheduled, tot);
@@ -73,6 +73,44 @@ function syncStats(s) {
   bar('renewal',   s.renewals_sent,     tot);
   bar('whatsapp',  s.whatsapp_sent,     tot);
   bar('escalation',s.escalations,       tot);
+}
+
+// Animate a KPI number rolling up to the new value
+function animCount(id, target, isMoney = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  // Parse current displayed value
+  const raw   = el.textContent.replace(/[^\d.]/g, '');
+  const start = parseFloat(raw) || 0;
+  if (start === target) return;           // no change
+
+  // Trigger pop + glow
+  el.classList.remove('pop');
+  void el.offsetWidth;                    // reflow
+  el.classList.add('pop');
+  setTimeout(() => el.classList.remove('pop'), 450);
+
+  const kpiCard = el.closest('.kpi');
+  if (kpiCard) {
+    kpiCard.classList.remove('updated');
+    void kpiCard.offsetWidth;
+    kpiCard.classList.add('updated');
+    setTimeout(() => kpiCard.classList.remove('updated'), 900);
+  }
+
+  // Roll up counter
+  const duration = 600;
+  const startTime = performance.now();
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+  function tick(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const cur = start + (target - start) * easeOut(t);
+    el.textContent = isMoney ? fmtInr(Math.round(cur)) : Math.round(cur);
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 function bar(key, val, tot) {
@@ -96,7 +134,8 @@ function prependRow(ev) {
   if (empty) empty.remove();
 
   const row = makeRow(ev);
-  row.classList.add('row-in');
+  row.classList.add('row-in', 'row-flash');
+  setTimeout(() => { row.classList.remove('row-in', 'row-flash'); }, 1400);
   tbody.insertBefore(row, tbody.firstChild);
 }
 
@@ -416,5 +455,50 @@ async function submitJsonUpload() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '&#9654;&nbsp; Run JSON Scenario';
+  }
+}
+
+// ── Auto Demo ─────────────────────────────────────────────────────────────────
+// Cycles through all scenarios automatically — great for live hackathon demos
+const AUTO_DEMO_KEYS     = ['u30', 'bt01', 'tm', 'u69', 'bt02', 'u13'];
+const AUTO_DEMO_INTERVAL = 3500; // ms between events
+
+let _autoDemoTimer  = null;
+let _autoDemoIdx    = 0;
+let _autoDemoActive = false;
+
+function toggleAutoDemo() {
+  const btn = document.getElementById('auto-demo-btn');
+  if (_autoDemoActive) {
+    // Stop
+    clearTimeout(_autoDemoTimer);
+    _autoDemoTimer  = null;
+    _autoDemoActive = false;
+    btn.innerHTML   = '&#9654; Auto Demo';
+    btn.classList.remove('running');
+    toast('Auto demo stopped', 'ok');
+  } else {
+    // Start
+    _autoDemoActive = true;
+    _autoDemoIdx    = 0;
+    btn.innerHTML   = '&#9646;&#9646; Stop Demo';
+    btn.classList.add('running');
+    toast('Auto demo started — scenarios firing every 3.5s', 'ok');
+    fireNextAutoDemo();
+  }
+}
+
+async function fireNextAutoDemo() {
+  if (!_autoDemoActive) return;
+
+  const key = AUTO_DEMO_KEYS[_autoDemoIdx % AUTO_DEMO_KEYS.length];
+  _autoDemoIdx++;
+
+  try {
+    await fetch(`/api/simulate/${key}`, { method: 'POST' });
+  } catch (e) { /* ignore — SSE will handle display */ }
+
+  if (_autoDemoActive) {
+    _autoDemoTimer = setTimeout(fireNextAutoDemo, AUTO_DEMO_INTERVAL);
   }
 }
