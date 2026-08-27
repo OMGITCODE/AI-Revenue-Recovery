@@ -280,3 +280,141 @@ function ivName(iv) {
     escalation:       'Escalated',
   }[iv] || iv;
 }
+
+// ── Custom Scenario Modal ─────────────────────────────────────────────────────
+let _jsonPayload = null;
+
+function openCreateModal() {
+  document.getElementById('create-modal').classList.add('open');
+  document.getElementById('create-backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreateModal() {
+  document.getElementById('create-modal').classList.remove('open');
+  document.getElementById('create-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeCreateModal();
+});
+
+function switchTab(tab) {
+  ['form', 'json'].forEach(t => {
+    document.getElementById(`mpanel-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`mtab-${t}`).classList.toggle('active', t === tab);
+  });
+}
+
+// ── Form submit ───────────────────────────────────────────────────────────────
+async function submitCustomForm(e) {
+  e.preventDefault();
+  const btn = document.getElementById('cf-submit');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+
+  const payload = {
+    scenario_name: document.getElementById('cf-name').value,
+    failure_code:  document.getElementById('cf-code').value,
+    vpa:           document.getElementById('cf-vpa').value,
+    bank:          document.getElementById('cf-bank').value,
+    amount:        parseFloat(document.getElementById('cf-amount').value),
+    mandate_state: document.getElementById('cf-state').value,
+    retry_attempt: parseInt(document.getElementById('cf-retry').value, 10),
+  };
+
+  try {
+    const res = await fetch('/api/custom', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || res.statusText);
+    }
+    const data = await res.json();
+    toast(`✓ "${payload.scenario_name}" processed`, 'ok');
+    closeCreateModal();
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#9654;&nbsp; Run Scenario';
+  }
+}
+
+// ── JSON Upload / Drop zone ───────────────────────────────────────────────────
+function dzDragover(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+
+function dzDragleave(e) {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+}
+
+function dzDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadJsonFile(file);
+}
+
+function dzFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadJsonFile(file);
+}
+
+function loadJsonFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      _jsonPayload = parsed;
+      document.getElementById('json-filename').textContent = file.name;
+      document.getElementById('json-pre').textContent = JSON.stringify(parsed, null, 2);
+      document.getElementById('json-preview').classList.remove('hidden');
+      document.getElementById('json-submit').disabled = false;
+    } catch {
+      toast('Invalid JSON file', 'err');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearJsonFile() {
+  _jsonPayload = null;
+  document.getElementById('json-preview').classList.add('hidden');
+  document.getElementById('json-submit').disabled = true;
+  document.getElementById('json-file-input').value = '';
+}
+
+async function submitJsonUpload() {
+  if (!_jsonPayload) return;
+  const btn = document.getElementById('json-submit');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+
+  try {
+    const res = await fetch('/api/custom', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(_jsonPayload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || res.statusText);
+    }
+    toast(`✓ JSON scenario processed`, 'ok');
+    closeCreateModal();
+    clearJsonFile();
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#9654;&nbsp; Run JSON Scenario';
+  }
+}

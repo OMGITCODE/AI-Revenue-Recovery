@@ -183,9 +183,14 @@
 
         </div>
 
-        <button class="run-all-btn" id="run-all-btn" onclick="runAll()">
-          ▶&nbsp; Run All Scenarios
-        </button>
+        <div class="sim-footer">
+          <button class="run-all-btn" id="run-all-btn" onclick="runAll()">
+            &#9654;&nbsp; Run All
+          </button>
+          <button class="create-sc-btn" onclick="openCreateModal()" title="Create custom scenario">
+            + Create
+          </button>
+        </div>
       </div>
 
       <!-- Intervention breakdown -->
@@ -238,6 +243,153 @@
     <button class="btn-ghost" onclick="closeDrawer()">✕ Close</button>
   </div>
   <div class="drawer-body" id="drawer-body"></div>
+</div>
+
+<!-- ── Custom Scenario Modal ─────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="create-backdrop" onclick="closeCreateModal()"></div>
+<div class="modal" id="create-modal" role="dialog" aria-modal="true" aria-labelledby="modal-heading">
+
+  <div class="modal-head">
+    <div>
+      <div class="modal-title" id="modal-heading">Create Custom Scenario</div>
+      <div class="modal-sub">Build your own UPI failure event and run it through the agent</div>
+    </div>
+    <button class="btn-ghost" onclick="closeCreateModal()">&#x2715;</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="modal-tabs">
+    <button class="mtab active" id="mtab-form" onclick="switchTab('form')">&#9998; Form</button>
+    <button class="mtab" id="mtab-json" onclick="switchTab('json')">&#8679; Upload JSON</button>
+  </div>
+
+  <!-- Form Tab -->
+  <div class="modal-body" id="mpanel-form">
+    <form id="custom-form" onsubmit="submitCustomForm(event)">
+      <div class="form-grid">
+
+        <div class="form-field">
+          <label class="form-label" for="cf-name">Scenario Name</label>
+          <input class="form-input" id="cf-name" type="text" placeholder="e.g. My Bank Test" value="Custom Scenario" required />
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-code">Failure Code</label>
+          <select class="form-input" id="cf-code" required>
+            <optgroup label="Funds / Limit">
+              <option value="U30">U30 — Insufficient Funds</option>
+              <option value="U69">U69 — Daily Limit Exceeded</option>
+              <option value="U66">U66 — Weekly Limit Exceeded</option>
+              <option value="U64">U64 — Monthly Limit Exceeded</option>
+              <option value="U29">U29 — Amount Exceeds Mandate</option>
+            </optgroup>
+            <optgroup label="Mandate Issues">
+              <option value="BT01">BT01 — Mandate Revoked</option>
+              <option value="BT02">BT02 — Mandate Expired</option>
+              <option value="U13">U13 — Mandate Paused</option>
+            </optgroup>
+            <optgroup label="Bank / Account">
+              <option value="BA">BA — Account Closed / Frozen</option>
+              <option value="XB">XB — Account Blocked</option>
+              <option value="AM">AM — Account Mismatch</option>
+            </optgroup>
+            <optgroup label="Technical">
+              <option value="TM">TM — Technical / Timeout</option>
+              <option value="TE">TE — Transaction Expired</option>
+              <option value="RB">RB — Bank Declined</option>
+            </optgroup>
+            <option value="UNKNOWN">UNKNOWN — Generic Failure</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-vpa">Customer VPA</label>
+          <input class="form-input" id="cf-vpa" type="text" placeholder="user@oksbi" value="testuser@oksbi" required />
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-bank">Bank Name</label>
+          <select class="form-input" id="cf-bank">
+            <option>SBI</option>
+            <option>HDFC</option>
+            <option>ICICI</option>
+            <option>Axis</option>
+            <option>Kotak</option>
+            <option>Yes Bank</option>
+            <option>Paytm Payments Bank</option>
+            <option>IDFC First</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-amount">Amount (INR)</label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">&#8377;</span>
+            <input class="form-input with-prefix" id="cf-amount" type="number" min="1" max="1000000" step="0.01" value="999" required />
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-state">Mandate State</label>
+          <select class="form-input" id="cf-state">
+            <option value="active" selected>Active</option>
+            <option value="paused">Paused</option>
+            <option value="revoked">Revoked</option>
+            <option value="expired">Expired</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="cf-retry">Retry Attempt #</label>
+          <input class="form-input" id="cf-retry" type="number" min="0" max="10" value="0" />
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost" onclick="closeCreateModal()">Cancel</button>
+        <button type="submit" class="btn-submit" id="cf-submit">&#9654;&nbsp; Run Scenario</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- JSON Upload Tab -->
+  <div class="modal-body hidden" id="mpanel-json">
+    <div class="drop-zone" id="drop-zone"
+         ondragover="dzDragover(event)" ondragleave="dzDragleave(event)" ondrop="dzDrop(event)">
+      <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="dz-text">Drag &amp; drop a JSON file here</p>
+      <p class="dz-sub">or</p>
+      <label class="btn-ghost" style="cursor:pointer">
+        Browse file
+        <input type="file" id="json-file-input" accept=".json,application/json" style="display:none" onchange="dzFileSelect(event)" />
+      </label>
+    </div>
+
+    <div class="json-preview hidden" id="json-preview">
+      <div class="json-preview-header">
+        <span id="json-filename" class="muted"></span>
+        <button class="btn-ghost" onclick="clearJsonFile()">&#x2715; Clear</button>
+      </div>
+      <pre class="json-pre" id="json-pre"></pre>
+    </div>
+
+    <p class="form-hint">
+      Expected fields: <code>failure_code</code>, <code>vpa</code>, <code>bank</code>,
+      <code>amount</code>, <code>mandate_state</code>, <code>retry_attempt</code>,
+      <code>scenario_name</code>
+    </p>
+
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn-submit" id="json-submit" onclick="submitJsonUpload()" disabled>&#9654;&nbsp; Run JSON Scenario</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- Toast root -->

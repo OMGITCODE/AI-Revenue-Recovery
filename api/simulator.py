@@ -233,3 +233,79 @@ async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
     )
     await store.add_event(ev)
     return ev
+
+
+async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
+    """
+    Build a UPIAutopayEvent from a user-supplied form dict and run the
+    full agent pipeline, identical to predefined scenarios.
+    """
+    # Resolve failure code — default to UNKNOWN if invalid
+    try:
+        fc = UPIFailureCode(form["failure_code"].upper())
+    except (ValueError, KeyError):
+        fc = UPIFailureCode.UNKNOWN
+
+    # Resolve mandate state — default ACTIVE
+    state_map = {s.value: s for s in MandateState}
+    mandate_state = state_map.get(form.get("mandate_state", "active").lower(), MandateState.ACTIVE)
+
+    # Map failure code to a sensible event_type
+    if fc in (UPIFailureCode.BT01,):
+        event_type = "mandate.revoked"
+    elif fc in (UPIFailureCode.BT02,):
+        event_type = "mandate.expired"
+    elif fc in (UPIFailureCode.U13,):
+        event_type = "mandate.paused"
+    else:
+        event_type = "mandate.execution.failed"
+
+    cfg = {
+        "failure_code":  fc,
+        "event_type":    event_type,
+        "vpa":           form.get("vpa", "user@oksbi"),
+        "bank":          form.get("bank", "Unknown Bank"),
+        "amount":        float(form.get("amount", 100)),
+        "mandate_state": mandate_state,
+        "retry_attempt": int(form.get("retry_attempt", 0)),
+        "customer_id":   f"CUST-CUSTOM-{uuid.uuid4().hex[:6].upper()}",
+        "name":          form.get("scenario_name", "Custom Scenario"),
+    }
+
+    upi_event = _make_upi_event(cfg)
+    detector  = UPIAutopayDetector()
+    risk      = await detector.detect_from_upi_event(upi_event)
+    if not risk:
+        return None
+
+    iv_types, iv_msgs, scheduled_at, action_url = [], [], None, None
+    for iv in INTERVENTIONS:
+        if iv.can_handle(risk):
+            result = await iv.execute(risk)
+            iv_types.append(result.intervention_type.value)
+            iv_msgs.append(result.message)
+            if result.scheduled_at and not scheduled_at:
+                scheduled_at = result.scheduled_at.strftime("%d %b %Y, %I:%M %p IST")
+            if result.action_url and not action_url:
+                action_url = result.action_url
+
+    ev = RecoveryEvent(
+        id=upi_event.event_id,
+        timestamp=datetime.now(IST).strftime("%H:%M:%S"),
+        event_type=upi_event.event_type,
+        failure_code=upi_event.failure_code.value,
+        failure_reason=upi_event.failure_code.human_reason,
+        customer_id=risk.customer_id,
+        customer_vpa=upi_event.customer_vpa,
+        bank=upi_event.bank_name,
+        amount=risk.amount,
+        severity=risk.severity.value,
+        interventions=iv_types,
+        intervention_msgs=iv_msgs,
+        scheduled_at=scheduled_at,
+        action_url=action_url,
+        success=bool(iv_types),
+        scenario_name=cfg["name"],
+    )
+    await store.add_event(ev)
+    return ev

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +23,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from api.store import store
-from api.simulator import SCENARIOS, run_scenario, run_custom_webhook
+from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -108,6 +109,26 @@ async def webhook(request: Request):
     ev = await run_custom_webhook(payload)
     if not ev:
         raise HTTPException(status_code=422, detail="Could not parse webhook payload")
+    return ev.to_dict()
+
+
+class CustomScenarioRequest(BaseModel):
+    """Form payload for a user-defined scenario."""
+    failure_code:   str   = Field(..., example="U30")
+    vpa:            str   = Field(..., example="user@oksbi")
+    bank:           str   = Field(..., example="SBI")
+    amount:         float = Field(..., gt=0, example=999.0)
+    mandate_state:  str   = Field(default="active", example="active")
+    retry_attempt:  int   = Field(default=0, ge=0)
+    scenario_name:  str   = Field(default="Custom Scenario")
+
+
+@app.post("/api/custom")
+async def custom_scenario(payload: CustomScenarioRequest):
+    """Run a user-created scenario through the full agent pipeline."""
+    ev = await run_custom_scenario(payload.dict())
+    if not ev:
+        raise HTTPException(status_code=422, detail="Could not process custom scenario")
     return ev.to_dict()
 
 
