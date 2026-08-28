@@ -37,7 +37,8 @@
       <span class="pulse"></span>
       Agent Live
     </div>
-    <button class="btn-nav" onclick="resetAll()">Reset</button>
+    <button class="btn-nav btn-seed" id="seed-btn" onclick="seedDemo()">🌱 Seed Demo</button>
+    <button class="btn-nav btn-danger" id="hard-reset-btn" onclick="hardReset()">💥 Hard Reset</button>
   </div>
 </nav>
 
@@ -83,7 +84,10 @@
           <div class="card-title">Recovery Events</div>
           <div class="card-sub">Real-time UPI failure detection &amp; intervention log</div>
         </div>
-        <button class="btn-ghost" onclick="resetAll()">Clear all</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-ghost" onclick="openQuickP2P()" title="Manually create a Promise-to-Pay">+ P2P</button>
+          <button class="btn-ghost" onclick="resetAll()">Clear all</button>
+        </div>
       </div>
       <div class="table-scroll-wrap">
         <div class="table-scroll">
@@ -98,11 +102,12 @@
               <th>Severity</th>
               <th>Interventions</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="events-tbody">
             <tr id="empty-row">
-              <td colspan="8">
+              <td colspan="9">
                 <div class="empty-state">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
@@ -244,21 +249,79 @@
           <div class="card-title">🤝 Promise-to-Pay Tracker</div>
           <div class="card-sub">Customer commitments — guardrails suppress nudges while active</div>
         </div>
-        <div class="module-stats" id="p2p-stats-bar">
-          <span class="stat-chip chip-blue"  id="p2p-pending">0 pending</span>
-          <span class="stat-chip chip-green" id="p2p-fulfilled">0 fulfilled</span>
-          <span class="stat-chip chip-red"   id="p2p-broken">0 broken</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="module-stats" id="p2p-stats-bar">
+            <span class="stat-chip chip-blue"  id="p2p-pending">0 pending</span>
+            <span class="stat-chip chip-green" id="p2p-fulfilled">0 fulfilled</span>
+            <span class="stat-chip chip-red"   id="p2p-broken">0 broken</span>
+          </div>
+          <button class="btn-ghost" onclick="openP2PForm()" title="Log a new promise">+ Add Promise</button>
         </div>
       </div>
+
+      <!-- Inline P2P Create Form -->
+      <div class="inline-form hidden" id="p2p-form">
+        <div class="inline-form-title">New Promise-to-Pay</div>
+        <div class="inline-form-grid">
+          <div class="form-field">
+            <label class="form-label" for="p2p-vpa">Customer VPA</label>
+            <input class="form-input" id="p2p-vpa" type="text" placeholder="user@oksbi" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="p2p-amount">Amount (₹)</label>
+            <input class="form-input" id="p2p-amount" type="number" min="1" placeholder="999" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="p2p-bank">Bank</label>
+            <select class="form-input" id="p2p-bank">
+              <option>SBI</option><option>HDFC</option><option>ICICI</option>
+              <option>Axis</option><option>Kotak</option><option>Yes Bank</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="p2p-code">Failure Code</label>
+            <select class="form-input" id="p2p-code">
+              <option value="U30">U30 — Insufficient Funds</option>
+              <option value="BT01">BT01 — Mandate Revoked</option>
+              <option value="BT02">BT02 — Mandate Expired</option>
+              <option value="U13">U13 — Mandate Paused</option>
+              <option value="TM">TM — Tech Error</option>
+              <option value="U69">U69 — Daily Limit</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="p2p-hours">Deadline (hours)</label>
+            <input class="form-input" id="p2p-hours" type="number" min="1" max="168" value="48" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="p2p-channel">Channel</label>
+            <select class="form-input" id="p2p-channel">
+              <option value="whatsapp">WhatsApp</option>
+              <option value="sms">SMS</option>
+              <option value="ivr">IVR</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <div class="form-field form-field-wide">
+            <label class="form-label" for="p2p-notes">Notes</label>
+            <input class="form-input" id="p2p-notes" type="text" placeholder="Customer called and promised by 5 PM" />
+          </div>
+        </div>
+        <div class="inline-form-footer">
+          <button class="btn-ghost" onclick="closeP2PForm()">Cancel</button>
+          <button class="btn-submit" id="p2p-submit" onclick="submitP2PForm()">&#9654;&nbsp; Create Promise</button>
+        </div>
+      </div>
+
       <div class="module-table-wrap">
         <table class="tbl" id="p2p-tbl">
           <thead>
             <tr>
-              <th>ID</th><th>Customer VPA</th><th>Amount</th><th>Deadline</th><th>Channel</th><th>Status</th><th>Notes</th>
+              <th>ID</th><th>Customer VPA</th><th>Amount</th><th>Deadline</th><th>Channel</th><th>Status</th><th>Notes</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="p2p-tbody">
-            <tr><td colspan="7"><div class="empty-state"><p>Loading...</p></div></td></tr>
+            <tr><td colspan="8"><div class="empty-state"><p>Loading...</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -271,21 +334,71 @@
           <div class="card-title">🛒 Checkout Drop-off Recovery</div>
           <div class="card-sub">Abandoned checkouts recovered via Hinglish nudges</div>
         </div>
-        <div class="module-stats" id="checkout-stats-bar">
-          <span class="stat-chip chip-blue"  id="chk-total">0 sessions</span>
-          <span class="stat-chip chip-green" id="chk-recovered">0 recovered</span>
-          <span class="stat-chip chip-amber" id="chk-nudges">0 nudges</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="module-stats" id="checkout-stats-bar">
+            <span class="stat-chip chip-blue"  id="chk-total">0 sessions</span>
+            <span class="stat-chip chip-green" id="chk-recovered">0 recovered</span>
+            <span class="stat-chip chip-amber" id="chk-nudges">0 nudges</span>
+          </div>
+          <button class="btn-ghost" onclick="openCheckoutForm()" title="Log a drop-off session">+ Log Drop-off</button>
         </div>
       </div>
+
+      <!-- Inline Checkout Drop-off Form -->
+      <div class="inline-form hidden" id="chk-form">
+        <div class="inline-form-title">Log Checkout Drop-off</div>
+        <div class="inline-form-grid">
+          <div class="form-field">
+            <label class="form-label" for="chk-vpa">Customer VPA</label>
+            <input class="form-input" id="chk-vpa" type="text" placeholder="user@oksbi" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="chk-phone">Phone (optional)</label>
+            <input class="form-input" id="chk-phone" type="text" placeholder="+91-9900000000" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="chk-amount">Cart Amount (₹)</label>
+            <input class="form-input" id="chk-amount" type="number" min="1" placeholder="1499" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="chk-merchant">Merchant</label>
+            <input class="form-input" id="chk-merchant" type="text" placeholder="FashionHub" value="Demo Merchant" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="chk-reason">Drop-off Reason</label>
+            <select class="form-input" id="chk-reason">
+              <option value="payment_page_exit">Payment page exit</option>
+              <option value="otp_timeout">OTP timeout</option>
+              <option value="bank_error_exit">Bank error exit</option>
+              <option value="upi_intent_abandoned">UPI intent abandoned</option>
+              <option value="address_form_exit">Address form exit</option>
+              <option value="session_expired">Session expired</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="chk-lang">Language</label>
+            <select class="form-input" id="chk-lang">
+              <option value="hinglish">Hinglish</option>
+              <option value="english">English</option>
+            </select>
+          </div>
+        </div>
+        <div class="inline-form-footer">
+          <button class="btn-ghost" onclick="closeCheckoutForm()">Cancel</button>
+          <button class="btn-submit" id="chk-submit" onclick="submitCheckoutForm()">&#9654;&nbsp; Log Drop-off</button>
+        </div>
+      </div>
+
       <div class="module-table-wrap">
         <table class="tbl" id="chk-tbl">
           <thead>
             <tr>
-              <th>Session</th><th>VPA</th><th>Cart ₹</th><th>Reason</th><th>Status</th><th>Hinglish Message</th>
+              <th>Session</th><th>VPA</th><th>Cart ₹</th><th>Reason</th><th>Status</th><th>Hinglish Message</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="chk-tbody">
-            <tr><td colspan="6"><div class="empty-state"><p>Loading...</p></div></td></tr>
+            <tr><td colspan="7"><div class="empty-state"><p>Loading...</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -301,10 +414,48 @@
           <div class="card-title">🏢 B2B Receivables Chaser</div>
           <div class="card-sub">Aging buckets · Tiered escalation · Hinglish IVR for Tier C</div>
         </div>
-        <div class="module-stats" id="b2b-stats-bar">
-          <span class="stat-chip chip-blue"  id="b2b-total">0 invoices</span>
-          <span class="stat-chip chip-red"   id="b2b-outstanding">₹0 outstanding</span>
-          <span class="stat-chip chip-amber" id="b2b-escalated">0 escalated</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="module-stats" id="b2b-stats-bar">
+            <span class="stat-chip chip-blue"  id="b2b-total">0 invoices</span>
+            <span class="stat-chip chip-red"   id="b2b-outstanding">₹0 outstanding</span>
+            <span class="stat-chip chip-amber" id="b2b-escalated">0 escalated</span>
+          </div>
+          <button class="btn-ghost" onclick="openB2BForm()" title="Add an invoice">+ Add Invoice</button>
+        </div>
+      </div>
+
+      <!-- Inline B2B Add Invoice Form -->
+      <div class="inline-form hidden" id="b2b-form">
+        <div class="inline-form-title">Add B2B Invoice</div>
+        <div class="inline-form-grid">
+          <div class="form-field">
+            <label class="form-label" for="b2b-debtor">Debtor Name</label>
+            <input class="form-input" id="b2b-debtor" type="text" placeholder="Infosys BPO" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="b2b-vpa">Debtor VPA</label>
+            <input class="form-input" id="b2b-vpa" type="text" placeholder="infosys@okhdfc" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="b2b-inv">Invoice Number</label>
+            <input class="form-input" id="b2b-inv" type="text" placeholder="INV-2026-010" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="b2b-inv-amount">Amount (₹)</label>
+            <input class="form-input" id="b2b-inv-amount" type="number" min="1" placeholder="50000" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="b2b-due">Due Date</label>
+            <input class="form-input" id="b2b-due" type="date" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="b2b-phone">Phone (optional)</label>
+            <input class="form-input" id="b2b-phone" type="text" placeholder="+91-9800000000" />
+          </div>
+        </div>
+        <div class="inline-form-footer">
+          <button class="btn-ghost" onclick="closeB2BForm()">Cancel</button>
+          <button class="btn-submit" id="b2b-submit" onclick="submitB2BForm()">&#9654;&nbsp; Add Invoice</button>
         </div>
       </div>
 
@@ -336,11 +487,11 @@
         <table class="tbl" id="b2b-tbl">
           <thead>
             <tr>
-              <th>Invoice</th><th>Debtor</th><th>Amount</th><th>Days Overdue</th><th>Bucket</th><th>Tier</th><th>Interest</th><th>Status</th><th>Last Action</th>
+              <th>Invoice</th><th>Debtor</th><th>Amount</th><th>Days Overdue</th><th>Bucket</th><th>Tier</th><th>Interest</th><th>Status</th><th>Last Action</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="b2b-tbody">
-            <tr><td colspan="9"><div class="empty-state"><p>Loading...</p></div></td></tr>
+            <tr><td colspan="10"><div class="empty-state"><p>Loading...</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -588,9 +739,37 @@
 
 </div>
 
+<!-- ── Settle Dialog Modal ──────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="settle-backdrop" onclick="closeSettleDialog()"></div>
+<div class="modal modal-sm" id="settle-modal" role="dialog" aria-modal="true" aria-labelledby="settle-heading">
+  <div class="modal-head">
+    <div>
+      <div class="modal-title" id="settle-heading">Settle Invoice</div>
+      <div class="modal-sub" id="settle-sub">Enter the amount received</div>
+    </div>
+    <button class="btn-ghost" onclick="closeSettleDialog()">&#x2715;</button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="settle-id" />
+    <input type="hidden" id="settle-full" />
+    <div class="form-field" style="margin-bottom:16px">
+      <label class="form-label" for="settle-amount">Amount Received (₹)</label>
+      <div class="input-prefix-wrap">
+        <span class="input-prefix">&#8377;</span>
+        <input class="form-input with-prefix" id="settle-amount" type="number" min="1" step="0.01" placeholder="Full amount" />
+      </div>
+      <div class="form-hint" style="margin-top:6px" id="settle-hint">Leave blank for full settlement</div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeSettleDialog()">Cancel</button>
+    <button class="btn-submit" id="settle-submit" onclick="confirmSettle()">&#8377;&nbsp; Confirm Settlement</button>
+  </div>
+</div>
+
 <!-- Toast root -->
 <div id="toast-root"></div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=utf8-fixed"></script>
 </body>
 </html>

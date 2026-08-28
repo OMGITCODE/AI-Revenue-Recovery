@@ -1461,3 +1461,145 @@ body {
 .outcome-pending { color: var(--amber); font-weight: 600; font-size: 12px; }
 .outcome-failure { color: var(--red);   font-weight: 600; font-size: 12px; }
 .outcome-skipped { color: var(--text-3);font-weight: 600; font-size: 12px; }
+
+/* -- Row Action Buttons ------------------------------------------------------- */
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.btn-act:hover { opacity: .85; transform: translateY(-1px); }
+.btn-act:active { transform: translateY(0); }
+.btn-act:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+.btn-green { background: var(--green-lt); color: var(--green); }
+.btn-red   { background: var(--red-lt);   color: var(--red); }
+.btn-blue  { background: var(--blue-lt);  color: var(--blue); }
+
+[data-theme="dark"] .btn-green { background: #052E16; color: #4ADE80; }
+[data-theme="dark"] .btn-red   { background: #3B0A0A; color: #F87171; }
+[data-theme="dark"] .btn-blue  { background: #0C1A33; color: #60A5FA; }
+
+/* -- Toast Notifications ------------------------------------------------------ */
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9999;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 480px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.18);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity .3s, transform .3s;
+  font-family: inherit;
+}
+.toast-visible { opacity: 1; transform: translateY(0); }
+
+.toast-green { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+.toast-red   { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+.toast-blue  { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+
+[data-theme="dark"] .toast-green { background: #052E16; color: #4ADE80; border-color: #166534; }
+[data-theme="dark"] .toast-red   { background: #3B0A0A; color: #F87171; border-color: #7F1D1D; }
+[data-theme="dark"] .toast-blue  { background: #0C1A33; color: #60A5FA; border-color: #1E3A5F; }
+
+/* -- Nav button variants ----------------------------------------------------- */
+
+.btn-seed {
+  background: var(--green-lt);
+  color: var(--green);
+  border: 1px solid rgba(0,168,107,.25);
+}
+.btn-seed:hover { background: #C6F6D5; }
+
+.btn-danger {
+  background: var(--red-lt);
+  color: var(--red);
+  border: 1px solid rgba(248,81,73,.25);
+}
+.btn-danger:hover { background: #FECACA; }
+
+[data-theme="dark"] .btn-seed   { background: #052E16; color: #4ADE80; border-color: #166534; }
+[data-theme="dark"] .btn-danger { background: #3B0A0A; color: #F87171; border-color: #7F1D1D; }
+
+/* -- Inline create forms (P2P / Checkout / B2B) ------------------------------- */
+
+.inline-form {
+  margin: 0 0 4px;
+  padding: 16px 20px 12px;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: var(--blue-lt);
+  animation: slide-down 0.18s ease;
+}
+
+[data-theme="dark"] .inline-form {
+  background: #0C1A33;
+  border-color: #2563EB;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.inline-form.hidden { display: none; }
+
+.inline-form-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue);
+  margin-bottom: 12px;
+}
+
+.inline-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.form-field-wide { grid-column: 1 / -1; }
+
+.inline-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* -- form-hint ---------------------------------------------------------------- */
+
+.form-hint { font-size: 11.5px; color: var(--text-3); }
+
+/* -- Settle dialog (modal-sm) ------------------------------------------------- */
+
+.modal-sm {
+  width: 420px;
+  max-width: calc(100vw - 40px);
+}
