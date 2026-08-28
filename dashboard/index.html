@@ -347,6 +347,85 @@
     </div>
   </div><!-- /content-full -->
 
+  <!-- ── Row 4: Recovery Ledger + ROI (side-by-side) ──────────────────────── -->
+  <div class="content content-2col" style="margin-top:12px; margin-bottom:24px;">
+
+    <!-- Recovery Ledger (Audit Trail) -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📋 Recovery Audit Ledger</div>
+          <div class="card-sub">Every decision · Plain-English reasoning · Confidence score · Append-only</div>
+        </div>
+        <div class="module-stats" id="ledger-stats-bar">
+          <span class="stat-chip chip-blue"  id="ldg-entries">0 entries</span>
+          <span class="stat-chip chip-green" id="ldg-avg-conf">conf: —</span>
+        </div>
+      </div>
+      <div class="module-table-wrap">
+        <table class="tbl" id="ledger-tbl">
+          <thead>
+            <tr>
+              <th>Time</th><th>Type</th><th>VPA</th><th>₹ Stake</th><th>Conf</th><th>Reasoning</th><th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-tbody">
+            <tr><td colspan="7"><div class="empty-state"><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recovery ROI -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">💰 Recovery ROI</div>
+          <div class="card-sub">Net ₹ recovered minus channel cost per intervention type</div>
+        </div>
+        <div class="module-stats" id="roi-stats-bar">
+          <span class="stat-chip chip-green" id="roi-net">₹0 net</span>
+          <span class="stat-chip chip-blue"  id="roi-rate">0% rate</span>
+        </div>
+      </div>
+
+      <!-- Overall ROI banner -->
+      <div class="roi-banner" id="roi-banner">
+        <div class="roi-item">
+          <div class="roi-label">Total Recovered</div>
+          <div class="roi-value green" id="roi-recovered">₹0</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Channel Costs</div>
+          <div class="roi-value red" id="roi-costs">₹0</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Net ROI</div>
+          <div class="roi-value" id="roi-netval">₹0</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">At Stake</div>
+          <div class="roi-value muted" id="roi-stake">₹0</div>
+        </div>
+      </div>
+
+      <!-- Per-channel breakdown -->
+      <div class="module-table-wrap">
+        <table class="tbl" id="roi-tbl">
+          <thead>
+            <tr>
+              <th>Channel</th><th>Actions</th><th>Cost/action</th><th>Total Cost</th><th>Recovered</th><th>Net ROI</th><th>Avg Conf</th>
+            </tr>
+          </thead>
+          <tbody id="roi-tbody">
+            <tr><td colspan="7"><div class="empty-state"><p>Loading...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content-2col -->
+
 </div><!-- /page -->
 
 <!-- ── Drawer ─────────────────────────────────────────────────────────────── -->

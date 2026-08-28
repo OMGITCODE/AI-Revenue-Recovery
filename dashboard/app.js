@@ -508,7 +508,7 @@ async function fireNextAutoDemo() {
 // ── Module Panels: Promise-to-Pay, Checkout, B2B ─────────────────────────────
 
 async function loadModules() {
-  await Promise.allSettled([loadP2P(), loadCheckout(), loadB2B()]);
+  await Promise.allSettled([loadP2P(), loadCheckout(), loadB2B(), loadLedger(), loadROI()]);
 }
 
 // ── Promise-to-Pay ────────────────────────────────────────────────────────────
@@ -684,6 +684,108 @@ function renderB2BTable(receivables) {
       <td class="muted">${fmtInr(r.interest_accrued)}</td>
       <td class="${stCls}">${r.status.toUpperCase()}</td>
       <td>${lastAct}</td>
+    </tr>`;
+  }).join('');
+}
+// ── Recovery Ledger ────────────────────────────────────────────────────────────
+
+const CHANNEL_UNIT_COSTS = {
+  whatsapp: 0.50, sms: 0.15, ivr: 1.50, email: 0.05,
+  smart_retry: 0.00, upi_collect: 0.25, mandate_renewal: 0.50,
+  escalation: 25.00, legal: 500.00, ar_specialist: 150.00,
+};
+
+async function loadLedger() {
+  try {
+    const res  = await fetch('/api/ledger?limit=30');
+    const data = await res.json();
+    const o    = data.overall_roi;
+    set('ldg-entries',  `${o.total_entries} entries`);
+    set('ldg-avg-conf', `conf: ${Math.round(o.avg_confidence * 100)}%`);
+    renderLedgerTable(data.entries);
+  } catch (e) { console.warn('Ledger load failed', e); }
+}
+
+function confPips(conf) {
+  const total  = 5;
+  const filled = Math.round(conf * total);
+  const cls    = conf >= 0.75 ? 'filled-high' : conf >= 0.50 ? 'filled-med' : 'filled-low';
+  const pips   = Array.from({length: total}, (_, i) =>
+    `<div class="conf-pip ${i < filled ? cls : ''}"></div>`
+  ).join('');
+  return `<div class="conf-bar"><div class="conf-pips">${pips}</div><span class="conf-num">${Math.round(conf * 100)}%</span></div>`;
+}
+
+const LEDGER_OUTCOME_CLS = {
+  success: 'outcome-success',
+  failure: 'outcome-failure',
+  pending: 'outcome-pending',
+  skipped: 'outcome-skipped',
+};
+
+function renderLedgerTable(entries) {
+  const tbody = document.getElementById('ledger-tbody');
+  if (!tbody) return;
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No ledger entries yet — run a scenario to populate.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e => {
+    const typeCls    = `ledger-type type-${e.event_type}`;
+    const outcomeCls = LEDGER_OUTCOME_CLS[e.outcome] || 'muted';
+    return `<tr>
+      <td class="mono muted">${e.ts}</td>
+      <td><span class="${typeCls}">${e.event_type}</span></td>
+      <td class="muted">${e.vpa}</td>
+      <td class="fw6">${fmtInr(e.amount)}</td>
+      <td>${confPips(e.confidence)}</td>
+      <td><span class="ledger-reasoning" title="${e.reasoning}">${e.reasoning}</span></td>
+      <td class="${outcomeCls}">${e.outcome.toUpperCase()}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Recovery ROI ───────────────────────────────────────────────────────────────
+
+async function loadROI() {
+  try {
+    const res  = await fetch('/api/roi');
+    const data = await res.json();
+    const o    = data.overall;
+    set('roi-recovered', fmtInr(o.total_recovered));
+    set('roi-costs',     fmtInr(o.total_cost));
+    const netEl = document.getElementById('roi-netval');
+    if (netEl) {
+      netEl.textContent = fmtInr(o.net_roi);
+      netEl.className   = 'roi-value ' + (o.net_roi >= 0 ? 'green' : 'red');
+    }
+    set('roi-stake', fmtInr(o.total_at_stake));
+    set('roi-net',   fmtInr(o.net_roi) + ' net');
+    set('roi-rate',  o.recovery_rate_pct + '% rate');
+    renderROITable(data.by_channel);
+  } catch (e) { console.warn('ROI load failed', e); }
+}
+
+function renderROITable(byChannel) {
+  const tbody = document.getElementById('roi-tbody');
+  if (!tbody) return;
+  const rows = Object.entries(byChannel);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No ROI data yet</p></div></td></tr>';
+    return;
+  }
+  rows.sort((a, b) => b[1].net_roi - a[1].net_roi);
+  tbody.innerHTML = rows.map(([ch, s]) => {
+    const unitCost = CHANNEL_UNIT_COSTS[ch] ?? 0;
+    const roiCls   = s.net_roi >= 0 ? 'status-ok fw6' : 'status-err fw6';
+    return `<tr>
+      <td class="fw6" style="text-transform:capitalize">${ch.replace(/_/g,' ')}</td>
+      <td class="muted">${s.count}</td>
+      <td class="muted">&#8377;${unitCost.toFixed(2)}</td>
+      <td class="muted">${fmtInr(s.total_cost)}</td>
+      <td class="fw6 status-ok">${fmtInr(s.total_recovered)}</td>
+      <td class="${roiCls}">${s.net_roi >= 0 ? '+' : ''}${fmtInr(s.net_roi)}</td>
+      <td>${confPips(s.avg_confidence)}</td>
     </tr>`;
   }).join('');
 }

@@ -77,6 +77,17 @@ class DecisionEngine:
     Usage:
         engine   = DecisionEngine()
         decision = engine.evaluate(event_dict, retry_count, active_promise)
+
+    Guardrails:
+        GR1 — Amount < ₹10: suppress all (cost > benefit)
+        GR2 — Retry count ≥ 3: no more smart_retry
+        GR3 — Mandate revoked/expired: force mandate_renewal path
+        GR4 — DND window 21:00–08:00 IST (TRAI): suppress whatsapp_nudge
+        GR5 — Active promise-to-pay: suppress nudge/collect (no harassment)
+        GR6 — Tier/amount: Bronze < ₹500 skip escalation (cost > value)
+        GR7 — RBI/NPCI: UPI Autopay debit > ₹15,000 requires pre-debit notification;
+               skip silent retry, force explicit customer consent channel
+        GR8 — Daily contact cap: max 3 outbound touches per customer per day
     """
 
     # Candidate intervention pool (must be a subset of UPIInterventionType values)
@@ -86,6 +97,12 @@ class DecisionEngine:
     DND_START_HOUR = 21
     DND_END_HOUR   = 8
 
+    # RBI/NPCI UPI Autopay pre-debit notification ceiling (₹)
+    RBI_PREDEBIT_THRESHOLD = 15_000
+
+    # Daily outbound contact cap per customer
+    DAILY_CONTACT_CAP = 3
+
     def evaluate(
         self,
         failure_code:  str,
@@ -93,6 +110,7 @@ class DecisionEngine:
         amount:        float,
         retry_count:   int   = 0,
         has_promise:   bool  = False,
+        daily_touches: int   = 0,
     ) -> GuardrailDecision:
 
         tier       = infer_tier(amount)
@@ -148,7 +166,32 @@ class DecisionEngine:
                 fired.append("tier_escalation_suppressed")
                 logger.info("GR6: Tier=%s amount=₹%.0f — escalation suppressed (cost/benefit)", tier, amount)
 
-        # ── Final decision ────────────────────────────────────────────────────
+        # ── Guardrail 7: RBI/NPCI ₹15,000 pre-debit notification rule ────────
+        # RBI Circular: UPI Autopay mandates > ₹15,000 MUST send pre-debit
+        # notification and require explicit customer confirmation.
+        # Silent retry is non-compliant above this ceiling.
+        if amount > self.RBI_PREDEBIT_THRESHOLD:
+            self._block(allowed, blocked, "smart_retry")
+            fired.append("rbi_predebit_threshold")
+            logger.warning(
+                "GR7 [RBI CIRCUIT BREAKER]: Amount ₹%.0f > ₹15,000 — "
+                "silent retry BLOCKED per NPCI/RBI UPI Autopay circular. "
+                "Forcing explicit customer consent channel.",
+                amount,
+            )
+
+        # ── Guardrail 8: Daily contact cap (TRAI DND compliance) ─────────────
+        # Max 3 outbound messages to any customer per day across all channels.
+        if daily_touches >= self.DAILY_CONTACT_CAP:
+            self._block(allowed, blocked, "whatsapp_nudge")
+            self._block(allowed, blocked, "upi_collect")
+            fired.append("daily_contact_cap")
+            logger.warning(
+                "GR8: Daily contact cap reached (%d touches) for this customer — "
+                "suppressing further outbound communications.",
+                daily_touches,
+            )
+
         approved = len(allowed) > 0
         reason   = (
             f"Tier={tier} | Budget={budget} retries left | "

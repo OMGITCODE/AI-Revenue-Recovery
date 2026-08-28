@@ -1355,3 +1355,109 @@ body {
 .bucket-90plus{ background: var(--red-lt);   color: var(--red); }
 
 [data-theme="dark"] .bucket-61-90 { background: #3D1F0A; color: #F0804A; }
+
+/* ── Recovery Ledger ───────────────────────────────────────────────────────── */
+
+.ledger-type {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.type-decide    { background: #EEF2FF; color: #4338CA; }
+.type-intervene { background: var(--blue-lt); color: var(--blue); }
+.type-guardrail { background: #FEF9C3; color: #854D0E; }
+.type-escalate  { background: var(--red-lt); color: var(--red); }
+.type-b2b       { background: #F0FDF4; color: #15803D; }
+.type-checkout  { background: #FFF7ED; color: #C2410C; }
+.type-p2p       { background: #FAF5FF; color: #7E22CE; }
+.type-recover   { background: var(--green-lt); color: var(--green); }
+
+[data-theme="dark"] .type-decide    { background: #1E1B4B; color: #A5B4FC; }
+[data-theme="dark"] .type-guardrail { background: #422006; color: #FDE68A; }
+[data-theme="dark"] .type-b2b       { background: #052E16; color: #86EFAC; }
+[data-theme="dark"] .type-checkout  { background: #431407; color: #FCA5A5; }
+[data-theme="dark"] .type-p2p       { background: #2E1065; color: #D8B4FE; }
+
+.conf-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.conf-pips {
+  display: flex;
+  gap: 2px;
+}
+
+.conf-pip {
+  width: 5px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.conf-pip.filled-high { background: var(--green); }
+.conf-pip.filled-med  { background: var(--amber); }
+.conf-pip.filled-low  { background: var(--red); }
+
+.conf-num {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-reasoning {
+  font-size: 11.5px;
+  color: var(--text-2);
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── ROI Panel ─────────────────────────────────────────────────────────────── */
+
+.roi-banner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.roi-item {
+  padding: 14px 16px;
+  background: var(--white);
+}
+
+.roi-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.roi-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+
+.roi-value.green  { color: var(--green); }
+.roi-value.red    { color: var(--red); }
+.roi-value.muted  { color: var(--text-3); }
+
+/* ── ROI table outcome colors ──────────────────────────────────────────────── */
+.outcome-success { color: var(--green); font-weight: 600; font-size: 12px; }
+.outcome-pending { color: var(--amber); font-weight: 600; font-size: 12px; }
+.outcome-failure { color: var(--red);   font-weight: 600; font-size: 12px; }
+.outcome-skipped { color: var(--text-3);font-weight: 600; font-size: 12px; }
