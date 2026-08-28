@@ -342,7 +342,7 @@ async def seed_demo_data():
     checkout_agent.record_drop_off("meera@okaxis",   "+91-9700000001", 2499,  "FashionHub",  "payment_page_exit",   "hinglish")
     checkout_agent.record_drop_off("ankit@oksbi",    "+91-9700000002", 899,   "ElectroMart", "otp_timeout",        "hinglish")
     checkout_agent.record_drop_off("sunita@okicici", "+91-9700000003", 15999, "LuxeStore",   "upi_intent_abandoned","english")
-    checkout_agent.record_drop_off(\"raj@paytm\",      \"+91-9700000004\", 349,   \"FoodExpress\", \"bank_error_exit\",    \"hinglish\")
+    checkout_agent.record_drop_off("raj@paytm",      "+91-9700000004", 349,   "FoodExpress", "bank_error_exit",    "hinglish")
 
     # ── Seed Recovery Ledger with realistic demo entries ──────────────────────
     # These narrate the full detect→diagnose→decide→intervene→recover pipeline
