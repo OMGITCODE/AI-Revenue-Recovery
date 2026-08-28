@@ -591,6 +591,27 @@ body {
   color: #92400E;
 }
 
+/* ── Trust score badge ───────────────────────────────────────────────────────── */
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
+.trust-high { background: #D1FAE5; color: #065F46; }
+.trust-med  { background: var(--amber-lt); color: #92400E; }
+.trust-low  { background: var(--red-lt);   color: var(--red); }
+
+[data-theme="dark"] .trust-high { background: #064E3B; color: #6EE7B7; }
+[data-theme="dark"] .trust-med  { background: #451A03; color: #FCD34D; }
+[data-theme="dark"] .trust-low  { background: #450A0A; color: #FCA5A5; }
+
 .status-ok  { color: var(--green); font-weight: 600; font-size: 12px; }
 .status-err { color: var(--red);   font-weight: 600; font-size: 12px; }
 

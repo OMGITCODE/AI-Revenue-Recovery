@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let events = [];
@@ -174,6 +174,11 @@ function makeRow(ev) {
     return `<span class="iv-tag${cls}">${ivName(iv)}</span>`;
   }).join('') || '<span class="muted" style="font-size:11px">—</span>';
 
+  // Trust score badge (colour-coded)
+  const ts    = ev.trust_score != null ? ev.trust_score : 0.5;
+  const tsCls = ts >= 0.75 ? 'trust-high' : ts >= 0.40 ? 'trust-med' : 'trust-low';
+  const tsTxt = (ts * 100).toFixed(0) + '%';
+
   // Quick-create P2P action (stop click bubbling to row drawer)
   const actHtml = `<button class="btn-act btn-blue" title="Create P2P from this event"
     onclick="event.stopPropagation();quickCreateP2P('${ev.customer_vpa}',${ev.amount},'${ev.bank}','${ev.failure_code}')"
@@ -186,6 +191,7 @@ function makeRow(ev) {
     <td class="muted">${ev.bank || ''}</td>
     <td class="fw6">${fmtInr(ev.amount)}</td>
     <td><span class="sev-badge sev-${sev}">${cap(sev)}</span></td>
+    <td><span class="trust-badge ${tsCls}" title="Payer trust score from P2P history">${tsTxt}</span></td>
     <td>${ivHtml}</td>
     <td>${ev.success
       ? '<span class="status-ok">✓ Recovered</span>'
@@ -239,6 +245,25 @@ function openDrawer(ev) {
     <div class="dl-section">
       <div class="dl-section-title">Action URL</div>
       <code style="font-size:11px;word-break:break-all;color:var(--blue)">${ev.action_url}</code>
+    </div>` : ''}
+    <div class="dl-section">
+      <div class="dl-section-title">🔐 Payer Trust Score</div>
+      ${(()=>{
+        const ts = ev.trust_score != null ? ev.trust_score : 0.5;
+        const cls = ts >= 0.75 ? 'trust-high' : ts >= 0.40 ? 'trust-med' : 'trust-low';
+        const label = ts >= 0.75 ? 'HIGH — reliable payer, likely self-cures' :
+                      ts >= 0.40 ? 'MED — mixed history, nudge recommended' :
+                                   'LOW — broken promises, escalate sooner';
+        return row('Score', `<span class="trust-badge ${cls}">${(ts*100).toFixed(0)}%</span> ${label}`);
+      })()}
+      ${row('Source', 'Promise-to-Pay fulfillment history (CRED-style)')}
+    </div>
+    ${ev.aa_check ? `
+    <div class="dl-section">
+      <div class="dl-section-title">🏦 Account Aggregator Check</div>
+      ${row('Provider', 'Setu AA Sandbox (RBI-regulated)')}
+      ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${ev.aa_check}</span>`)}
+      ${row('Why', '"We don\'t guess when the customer can pay — we ask, with consent, and check."')}
     </div>` : ''}`;
 
   document.getElementById('drawer').classList.add('open');

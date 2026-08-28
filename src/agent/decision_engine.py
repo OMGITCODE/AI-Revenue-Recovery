@@ -55,6 +55,7 @@ class GuardrailDecision:
     customer_tier:      str         = CustomerTier.BRONZE
     retry_budget_left:  int         = 3
     reason:             str         = ""
+    trust_score:        float       = 0.5   # payer trust score 0.0–1.0
 
     def to_dict(self) -> dict:
         return {
@@ -65,6 +66,7 @@ class GuardrailDecision:
             "customer_tier":     self.customer_tier,
             "retry_budget_left": self.retry_budget_left,
             "reason":            self.reason,
+            "trust_score":       self.trust_score,
         }
 
 
@@ -111,6 +113,7 @@ class DecisionEngine:
         retry_count:   int   = 0,
         has_promise:   bool  = False,
         daily_touches: int   = 0,
+        trust_score:   float = 0.5,   # payer trust score from promise_tracker
     ) -> GuardrailDecision:
 
         tier       = infer_tier(amount)
@@ -193,16 +196,22 @@ class DecisionEngine:
             )
 
         approved = len(allowed) > 0
+        trust_label = (
+            "HIGH" if trust_score >= 0.75 else
+            "MED"  if trust_score >= 0.40 else
+            "LOW"
+        )
         reason   = (
             f"Tier={tier} | Budget={budget} retries left | "
+            f"Trust={trust_score:.2f}({trust_label}) | "
             + (f"DND={in_dnd} | " if in_dnd else "")
             + (f"Promise={has_promise} | " if has_promise else "")
             + f"Guardrails={fired or 'none'}"
         )
 
         logger.info(
-            "DecisionEngine → approved=%s | allowed=%s | blocked=%s | tier=%s",
-            approved, allowed, blocked, tier,
+            "DecisionEngine → approved=%s | allowed=%s | blocked=%s | tier=%s | trust=%.2f",
+            approved, allowed, blocked, tier, trust_score,
         )
 
         return GuardrailDecision(
@@ -213,6 +222,7 @@ class DecisionEngine:
             customer_tier=tier,
             retry_budget_left=budget,
             reason=reason,
+            trust_score=trust_score,
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────────

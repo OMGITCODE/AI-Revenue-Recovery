@@ -32,6 +32,8 @@ class RecoveryEvent:
     action_url:         str | None   # renewal link etc.
     success:            bool
     scenario_name:      str = ""     # e.g. "U30 – Insufficient Funds"
+    trust_score:        float = 0.5  # payer P2P trust score (0.0–1.0)
+    aa_check:           str   = ""   # AA balance result summary string
 
     def to_dict(self) -> dict:
         return {
@@ -51,6 +53,8 @@ class RecoveryEvent:
             "action_url":       self.action_url,
             "success":          self.success,
             "scenario_name":    self.scenario_name,
+            "trust_score":      self.trust_score,
+            "aa_check":         self.aa_check,
         }
 
 

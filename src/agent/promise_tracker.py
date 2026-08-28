@@ -103,6 +103,11 @@ class PromiseToPayTracker:
     def __init__(self):
         self._store: Dict[str, PromiseToPay] = {}
 
+    # Alias so api/main.py reset can do: promise_tracker._promises.clear()
+    @property
+    def _promises(self) -> Dict[str, PromiseToPay]:
+        return self._store
+
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
     def create(
@@ -185,6 +190,49 @@ class PromiseToPayTracker:
 
     def broken(self) -> List[PromiseToPay]:
         return [p for p in self._store.values() if p.status == PromiseStatus.BROKEN]
+
+    def payer_trust_score(self, vpa: str) -> float:
+        """
+        Compute a CRED-style trust score (0.0 – 1.0) from this payer's
+        Promise-to-Pay history.  A higher score means the customer has a
+        strong track record of keeping commitments — the Decision Engine
+        uses this to be *less* aggressive with retries (they'll self-cure)
+        or *more* lenient with retry timing.
+
+        Algorithm:
+          - No history          → neutral 0.5  (benefit of the doubt)
+          - fulfilled / total   → base rate
+          - Recency-weighted:   recent promises count 2×
+          - Broken promises     subtract 0.15 each (capped at floor 0.05)
+
+        In production: feed this into Thompson Sampling as a prior.
+        """
+        history = [p for p in self._store.values() if p.vpa == vpa]
+        if not history:
+            return 0.5   # neutral — no data
+
+        # Sort newest-first for recency weighting
+        history.sort(key=lambda p: p.promised_at, reverse=True)
+
+        weighted_fulfilled = 0.0
+        weighted_total     = 0.0
+        for i, p in enumerate(history):
+            weight = 2.0 if i == 0 else 1.0   # most-recent counts double
+            weighted_total += weight
+            if p.status == PromiseStatus.FULFILLED:
+                weighted_fulfilled += weight
+
+        base_rate  = weighted_fulfilled / weighted_total if weighted_total else 0.5
+        # Penalise broken promises
+        broken_cnt = sum(1 for p in history if p.status == PromiseStatus.BROKEN)
+        score      = base_rate - (broken_cnt * 0.15)
+        score      = round(max(0.05, min(1.0, score)), 2)
+
+        logger.debug(
+            "TrustScore vpa=%s history=%d fulfilled=%.1f broken=%d score=%.2f",
+            vpa, len(history), weighted_fulfilled, broken_cnt, score,
+        )
+        return score
 
     # ── Sweep (call periodically) ─────────────────────────────────────────────
 

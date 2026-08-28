@@ -29,6 +29,7 @@ from src.agent.promise_tracker import promise_tracker
 from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.b2b_chaser import b2b_chaser, AgingBucket
 from src.agent.recovery_ledger import ledger as recovery_ledger
+from src.integrations.setu_aa import setu_aa
 
 _decision_engine = DecisionEngine()
 
@@ -161,6 +162,43 @@ async def _run_and_log(scenario_key: str):
         channel    = "",
     )
 
+    # 1b) TRUST SCORE — compute from P2P history before deciding
+    trust_score = promise_tracker.payer_trust_score(ev.customer_vpa)
+
+    # 1c) AA BALANCE CHECK — for U30 (insufficient funds) only
+    #     Replace salary-cycle guess with a verified balance signal.
+    aa_check = ""
+    if ev.failure_code == "U30":
+        aa_result = setu_aa.check_balance(
+            vpa          = ev.customer_vpa,
+            amount_due   = ev.amount,
+            bank         = ev.bank,
+            failure_code = ev.failure_code,
+        )
+        aa_check = aa_result.note
+        # Boost or dampen trust score based on verified funds
+        if aa_result.funds_available:
+            trust_score = min(1.0, trust_score + 0.20)  # confirmed salary credit
+        else:
+            trust_score = max(0.05, trust_score - 0.10)  # still short
+        recovery_ledger.log(
+            event_type = "aa_check",
+            vpa        = ev.customer_vpa,
+            amount     = ev.amount,
+            reasoning  = (
+                f"[AA] Setu sandbox consent approved. "
+                + aa_result.note
+                + f" (Trust adjusted → {trust_score:.2f})"
+            ),
+            confidence = 0.92,   # AA signal is high-confidence vs. heuristic
+            channel    = "setu_aa",
+        )
+
+    # Patch computed fields back onto the event (already stored in EventStore,
+    # but we update in-place so the SSE dict re-emitted later carries them)
+    ev.trust_score = round(trust_score, 2)
+    ev.aa_check    = aa_check
+
     # 2) DECIDE entry — log guardrail / strategy
     decision = _decision_engine.evaluate(
         failure_code  = ev.failure_code,
@@ -168,6 +206,7 @@ async def _run_and_log(scenario_key: str):
         amount        = ev.amount,
         retry_count   = cfg.get("retry_attempt", 0),
         has_promise   = False,
+        trust_score   = trust_score,
     )
     confidence_decide = 0.90 if decision.guardrails_fired else 0.72
     evt_type_decide   = "guardrail" if decision.guardrails_fired else "decide"
