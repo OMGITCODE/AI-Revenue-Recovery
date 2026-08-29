@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   connectSSE();
   loadModules();                         // load P2P, Checkout, B2B
   setInterval(loadModules, 15_000);      // refresh every 15s
+  loadBenchmark();                       // load benchmark panel on boot
 });
 
 // â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1108,6 +1109,71 @@ async function confirmSettle() {
     await loadB2B(); await loadLedger(); await loadROI();
   } catch (e) { toast('Settle failed: ' + e.message, 'red'); }
   finally { btn.disabled = false; btn.innerHTML = '&#8377;&nbsp; Confirm Settlement'; }
+}
+
+// ── Benchmark Panel ──────────────────────────────────────────────────────────
+async function loadBenchmark() {
+  const btn  = document.getElementById('bm-refresh-btn');
+  const chip = document.getElementById('bm-uplift-chip');
+  if (btn)  { btn.disabled = true; btn.textContent = '↻ Loading…'; }
+  if (chip) { chip.textContent = 'Running…'; chip.className = 'stat-chip chip-blue'; }
+  try {
+    const data = await fetch('/api/benchmark').then(r => r.json());
+    const b    = data.baseline;
+    const a    = data.ai_agent;
+    const d    = data.delta;
+
+    // Headline KPIs
+    setText('bm-stake',      fmtInr(a.total_at_stake));
+    setText('bm-base-rec',   fmtInr(b.total_recovered));
+    setText('bm-ai-rec',     fmtInr(a.total_recovered));
+    setText('bm-base-rate',  b.recovery_rate_pct + '% recovery rate');
+    setText('bm-ai-rate',    a.recovery_rate_pct + '% recovery rate');
+    setText('bm-delta',      '+' + fmtInr(d.revenue_recovered_uplift));
+    setText('bm-rate-delta', '+' + d.recovery_rate_pts + ' pts recovery rate');
+    setText('bm-violations', b.compliance_violations + ' (baseline)');
+    setText('bm-roi-uplift', '+' + fmtInr(d.net_roi_uplift));
+
+    // Uplift chip
+    if (chip) {
+      chip.textContent  = '+' + fmtInr(d.revenue_recovered_uplift) + ' uplift (+' + d.recovery_rate_pts + ' pts)';
+      chip.className    = 'stat-chip chip-green';
+    }
+
+    // Comparison table
+    const tbody = document.getElementById('bm-tbody');
+    if (tbody) {
+      const rows = [
+        ['Revenue at Stake',           fmtInr(b.total_at_stake),          fmtInr(a.total_at_stake),         '—'],
+        ['Revenue Recovered',          fmtInr(b.total_recovered),         fmtInr(a.total_recovered),        '+' + fmtInr(d.revenue_recovered_uplift) + ' (' + ((d.revenue_recovered_uplift / b.total_recovered) * 100).toFixed(0) + '%)'],
+        ['Recovery Rate',              b.recovery_rate_pct + '%',         a.recovery_rate_pct + '%',        '+' + d.recovery_rate_pts + ' percentage points'],
+        ['Compliance Violations',      b.compliance_violations + ' (RBI/TRAI)', a.compliance_violations + ' ✅', '-' + d.violations_eliminated + ' violations eliminated'],
+        ['Wasted Retries',             b.retries + ' (blind flood)',      a.retries + ' (salary-targeted)', '-' + (b.retries - a.retries) + ' retries saved'],
+        ['Intervention Channel Costs', fmtInr(b.channel_costs),           fmtInr(a.channel_costs),          fmtInr(a.channel_costs - b.channel_costs)],
+        ['Net ROI (Recovered − Cost)', fmtInr(b.net_roi),                 fmtInr(a.net_roi),                '+' + fmtInr(d.net_roi_uplift) + ' net uplift'],
+      ];
+      tbody.innerHTML = rows.map(([label, bval, aval, delta]) =>
+        `<tr>
+          <td><strong>${label}</strong></td>
+          <td style="color:var(--red)">${bval}</td>
+          <td style="color:var(--green)">${aval}</td>
+          <td style="color:var(--accent);font-weight:600">${delta}</td>
+        </tr>`
+      ).join('');
+    }
+  } catch (e) {
+    console.error('Benchmark load failed:', e);
+    if (chip) { chip.textContent = 'Error'; chip.className = 'stat-chip chip-red'; }
+    const tbody = document.getElementById('bm-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>Benchmark failed to load. Is the server running?</p></div></td></tr>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+  }
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
 }
 
 // Escape closes all inline forms + settle dialog

@@ -576,7 +576,72 @@
       </div>
     </div>
 
-  </div><!-- /content-2col -->
+  <!-- ── Benchmark Panel ──────────────────────────────────────────────────── -->
+  <div class="content" style="margin-top:12px;">
+    <div class="card" id="benchmark-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📊 Empirical Benchmark: RecoverIQ vs Fixed-Schedule Retry Baseline</div>
+          <div class="card-sub">Live comparison across 40 real-world UPI Autopay failure scenarios · Click to refresh</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="stat-chip chip-green" id="bm-uplift-chip">Loading...</span>
+          <button class="btn-ghost" id="bm-refresh-btn" onclick="loadBenchmark()" title="Refresh benchmark">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Headline numbers -->
+      <div class="roi-banner" id="bm-banner" style="margin-bottom:12px;">
+        <div class="roi-item">
+          <div class="roi-label">Revenue at Stake</div>
+          <div class="roi-value muted" id="bm-stake">₹—</div>
+          <div class="roi-label" style="margin-top:2px">40 scenarios</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Baseline Recovered</div>
+          <div class="roi-value red" id="bm-base-rec">₹—</div>
+          <div class="roi-label" style="margin-top:2px" id="bm-base-rate">—% rate</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">AI Agent Recovered</div>
+          <div class="roi-value green" id="bm-ai-rec">₹—</div>
+          <div class="roi-label" style="margin-top:2px" id="bm-ai-rate">—% rate</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Revenue Uplift</div>
+          <div class="roi-value" id="bm-delta" style="color:var(--accent)">₹—</div>
+          <div class="roi-label" style="margin-top:2px" id="bm-rate-delta">— pts recovery rate</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Compliance Violations</div>
+          <div class="roi-value red" id="bm-violations">—</div>
+          <div class="roi-label" style="margin-top:2px">Baseline (RBI/TRAI)</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">Net ROI Uplift</div>
+          <div class="roi-value green" id="bm-roi-uplift">₹—</div>
+          <div class="roi-label" style="margin-top:2px">After channel costs</div>
+        </div>
+      </div>
+
+      <!-- Comparison table -->
+      <div class="module-table-wrap">
+        <table class="tbl" id="bm-tbl">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Baseline (Fixed-Schedule Retry)</th>
+              <th>RecoverIQ AI Agent</th>
+              <th>Delta / Uplift</th>
+            </tr>
+          </thead>
+          <tbody id="bm-tbody">
+            <tr><td colspan="4"><div class="empty-state"><p>Click ↻ Refresh to load benchmark results</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /benchmark -->
 
 </div><!-- /page -->
 
