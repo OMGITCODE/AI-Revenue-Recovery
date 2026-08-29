@@ -612,7 +612,7 @@ async def b2b_dashboard():
     }
 
 
-# ── Recovery Ledger + ROI ─────────────────────────────────────────────────────────
+# ── Recovery Ledger + ROI + Audit Export ──────────────────────────────────────────
 
 @app.get("/api/ledger")
 async def get_ledger(limit: int = 50):
@@ -625,12 +625,101 @@ async def get_ledger(limit: int = 50):
         "entries":     [e.to_dict() for e in recovery_ledger.recent(limit)],
     }
 
+@app.get("/api/ledger/export")
+async def export_ledger(format: str = "json"):
+    """
+    Export the full compliance audit trail as JSON or CSV for regulatory oversight.
+    """
+    entries = [e.to_dict() for e in recovery_ledger.all_entries()]
+    if format.lower() == "csv":
+        import io
+        import csv
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "ledger_id", "ts_full", "event_type", "vpa", "amount",
+                "reasoning", "confidence", "outcome", "channel",
+                "channel_cost", "amount_recovered", "roi"
+            ]
+        )
+        writer.writeheader()
+        for row in entries:
+            # Map clean dict for CSV
+            writer.writerow({
+                "ledger_id": row.get("ledger_id"),
+                "ts_full": row.get("ts_full"),
+                "event_type": row.get("event_type"),
+                "vpa": row.get("vpa"),
+                "amount": row.get("amount"),
+                "reasoning": row.get("reasoning"),
+                "confidence": row.get("confidence"),
+                "outcome": row.get("outcome"),
+                "channel": row.get("channel"),
+                "channel_cost": row.get("channel_cost"),
+                "amount_recovered": row.get("amount_recovered"),
+                "roi": row.get("roi"),
+            })
+        from fastapi.responses import Response
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=recovery_audit_trail.csv"}
+        )
+    return {
+        "audit_trail_version": "1.0",
+        "total_records": len(entries),
+        "overall_roi": recovery_ledger.overall_roi(),
+        "records": entries,
+    }
+
 @app.get("/api/roi")
 async def get_roi():
     """Recovery ROI breakdown: net ₹ recovered minus channel cost per intervention type."""
     return {
         "overall":    recovery_ledger.overall_roi(),
         "by_channel": recovery_ledger.roi_by_channel(),
+    }
+
+@app.get("/api/bandit")
+async def get_bandit_state():
+    """Returns contextual Thompson Sampling bandit Beta posterior distributions."""
+    from src.agent.bandit import bandit_engine
+    return {
+        "algorithm": "Contextual Thompson Sampling (Beta-Bernoulli Prior)",
+        "summary": bandit_engine.get_summary(),
+    }
+
+@app.get("/api/benchmark")
+async def run_benchmark_endpoint():
+    """Runs empirical benchmark comparing fixed retry baseline vs RecoverIQ AI Agent."""
+    from benchmark import run_benchmark
+    b, a = run_benchmark()
+    return {
+        "baseline": {
+            "total_at_stake": b.total_at_stake,
+            "total_recovered": b.total_recovered,
+            "recovery_rate_pct": round((b.recovered_events / b.total_events) * 100, 1),
+            "retries": b.retries_fired,
+            "compliance_violations": b.compliance_violations,
+            "channel_costs": round(b.channel_costs, 2),
+            "net_roi": round(b.net_roi, 2),
+        },
+        "ai_agent": {
+            "total_at_stake": a.total_at_stake,
+            "total_recovered": a.total_recovered,
+            "recovery_rate_pct": round((a.recovered_events / a.total_events) * 100, 1),
+            "retries": a.retries_fired,
+            "compliance_violations": a.compliance_violations,
+            "channel_costs": round(a.channel_costs, 2),
+            "net_roi": round(a.net_roi, 2),
+        },
+        "delta": {
+            "revenue_recovered_uplift": round(a.total_recovered - b.total_recovered, 2),
+            "recovery_rate_pts": round((a.recovered_events / a.total_events * 100) - (b.recovered_events / b.total_events * 100), 1),
+            "net_roi_uplift": round(a.net_roi - b.net_roi, 2),
+            "violations_eliminated": b.compliance_violations - a.compliance_violations,
+        }
     }
 
 

@@ -28,6 +28,8 @@ logger = get_logger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
+from .bandit import bandit_engine, BanditDecision
+
 # ── Customer tier ─────────────────────────────────────────────────────────────
 
 class CustomerTier(str, Enum):
@@ -56,6 +58,7 @@ class GuardrailDecision:
     retry_budget_left:  int         = 3
     reason:             str         = ""
     trust_score:        float       = 0.5   # payer trust score 0.0–1.0
+    bandit_decision:    Optional[dict] = None # Thompson sampling MAB selection
 
     def to_dict(self) -> dict:
         return {
@@ -67,6 +70,7 @@ class GuardrailDecision:
             "retry_budget_left": self.retry_budget_left,
             "reason":            self.reason,
             "trust_score":       self.trust_score,
+            "bandit_decision":   self.bandit_decision,
         }
 
 
@@ -201,17 +205,48 @@ class DecisionEngine:
             "MED"  if trust_score >= 0.40 else
             "LOW"
         )
+
+        # ── Step 2: Contextual Thompson Sampling Action Selection ────────────
+        bandit_res = None
+        if approved:
+            # Map NPCI failure code to bandit category
+            if failure_code in ("U30", "U13"):
+                cat = "insufficient_funds"
+            elif failure_code in ("TM", "TE"):
+                cat = "technical_error"
+            elif failure_code in ("BT01", "BT02", "BA", "RB"):
+                cat = "mandate_inactive"
+            else:
+                cat = "insufficient_funds"
+
+            bandit_decision_obj = bandit_engine.select_best_arm(
+                failure_category=cat,
+                amount=amount,
+                customer_tier=tier.value,
+                trust_score=trust_score,
+                allowed_actions=allowed,
+            )
+            bandit_res = bandit_decision_obj.to_dict()
+
+            # Re-order allowed actions so the Thompson-selected optimal arm is first
+            top_arm = bandit_decision_obj.selected_arm.value
+            if top_arm in allowed:
+                allowed.remove(top_arm)
+                allowed.insert(0, top_arm)
+
         reason   = (
             f"Tier={tier} | Budget={budget} retries left | "
             f"Trust={trust_score:.2f}({trust_label}) | "
             + (f"DND={in_dnd} | " if in_dnd else "")
             + (f"Promise={has_promise} | " if has_promise else "")
+            + (f"MAB=[{bandit_res['selected_arm']}] | " if bandit_res else "")
             + f"Guardrails={fired or 'none'}"
         )
 
         logger.info(
-            "DecisionEngine → approved=%s | allowed=%s | blocked=%s | tier=%s | trust=%.2f",
+            "DecisionEngine → approved=%s | allowed=%s | blocked=%s | tier=%s | trust=%.2f | bandit=%s",
             approved, allowed, blocked, tier, trust_score,
+            bandit_res["selected_arm"] if bandit_res else "none",
         )
 
         return GuardrailDecision(
@@ -223,6 +258,7 @@ class DecisionEngine:
             retry_budget_left=budget,
             reason=reason,
             trust_score=trust_score,
+            bandit_decision=bandit_res,
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
