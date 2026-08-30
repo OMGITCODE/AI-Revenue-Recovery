@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-47%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-52%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -236,7 +236,7 @@ Open **`http://localhost:8000`** in your browser to view the live dashboard.
 
 ```bash
 python -m pytest tests/ -v
-# 47 passed in ~3.5s
+# 52 passed in ~3.3s
 ```
 
 ---
