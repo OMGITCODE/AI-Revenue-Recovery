@@ -1,7 +1,32 @@
-"""Revenue Recovery Orchestrator.
+"""
+Revenue Recovery Orchestrator  [REFERENCE / V1 PROTOTYPE]
+==========================================================
+⚠️  THIS FILE IS AN EARLIER ITERATION.
 
-Coordinates the full recovery workflow:
-detect → diagnose → intervene → track.
+The live, production orchestration layer is api/main.py
+────────────────────────────────────────────────────────
+api/main.py is the real orchestrator. It wires together:
+  • UPIAutopayDetector          (src/agent/upi_detector.py)
+  • DecisionEngine + Guardrails (src/agent/decision_engine.py)
+  • Thompson Sampling Bandit    (src/agent/bandit.py)
+  • Promise-to-Pay Tracker      (src/agent/promise_tracker.py)
+  • Recovery Audit Ledger       (src/agent/recovery_ledger.py)
+  • Setu Account Aggregator     (src/integrations/setu_aa.py)
+  • B2B Receivables Chaser      (src/agent/b2b_chaser.py)
+  • Checkout Drop-off Recovery  (src/agent/checkout_recovery.py)
+
+It exposes 25+ REST endpoints (see /docs) and a live SSE stream.
+
+This file (orchestrator.py) is the generic v1 prototype built
+before the UPI-specific pipeline was completed. It is kept here
+for reference and to show the architectural evolution from the
+generic detect → diagnose → intervene loop to the full
+NPCI-aware, guardrail-enforced, Bayesian MAB pipeline in
+api/main.py.
+
+To run the project:
+    uvicorn api.main:app --host 127.0.0.1 --port 8000
+    # then open http://localhost:8000
 """
 
 from .detector import RevenueRiskDetector, RevenueRisk
@@ -13,7 +38,12 @@ logger = get_logger(__name__)
 
 
 class RecoveryOrchestrator:
-    """Orchestrates the end-to-end revenue recovery pipeline."""
+    """
+    Generic v1 orchestrator — detect → diagnose → intervene loop.
+
+    NOTE: For the full production pipeline (UPI Autopay, NPCI codes,
+    RBI guardrails, Thompson Sampling, audit ledger), see api/main.py.
+    """
 
     def __init__(
         self,
@@ -77,10 +107,9 @@ if __name__ == "__main__":
     import asyncio
 
     async def main():
-        detector = RevenueRiskDetector()
-        diagnoser = RootCauseDiagnoser()
-        orchestrator = RecoveryOrchestrator(detector, diagnoser, [])
-        print("🔄 AI Revenue Recovery Agent initialized.")
-        print("Ready to detect and recover revenue at risk.")
+        print("⚠️  orchestrator.py is the v1 prototype.")
+        print("   The live pipeline is: uvicorn api.main:app --port 8000")
+        print("   Dashboard: http://localhost:8000")
 
     asyncio.run(main())
+

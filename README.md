@@ -89,17 +89,19 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 
 ## 🎯 Full-Spectrum Recovery Capabilities
 
-| Module | Mechanism | Key Innovation |
+| Module | File | Key Innovation |
 |---|---|---|
-| **UPI Autopay Recovery** | 14 NPCI error codes mapped to intelligent recovery workflows | Differentiates permanent failures (`BT01`, `BT02`) from transient ones (`U30`, `TM`) |
-| **Salary-Cycle Retry** | Schedules `U30` retries for 1st–7th of month in IST | Avoids month-end dry balance trap; boosts debit success from 14% to 88% |
-| **Setu Account Aggregator** | Balance pre-flight check stub before debit retry | Verifies salary credit arrival before attempting bank debit |
-| **Mandate Renewal Link** | Auto-generates Razorpay magic links for revoked/expired mandates | Re-registers customer mandate via WhatsApp in 1 click |
-| **Promise-to-Pay Tracker** | Logs customer commitments with explicit deadlines | Suppresses aggressive retries while customer commitment is active |
-| **Checkout Drop-off Recovery** | Hinglish conversational WhatsApp nudges ($T+10\text{min}$) | Recovers abandoned carts with 1-click UPI intent fallback |
-| **B2B Receivables Chaser** | Dunning sequencer across 4 aging buckets ($1\text{--}30\text{d}, 31\text{--}60\text{d}, 61\text{--}90\text{d}, 90\text{d}+$) | Automated IVR, WhatsApp reminders, 18% p.a. interest calculation, legal notices |
-| **RBI & TRAI Guardrails** | Strict regulatory circuit breakers | Blocks silent retries $>₹15,000$ (RBI GR7); enforces TRAI DND (21:00–08:00 IST) |
-| **Immutable Audit Ledger** | Every decision logged with confidence score & plain-English reasoning | Exportable as CSV/JSON for regulatory compliance and audit trails |
+| **Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Beta-Bernoulli MAB — learns optimal channel per failure context, 48 contextual clusters with domain priors |
+| **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 8 RBI/TRAI guardrails (GR1–GR8): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, daily contact cap |
+| **UPI Autopay Recovery** | `src/agent/upi_detector.py` | 14 NPCI error codes mapped to intelligent recovery — differentiates permanent (`BT01`, `BT02`) from transient (`U30`, `TM`) |
+| **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Reschedules `U30` retries to 1st–7th of month (10:00 AM IST) — avoids month-end dry balance trap |
+| **Setu Account Aggregator** | `src/integrations/setu_aa.py` | Balance pre-flight check stub before debit retry — verifies salary credit before bank call |
+| **Promise-to-Pay Tracker** | `src/agent/promise_tracker.py` | Logs commitments with deadlines + Payer Trust Score (0.0–1.0) — suppresses nudges while promise is active |
+| **Checkout Drop-off Recovery** | `src/agent/checkout_recovery.py` | Hinglish conversational WhatsApp nudges at T+10min — recovers abandoned carts with 1-click UPI fallback |
+| **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) — IVR, WhatsApp, interest calc, legal notices |
+| **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Append-only ledger: every decision with confidence score + plain-English reasoning; CSV/JSON export |
+| **Live REST API (25+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/ledger/export` |
+| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹189,225 recovered, +85 pts rate, 0 compliance violations |
 
 ---
 
@@ -156,11 +158,12 @@ ai-revenue-recovery-agent/
 │   │   ├── retry_scheduler.py   # Salary-cycle calendar scheduler (IST)
 │   │   ├── checkout_recovery.py # Hinglish conversational checkout recovery
 │   │   ├── b2b_chaser.py        # B2B dunning sequencer & aging buckets
-│   │   ├── detector.py          # Generic revenue risk detection
-│   │   ├── diagnoser.py         # NPCI root-cause diagnoser
-│   │   ├── upi_detector.py      # UPI Autopay webhook detector
-│   │   ├── interventions.py     # Base generic recovery interventions
-│   │   └── upi_interventions.py # 5 UPI recovery strategies
+│   │   ├── upi_detector.py      # UPI Autopay webhook detector (14 NPCI codes)
+│   │   ├── upi_interventions.py # 5 UPI recovery strategies (retry/collect/renewal/nudge/escalate)
+│   │   ├── detector.py          # Generic revenue risk detection (v1 base)
+│   │   ├── diagnoser.py         # Root-cause diagnoser (v1 base)
+│   │   ├── interventions.py     # Base intervention classes (v1 base)
+│   │   └── orchestrator.py      # ⚠️ V1 prototype [REFERENCE ONLY] — live pipeline is api/main.py
 │   │
 │   ├── integrations/            # External APIs
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
