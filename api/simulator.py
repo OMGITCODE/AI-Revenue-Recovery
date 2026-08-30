@@ -125,8 +125,11 @@ def _make_upi_event(cfg: dict) -> UPIAutopayEvent:
         created_at=now - timedelta(days=60),
         expiry_date=now + timedelta(days=305),
     )
+    event_id = cfg.get("event_id")
+    if not event_id:
+        event_id = uuid.uuid4().hex[:12].upper()
     return UPIAutopayEvent(
-        event_id=uuid.uuid4().hex[:12].upper(),
+        event_id=event_id,
         event_type=cfg["event_type"],
         payment_id=f"pay_{uuid.uuid4().hex[:10]}",
         mandate=mandate,
@@ -182,8 +185,10 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
     cfg = SCENARIOS.get(scenario_key)
     if not cfg:
         return None
+    cfg_copy = cfg.copy()
+    cfg_copy["event_id"] = f"EVT-SIM-{scenario_key.upper()}"
 
-    upi_event = _make_upi_event(cfg)
+    upi_event = _make_upi_event(cfg_copy)
     detector  = UPIAutopayDetector()
     risk      = await detector.detect_from_upi_event(upi_event)
     if not risk:

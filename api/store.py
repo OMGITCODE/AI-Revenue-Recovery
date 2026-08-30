@@ -100,7 +100,6 @@ class EventStore:
 
     def __init__(self, maxlen: int = 100):
         self._events: deque[RecoveryEvent] = deque(maxlen=maxlen)
-        self._stats = Stats()
         self._subscribers: list[asyncio.Queue] = []
         self._lock = asyncio.Lock()
 
@@ -115,20 +114,6 @@ class EventStore:
                     return
 
             self._events.appendleft(event)
-            # Update stats
-            self._stats.total_events += 1
-            if event.success:
-                self._stats.successful += 1
-                self._stats.total_recovered += (event.amount_recovered if event.amount_recovered > 0 else event.amount)
-            else:
-                self._stats.failed += 1
-
-            for iv in event.interventions:
-                if iv == "smart_retry":    self._stats.retries_scheduled += 1
-                if iv == "mandate_renewal":self._stats.renewals_sent     += 1
-                if iv == "escalation":     self._stats.escalations       += 1
-                if iv == "whatsapp_nudge": self._stats.whatsapp_sent     += 1
-                if iv == "upi_collect":    self._stats.upi_collects      += 1
 
         # Notify all SSE subscribers
         for q in self._subscribers:
@@ -149,11 +134,25 @@ class EventStore:
         return [e.to_dict() for e in list(self._events)[:limit]]
 
     def get_stats(self) -> dict:
-        return self._stats.to_dict()
+        stats = Stats()
+        for event in self._events:
+            stats.total_events += 1
+            if event.success:
+                stats.successful += 1
+                stats.total_recovered += (event.amount_recovered if event.amount_recovered > 0 else event.amount)
+            else:
+                stats.failed += 1
+
+            for iv in event.interventions:
+                if iv == "smart_retry":    stats.retries_scheduled += 1
+                if iv == "mandate_renewal":stats.renewals_sent     += 1
+                if iv == "escalation":     stats.escalations       += 1
+                if iv == "whatsapp_nudge": stats.whatsapp_sent     += 1
+                if iv == "upi_collect":    stats.upi_collects      += 1
+        return stats.to_dict()
 
     def reset(self) -> None:
         self._events.clear()
-        self._stats = Stats()
 
 
 # Global singleton
