@@ -14,19 +14,25 @@
 
 To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 40-event real-world UPI Autopay failure dataset.
 
-### 🏆 Empirical Benchmark Results (40 Scenarios)
+Outcomes are **probabilistic**, drawn from published industry conversion rates — not forced to 100%. The benchmark runs **N=50 Monte Carlo passes** and reports mean ± std, so every number is checkable against the cited conversion rate in `benchmark.py`.
 
-| Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Value Uplift |
+### 🏆 Empirical Benchmark Results (40 Scenarios · 50 Monte Carlo Runs)
+
+| Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
-| **Total Revenue at Stake** | ₹208,772 | ₹208,772 | — |
-| **Revenue Recovered** | **₹19,547** | **₹208,772** | **+₹189,225 (+968.1%)** |
-| **Recovery Rate (%)** | 15.0% (6/40) | **100.0%** (40/40) | **+85.0% pts absolute uplift** |
-| **Compliance Violations** | 3 (RBI >₹15k silent retries & TRAI DND breaches) | **0 (100% compliant)** | **-3 violations eliminated** |
-| **Total Retries Fired** | 120 (blind flood) | **12 (salary-targeted)** | **-108 wasted retries (-90%)** |
-| **Intervention Channel Cost** | ₹60.00 | ₹381.50 | ₹+321.50 (cost of WhatsApp/IVR links) |
-| **Net ROI (Recovered - Cost)**| **₹19,487** | **₹208,390** | **+₹188,904 net profit uplift** |
+| **Total Revenue at Stake** | ₹2,08,772 | ₹2,08,772 | — |
+| **Revenue Recovered** *(mean, n=50)* | **₹19,547** (deterministic) | **₹1,58,639 ± ₹20,292** | **+₹1,39,092 mean uplift** |
+| **Recovery Rate** *(mean ± std, n=50)* | 15.0% (6/40) | **75.0% ± 7.8%** | **+60 pts mean** |
+| **BT01/BT02 Mandate Renewal** | 0% (blind retry) | **~68%** (WhatsApp magic link) | +68 pts |
+| **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
+| **Compliance Violations (RBI/DND)** | 3 (silent retries + DND breaches) | **0 (100% compliant)** | **-3 eliminated** |
+| **Total Retries Fired** | 120 (blind flood) | **18 (salary-targeted)** | **-102 wasted retries** |
+| **Net ROI** *(sample run)* | **₹19,487** | **₹1,43,637** | **+₹1,24,150** |
 
-> 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` or `GET /api/benchmark`.
+> 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100`) · `GET /api/benchmark`
+> 
+> ⚙️ *Conversion rates used:* mandate renewal 68% · U30 salary-window 88% · UPI Collect 65% · WhatsApp nudge 72% · escalation 85% — all from NPCI/industry data, cited inline in `benchmark.py`.
+
 
 ---
 
