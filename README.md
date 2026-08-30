@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-45%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-47%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -143,8 +143,8 @@ ai-revenue-recovery-agent/
 │
 ├── api/                         # FastAPI Backend & SSE Live Stream
 │   ├── main.py                  # API endpoints, webhook parser, audit export
-│   ├── simulator.py             # Event generator & scenario runner
-│   └── store.py                 # Thread-safe in-memory event store
+│   ├── simulator.py             # Event generator & realistic outcome engine
+│   └── store.py                 # Thread-safe in-memory event store with outcome tracking
 │
 ├── dashboard/                   # Razorpay-Style Dark UI
 │   ├── index.html               # Responsive multi-panel dashboard
@@ -184,10 +184,10 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (45 passing tests)
-    ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests
-    ├── test_bandit_and_benchmark.py # Thompson Sampling & benchmark tests
-    └── test_idempotency.py      # Webhook deduplication & concurrency locks
+└── tests/                       # Test Suite (47 passing tests)
+    ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
+    ├── test_bandit_and_benchmark.py # Thompson Sampling & benchmark tests (7 tests)
+    └── test_idempotency.py      # Webhook deduplication & concurrency locks (6 tests)
 ```
 
 ---
@@ -236,7 +236,7 @@ Open **`http://localhost:8000`** in your browser to view the live dashboard.
 
 ```bash
 python -m pytest tests/ -v
-# 45 passed in ~1.7s
+# 47 passed in ~3.5s
 ```
 
 ---
