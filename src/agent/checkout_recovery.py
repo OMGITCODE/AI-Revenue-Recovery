@@ -193,6 +193,8 @@ class CheckoutRecoveryAgent:
     def mark_recovered(self, session_id: str) -> Optional[CheckoutSession]:
         s = self._sessions.get(session_id)
         if s:
+            if s.status == RecoveryStatus.RECOVERED:
+                return s
             s.status       = RecoveryStatus.RECOVERED
             s.recovered_at = datetime.now(IST)
             logger.info("Checkout RECOVERED: %s | ₹%.0f", session_id, s.cart_amount)

@@ -277,6 +277,8 @@ class B2BChaser:
     def settle(self, receivable_id: str, amount_received: float) -> Optional[Receivable]:
         r = self._receivables.get(receivable_id)
         if r:
+            if r.status == ChaseStatus.SETTLED:
+                return r
             r.status = ChaseStatus.SETTLED
             logger.info("Receivable SETTLED: %s | received ₹%.0f vs ₹%.0f due", receivable_id, amount_received, r.total_outstanding)
         return r

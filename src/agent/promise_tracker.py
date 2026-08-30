@@ -150,6 +150,8 @@ class PromiseToPayTracker:
         if not p:
             logger.warning("P2P fulfill: promise %s not found", promise_id)
             return None
+        if p.status == PromiseStatus.FULFILLED:
+            return p
         p.status       = PromiseStatus.FULFILLED
         p.fulfilled_at = datetime.now(IST)
         logger.info("P2P fulfilled: %s | vpa=%s | ₹%.0f", promise_id, p.vpa, p.amount)
@@ -160,6 +162,8 @@ class PromiseToPayTracker:
         p = self._store.get(promise_id)
         if not p:
             return None
+        if p.status == PromiseStatus.BROKEN:
+            return p
         p.status    = PromiseStatus.BROKEN
         p.broken_at = datetime.now(IST)
         logger.warning(
