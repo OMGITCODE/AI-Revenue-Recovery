@@ -115,19 +115,27 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-During development and testing, we encountered two significant real-world technical failures:
+During development and testing, we encountered three significant real-world technical failures:
 
 ### 1. Windows `cp1252` Stdout Encoding vs. Currency (`₹`) & Emojis
 * **The Bug:** Running Python scripts or streaming Server-Sent Events (SSE) on Windows crashed with `UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9'` because the default Windows console pipe initializes with legacy `cp1252` encoding.
 * **The Fix:**
   1. Built a custom ASGI `Utf8CharsetMiddleware` in FastAPI to guarantee all HTTP, CSS, and JS payloads explicitly serve `charset=utf-8`.
-  2. Enforced `-X utf8` flag and `PYTHONIOENCODING=utf-8` across all demo runners and batch execution scripts.
+  2. Enforced `-X utf8` flag, stream reconfiguring (`sys.stdout.reconfigure(encoding="utf-8")`), and `PYTHONIOENCODING=utf-8` across all demo runners and batch execution scripts.
 
 ### 2. The Month-End `U30` Retry Trap & NPCI Bank Blackout Race Condition
 * **The Bug:** Standard payment gateway retry logic retries failed subscriptions on $D+1, D+2, D+3$. When a salaried subscriber fails on the 28th due to `U30` (insufficient funds), naive fixed retries fire on the 29th, 30th, and 31st — failing all 3 times, incurring bank penalty fees, exhausting the 3-retry lifetime limit, and permanently canceling the subscription right before salary credit on the 1st.
 * **The Fix:**
   1. Engineered `UPIRetryScheduler` to detect month-end dates and reschedule `U30` retries specifically into the **1st–7th of the following month (10:00 AM IST)**.
   2. Integrated **Setu Account Aggregator (AA)** balance pre-flight check stub to verify funds availability before debit execution.
+
+### 3. Cross-Module Duplicate Entry Propagation & Stats Inflation
+* **The Bug:** Gateway webhook retries and rapid repeated simulation triggers generated random UUIDs that bypassed cache lookups, creating duplicate pending promises, ghost checkout drop-offs, redundant dunning dispatches, and double-counted recovery revenue stats in the dashboard.
+* **The Fix:**
+  1. **Deterministic Scenario Event Keys**: Bound simulated scenario executions to fixed event IDs (`EVT-SIM-{CODE}`) so repeated runs update existing records in-place.
+  2. **Audit Ledger Debounce Window**: Enforced a 5-second rapid debounce on `(event_type, vpa, amount, reasoning)` in `RecoveryLedger` to suppress duplicate log rows.
+  3. **Strictly Idempotent State Transitions**: Added state-guard checks across `PromiseToPayTracker.fulfill/break`, `CheckoutRecoveryAgent.mark_recovered`, and `B2BChaser.settle`.
+  4. **Dynamic Stats Computation**: Replaced error-prone incremental counters in `EventStore` with dynamic aggregation computed directly from active events, eliminating statistics drift.
 
 ---
 
@@ -184,10 +192,10 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (47 passing tests)
+└── tests/                       # Test Suite (52 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling & benchmark tests (7 tests)
-    └── test_idempotency.py      # Webhook deduplication & concurrency locks (6 tests)
+    └── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
 ```
 
 ---
