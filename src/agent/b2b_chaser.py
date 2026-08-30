@@ -238,6 +238,9 @@ class B2BChaser:
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
+    def has_invoice(self, invoice_number: str) -> bool:
+        return any(r.invoice_number == invoice_number for r in self._receivables.values())
+
     def add_receivable(
         self,
         debtor_name:    str,
@@ -248,6 +251,10 @@ class B2BChaser:
         due_date_iso:   str,
         currency:       str = "INR",
     ) -> Receivable:
+        existing = next((r for r in self._receivables.values() if r.invoice_number == invoice_number), None)
+        if existing:
+            return existing
+
         due = datetime.fromisoformat(due_date_iso).replace(tzinfo=IST)
         rid = "RCV-" + str(uuid.uuid4())[:6].upper()
         r   = Receivable(

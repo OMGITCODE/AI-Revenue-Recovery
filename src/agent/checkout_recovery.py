@@ -146,6 +146,12 @@ class CheckoutRecoveryAgent:
 
     # ── Session management ────────────────────────────────────────────────────
 
+    def has_active(self, customer_vpa: str, cart_amount: float) -> bool:
+        return any(
+            s.customer_vpa == customer_vpa and abs(s.cart_amount - cart_amount) < 1 and s.status in (RecoveryStatus.OPEN, RecoveryStatus.CONTACTED)
+            for s in self._sessions.values()
+        )
+
     def record_drop_off(
         self,
         customer_vpa:    str,
@@ -156,6 +162,10 @@ class CheckoutRecoveryAgent:
         language:        str = "hinglish",
     ) -> CheckoutSession:
         """Record a new checkout abandonment."""
+        existing = next((s for s in self._sessions.values() if s.customer_vpa == customer_vpa and abs(s.cart_amount - cart_amount) < 1 and s.status in (RecoveryStatus.OPEN, RecoveryStatus.CONTACTED)), None)
+        if existing:
+            return existing
+
         reason = DropOffReason(drop_off_reason) if drop_off_reason in DropOffReason._value2member_map_ else DropOffReason.UNKNOWN
         session_id   = "CHK-" + str(uuid.uuid4())[:6].upper()
         recovery_url = f"https://rzp.io/l/recover-{session_id.lower()}"

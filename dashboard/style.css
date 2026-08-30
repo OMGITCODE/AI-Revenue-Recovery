@@ -360,7 +360,12 @@ body {
   min-height: calc(100vh - var(--nav-h));
   display: flex;
   flex-direction: column;
-  padding-bottom: 24px;
+  padding-bottom: 32px;
+  width: 100%;
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
 }
 
 /* ── Metrics strip ───────────────────────────────────────────────────────────
@@ -368,9 +373,11 @@ body {
 ────────────────────────────────────────────────────────────────────────────── */
 .metrics {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
   padding: 16px 24px 0;
+  width: 100%;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
@@ -411,14 +418,31 @@ body {
 }
 
 /* ── Content area ────────────────────────────────────────────────────────────
-   Left: events table (grows). Right: simulator + breakdown (fixed 300px)
+   Left: events table (grows). Right: simulator + breakdown (fixed 320px)
 ────────────────────────────────────────────────────────────────────────────── */
 .content {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 12px;
-  padding: 12px 24px 0;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  padding: 14px 24px 0;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.content.content-2col {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.content.content-full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.content > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────────
@@ -431,6 +455,9 @@ body {
   box-shadow: var(--shadow-xs);
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .card-header {
@@ -614,6 +641,8 @@ body {
 
 .status-ok  { color: var(--green); font-weight: 600; font-size: 12px; }
 .status-err { color: var(--red);   font-weight: 600; font-size: 12px; }
+.status-esc { color: var(--amber); font-weight: 600; font-size: 12px; }
+.status-pend{ color: var(--blue);  font-weight: 600; font-size: 12px; }
 
 .mono { font-family: 'SF Mono','Fira Code',ui-monospace,monospace; font-size: 11.5px; color: var(--text-2); }
 .fw6  { font-weight: 600; }
@@ -1624,3 +1653,192 @@ body {
   width: 420px;
   max-width: calc(100vw - 40px);
 }
+
+/* ── Module Table Wrappers & Boundary Protections ───────────────────────────── */
+
+.table-scroll-wrap,
+.module-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--white);
+}
+
+.module-table-wrap .tbl {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+}
+
+/* ── Status Chips & Module Stats Header ─────────────────────────────────────── */
+
+.module-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px 9px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-blue  { background: var(--blue-lt);  color: var(--blue);  border: 1px solid rgba(51,102,255,0.25); }
+.chip-green { background: var(--green-lt); color: var(--green); border: 1px solid rgba(0,168,107,0.25); }
+.chip-red   { background: var(--red-lt);   color: var(--red);   border: 1px solid rgba(229,57,53,0.25);  }
+.chip-amber { background: var(--amber-lt); color: #B45309;      border: 1px solid rgba(245,158,11,0.25); }
+
+[data-theme="dark"] .chip-blue  { background: #172554; color: #60A5FA; border-color: #1E40AF; }
+[data-theme="dark"] .chip-green { background: #052E16; color: #4ADE80; border-color: #166534; }
+[data-theme="dark"] .chip-red   { background: #3B0A0A; color: #F87171; border-color: #7F1D1D; }
+[data-theme="dark"] .chip-amber { background: #3A2303; color: #FBBF24; border-color: #78350F; }
+
+/* ── ROI & Benchmark Stats Banner ───────────────────────────────────────────── */
+
+.roi-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--tbl-head);
+  border-bottom: 1px solid var(--border);
+}
+
+.roi-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.roi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roi-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.roi-value.green { color: var(--green); }
+.roi-value.red   { color: var(--red);   }
+.roi-value.blue  { color: var(--blue);  }
+.roi-value.muted { color: var(--text-3); }
+
+/* ── B2B Aging Buckets Strip ────────────────────────────────────────────────── */
+
+.aging-buckets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--tbl-head);
+  border-bottom: 1px solid var(--border);
+}
+
+.aging-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.aging-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aging-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dot-green  { background: var(--green); }
+.dot-amber  { background: var(--amber); }
+.dot-orange { background: #EA580C;      }
+.dot-red    { background: var(--red);   }
+
+.aging-bar-wrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.aging-bar {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.bar-green  { background: var(--green); }
+.bar-amber  { background: var(--amber); }
+.bar-orange { background: #EA580C;      }
+.bar-red    { background: var(--red);   }
+
+.aging-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Global Layout & Responsive Breakpoints ──────────────────────────────────── */
+
+@media (max-width: 1200px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+  .content.content-2col {
+    grid-template-columns: 1fr;
+  }
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .aging-buckets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nav {
+    padding: 0 14px;
+  }
+  .content {
+    padding: 10px 14px 0;
+  }
+  .metrics {
+    padding: 12px 14px 0;
+  }
+}
+

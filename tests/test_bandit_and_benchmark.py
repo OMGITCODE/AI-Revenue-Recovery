@@ -67,10 +67,38 @@ class TestThompsonSamplingBandit:
 
 class TestBenchmarkSuite:
     def test_run_benchmark_completes(self):
-        base, ai = run_benchmark()
+        base, ai = run_benchmark(n_runs=10)
         assert base.total_events == 40
         assert ai.total_events == 40
         assert ai.total_recovered > base.total_recovered
         assert ai.compliance_violations == 0
         assert base.compliance_violations > 0
         assert ai.net_roi > base.net_roi
+
+    def test_benchmark_monte_carlo_stats(self):
+        base, ai = run_benchmark(n_runs=20)
+        assert hasattr(ai, "_ai_rate_mean")
+        assert hasattr(ai, "_ai_rate_std")
+        assert hasattr(ai, "_ai_rec_mean")
+        assert hasattr(ai, "_ai_rec_std")
+        assert ai._n_runs == 20
+        assert ai.total_recovered == ai._ai_rec_mean
+        assert 50.0 <= ai._ai_rate_mean <= 95.0
+        assert ai._ai_rate_std >= 0.0
+
+    def test_api_benchmark_endpoint(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+
+        client = TestClient(app)
+        res = client.get("/api/benchmark")
+        assert res.status_code == 200
+        data = res.json()
+        assert "baseline" in data
+        assert "ai_agent" in data
+        assert "delta" in data
+        assert "recovery_rate_std" in data["ai_agent"]
+        assert "total_recovered_std" in data["ai_agent"]
+        assert data["ai_agent"]["recovery_rate_pct"] > data["baseline"]["recovery_rate_pct"]
+        assert data["ai_agent"]["total_recovered"] > data["baseline"]["total_recovered"]
+        assert data["delta"]["violations_eliminated"] > 0

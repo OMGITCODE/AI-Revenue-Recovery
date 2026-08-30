@@ -34,6 +34,8 @@ class RecoveryEvent:
     scenario_name:      str = ""     # e.g. "U30 – Insufficient Funds"
     trust_score:        float = 0.5  # payer P2P trust score (0.0–1.0)
     aa_check:           str   = ""   # AA balance result summary string
+    status:             str   = "recovered" # recovered / escalated / failed
+    amount_recovered:   float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +57,8 @@ class RecoveryEvent:
             "scenario_name":    self.scenario_name,
             "trust_score":      self.trust_score,
             "aa_check":         self.aa_check,
+            "status":           self.status,
+            "amount_recovered": self.amount_recovered,
         }
 
 
@@ -107,7 +111,7 @@ class EventStore:
             self._stats.total_events += 1
             if event.success:
                 self._stats.successful += 1
-                self._stats.total_recovered += event.amount
+                self._stats.total_recovered += (event.amount_recovered if event.amount_recovered > 0 else event.amount)
             else:
                 self._stats.failed += 1
 

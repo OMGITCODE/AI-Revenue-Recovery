@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-45%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -99,6 +99,7 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 |---|---|---|
 | **Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Beta-Bernoulli MAB — learns optimal channel per failure context, 48 contextual clusters with domain priors |
 | **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 8 RBI/TRAI guardrails (GR1–GR8): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, daily contact cap |
+| **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | Event deduplication cache with TTL + per-VPA async mutex locks — prevents duplicate retries & race conditions |
 | **UPI Autopay Recovery** | `src/agent/upi_detector.py` | 14 NPCI error codes mapped to intelligent recovery — differentiates permanent (`BT01`, `BT02`) from transient (`U30`, `TM`) |
 | **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Reschedules `U30` retries to 1st–7th of month (10:00 AM IST) — avoids month-end dry balance trap |
 | **Setu Account Aggregator** | `src/integrations/setu_aa.py` | Balance pre-flight check stub before debit retry — verifies salary credit before bank call |
@@ -108,6 +109,7 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 | **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Append-only ledger: every decision with confidence score + plain-English reasoning; CSV/JSON export |
 | **Live REST API (25+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/ledger/export` |
 | **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹1,39,092 mean uplift, +60 pts rate uplift, 0 compliance violations |
+
 
 ---
 
@@ -159,6 +161,7 @@ ai-revenue-recovery-agent/
 │   ├── agent/                   # AI Logic & Decision Systems
 │   │   ├── bandit.py            # Bayesian Contextual Thompson Sampling MAB
 │   │   ├── decision_engine.py   # RBI (GR7/GR8) & TRAI Guardrails Engine
+│   │   ├── idempotency.py       # Event deduplication cache & concurrency locks
 │   │   ├── promise_tracker.py   # Promise-to-Pay tracker + Payer Trust Score
 │   │   ├── recovery_ledger.py   # Traceable audit ledger & ROI calculator
 │   │   ├── retry_scheduler.py   # Salary-cycle calendar scheduler (IST)
@@ -181,9 +184,10 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (39 passing tests)
+└── tests/                       # Test Suite (45 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests
-    └── test_bandit_and_benchmark.py # Thompson Sampling & benchmark tests
+    ├── test_bandit_and_benchmark.py # Thompson Sampling & benchmark tests
+    └── test_idempotency.py      # Webhook deduplication & concurrency locks
 ```
 
 ---
@@ -232,7 +236,7 @@ Open **`http://localhost:8000`** in your browser to view the live dashboard.
 
 ```bash
 python -m pytest tests/ -v
-# 39 passed in ~0.4s
+# 45 passed in ~1.7s
 ```
 
 ---
@@ -243,9 +247,11 @@ python -m pytest tests/ -v
 |---|---|---|
 | `GET` | `/api/benchmark` | Runs empirical benchmark and returns ₹ delta & uplift statistics |
 | `GET` | `/api/bandit` | Inspects current Thompson Sampling Beta posterior distributions $(\alpha, \beta)$ |
+| `GET` | `/api/idempotency` | Inspects active idempotency deduplication cache & active mutex locks |
 | `GET` | `/api/ledger/export?format=csv` | Downloads complete regulatory audit trail as CSV |
 | `GET` | `/api/ledger/export?format=json`| Exports complete compliance ledger as structured JSON |
 | `GET` | `/api/roi` | Returns real-time ROI breakdown (net ₹ recovered minus channel costs) |
+| `POST`| `/api/webhook` | Ingests gateway webhooks with duplicate rejection & concurrency locks |
 | `POST`| `/api/decide` | Evaluates guardrails and Thompson Sampling for a custom failure event |
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |

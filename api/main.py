@@ -29,6 +29,7 @@ from src.agent.promise_tracker import promise_tracker
 from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.b2b_chaser import b2b_chaser, AgingBucket
 from src.agent.recovery_ledger import ledger as recovery_ledger
+from src.agent.idempotency import idempotency_manager, customer_locks
 from src.integrations.setu_aa import setu_aa
 
 _decision_engine = DecisionEngine()
@@ -233,7 +234,9 @@ async def _run_and_log(scenario_key: str):
             channel    = channel,
         )
         if not decision.guardrails_fired:
-            recovery_ledger.mark_outcome(e_iv.ledger_id, "pending", 0)
+            outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
+            rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
+            recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
     elif decision.guardrails_fired:
         recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
 
@@ -294,25 +297,68 @@ async def _run_and_log(scenario_key: str):
 
 @app.post("/api/webhook")
 async def webhook(request: Request):
-    """Accept a raw Razorpay-style webhook payload."""
+    """Accept a raw Razorpay-style webhook payload with idempotency deduplication & concurrency locking."""
     try:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    ev = await run_custom_webhook(payload)
-    if not ev:
-        raise HTTPException(status_code=422, detail="Could not parse webhook payload")
-    return ev.to_dict()
+    # 1. Deterministic event ID resolution (Header → Payload ID → Content Hash)
+    headers_dict = dict(request.headers)
+    event_id = idempotency_manager.compute_event_id(payload, headers_dict)
+
+    # 2. Idempotency check: catch duplicate webhooks within TTL window
+    if await idempotency_manager.is_duplicate(event_id):
+        cached = await idempotency_manager.get_cached_response(event_id)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "duplicate_ignored",
+                "event_id": event_id,
+                "message": "Idempotent webhook skipped — duplicate event already processed",
+                "cached_event": cached,
+            },
+        )
+
+    # 3. Extract customer VPA for async concurrency serialization
+    vpa = "default_customer"
+    if isinstance(payload, dict):
+        entity = payload.get("payload", {}).get("payment", {}).get("entity", {}) or payload
+        vpa = entity.get("vpa") or entity.get("customer_vpa") or entity.get("email") or "default_customer"
+
+    # 4. Acquire per-customer mutex lock to prevent concurrent state corruption
+    lock = await customer_locks.lock_for(vpa)
+    async with lock:
+        ev = await run_custom_webhook(payload)
+        if not ev:
+            raise HTTPException(status_code=422, detail="Could not parse webhook payload")
+
+        result_dict = ev.to_dict()
+        await idempotency_manager.record_processed(
+            event_id=event_id,
+            vpa=ev.customer_vpa or vpa,
+            status="processed",
+            response_payload=result_dict,
+        )
+        return result_dict
+
+
+@app.get("/api/idempotency")
+async def get_idempotency():
+    """Inspect active idempotency cache and duplicate metrics."""
+    return {
+        **idempotency_manager.get_stats(),
+        "active_customer_locks": customer_locks.active_locks_count(),
+    }
 
 
 class CustomScenarioRequest(BaseModel):
     """Form payload for a user-defined scenario."""
-    failure_code:   str   = Field(..., example="U30")
-    vpa:            str   = Field(..., example="user@oksbi")
-    bank:           str   = Field(..., example="SBI")
-    amount:         float = Field(..., gt=0, example=999.0)
-    mandate_state:  str   = Field(default="active", example="active")
+    failure_code:   str   = Field(..., json_schema_extra={"example": "U30"})
+    vpa:            str   = Field(..., json_schema_extra={"example": "user@oksbi"})
+    bank:           str   = Field(..., json_schema_extra={"example": "SBI"})
+    amount:         float = Field(..., gt=0, json_schema_extra={"example": 999.0})
+    mandate_state:  str   = Field(default="active", json_schema_extra={"example": "active"})
     retry_attempt:  int   = Field(default=0, ge=0)
     scenario_name:  str   = Field(default="Custom Scenario")
 
@@ -335,6 +381,8 @@ async def reset():
     checkout_agent._sessions.clear()
     b2b_chaser._receivables.clear()
     recovery_ledger._entries.clear()
+    idempotency_manager.clear()
+    customer_locks.clear()
     await _broadcast_modules_updated()
     return {"status": "reset"}
 
@@ -692,14 +740,26 @@ async def get_bandit_state():
 
 @app.get("/api/benchmark")
 async def run_benchmark_endpoint():
-    """Runs empirical benchmark comparing fixed retry baseline vs RecoverIQ AI Agent."""
+    """Runs empirical benchmark comparing fixed retry baseline vs RecoverIQ AI Agent across Monte Carlo runs."""
     from benchmark import run_benchmark
-    b, a = run_benchmark()
+    b, a = run_benchmark(n_runs=50)
+
+    n_runs = getattr(a, "_n_runs", 50)
+    ai_rec_mean = getattr(a, "_ai_rec_mean", a.total_recovered)
+    ai_rec_std  = getattr(a, "_ai_rec_std", 0.0)
+    ai_rate_mean = getattr(a, "_ai_rate_mean", round((a.recovered_events / a.total_events) * 100, 1))
+    ai_rate_std  = getattr(a, "_ai_rate_std", 0.0)
+    base_rec_mean = getattr(b, "_base_rec_mean", b.total_recovered)
+    base_rate_mean = getattr(b, "_base_rate_mean", round((b.recovered_events / b.total_events) * 100, 1))
+    ai_roi_mean = getattr(a, "_ai_roi_mean", a.net_roi)
+
     return {
+        "n_runs": n_runs,
+        "methodology": "Monte Carlo (n=50) — probabilistic outcomes per published NPCI/industry conversion rates",
         "baseline": {
             "total_at_stake": b.total_at_stake,
-            "total_recovered": b.total_recovered,
-            "recovery_rate_pct": round((b.recovered_events / b.total_events) * 100, 1),
+            "total_recovered": round(base_rec_mean, 2),
+            "recovery_rate_pct": round(base_rate_mean, 1),
             "retries": b.retries_fired,
             "compliance_violations": b.compliance_violations,
             "channel_costs": round(b.channel_costs, 2),
@@ -707,20 +767,23 @@ async def run_benchmark_endpoint():
         },
         "ai_agent": {
             "total_at_stake": a.total_at_stake,
-            "total_recovered": a.total_recovered,
-            "recovery_rate_pct": round((a.recovered_events / a.total_events) * 100, 1),
+            "total_recovered": round(ai_rec_mean, 2),
+            "total_recovered_std": round(ai_rec_std, 2),
+            "recovery_rate_pct": round(ai_rate_mean, 1),
+            "recovery_rate_std": round(ai_rate_std, 1),
             "retries": a.retries_fired,
             "compliance_violations": a.compliance_violations,
             "channel_costs": round(a.channel_costs, 2),
-            "net_roi": round(a.net_roi, 2),
+            "net_roi": round(ai_roi_mean, 2),
         },
         "delta": {
-            "revenue_recovered_uplift": round(a.total_recovered - b.total_recovered, 2),
-            "recovery_rate_pts": round((a.recovered_events / a.total_events * 100) - (b.recovered_events / b.total_events * 100), 1),
-            "net_roi_uplift": round(a.net_roi - b.net_roi, 2),
+            "revenue_recovered_uplift": round(ai_rec_mean - base_rec_mean, 2),
+            "recovery_rate_pts": round(ai_rate_mean - base_rate_mean, 1),
+            "net_roi_uplift": round(ai_roi_mean - b.net_roi, 2),
             "violations_eliminated": b.compliance_violations - a.compliance_violations,
         }
     }
+
 
 
 # Startup: no auto-seeding — call POST /api/seed from the dashboard instead.

@@ -194,7 +194,9 @@ function makeRow(ev) {
     <td><span class="sev-badge sev-${sev}">${cap(sev)}</span></td>
     <td><span class="trust-badge ${tsCls}" title="Payer trust score from P2P history">${tsTxt}</span></td>
     <td>${ivHtml}</td>
-    <td>${ev.success
+    <td>${ev.status === 'escalated' || (ev.interventions && ev.interventions.includes('escalation') && !ev.success)
+      ? '<span class="status-esc">🚨 Escalated</span>'
+      : ev.success
       ? '<span class="status-ok">✓ Recovered</span>'
       : '<span class="status-err">✗ Failed</span>'}</td>
     <td>${actHtml}</td>`;
@@ -1126,9 +1128,9 @@ async function loadBenchmark() {
     // Headline KPIs
     setText('bm-stake',      fmtInr(a.total_at_stake));
     setText('bm-base-rec',   fmtInr(b.total_recovered));
-    setText('bm-ai-rec',     fmtInr(a.total_recovered));
-    setText('bm-base-rate',  b.recovery_rate_pct + '% recovery rate');
-    setText('bm-ai-rate',    a.recovery_rate_pct + '% recovery rate');
+    setText('bm-ai-rec',     fmtInr(a.total_recovered) + (a.total_recovered_std ? ` ± ${fmtInr(a.total_recovered_std)}` : ''));
+    setText('bm-base-rate',  b.recovery_rate_pct + '% rate (fixed)');
+    setText('bm-ai-rate',    a.recovery_rate_pct + '%' + (a.recovery_rate_std ? ` ± ${a.recovery_rate_std}%` : '') + ' rate');
     setText('bm-delta',      '+' + fmtInr(d.revenue_recovered_uplift));
     setText('bm-rate-delta', '+' + d.recovery_rate_pts + ' pts recovery rate');
     setText('bm-violations', b.compliance_violations + ' (baseline)');
@@ -1145,8 +1147,8 @@ async function loadBenchmark() {
     if (tbody) {
       const rows = [
         ['Revenue at Stake',           fmtInr(b.total_at_stake),          fmtInr(a.total_at_stake),         '—'],
-        ['Revenue Recovered',          fmtInr(b.total_recovered),         fmtInr(a.total_recovered),        '+' + fmtInr(d.revenue_recovered_uplift) + ' (' + ((d.revenue_recovered_uplift / b.total_recovered) * 100).toFixed(0) + '%)'],
-        ['Recovery Rate',              b.recovery_rate_pct + '%',         a.recovery_rate_pct + '%',        '+' + d.recovery_rate_pts + ' percentage points'],
+        ['Revenue Recovered',          fmtInr(b.total_recovered),         fmtInr(a.total_recovered) + (a.total_recovered_std ? ` ± ${fmtInr(a.total_recovered_std)}` : ''), '+' + fmtInr(d.revenue_recovered_uplift) + ' (' + ((d.revenue_recovered_uplift / b.total_recovered) * 100).toFixed(0) + '%)'],
+        ['Recovery Rate',              b.recovery_rate_pct + '%',         a.recovery_rate_pct + '%' + (a.recovery_rate_std ? ` ± ${a.recovery_rate_std}%` : ''), '+' + d.recovery_rate_pts + ' percentage points'],
         ['Compliance Violations',      b.compliance_violations + ' (RBI/TRAI)', a.compliance_violations + ' ✅', '-' + d.violations_eliminated + ' violations eliminated'],
         ['Wasted Retries',             b.retries + ' (blind flood)',      a.retries + ' (salary-targeted)', '-' + (b.retries - a.retries) + ' retries saved'],
         ['Intervention Channel Costs', fmtInr(b.channel_costs),           fmtInr(a.channel_costs),          fmtInr(a.channel_costs - b.channel_costs)],

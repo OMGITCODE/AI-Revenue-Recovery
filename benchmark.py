@@ -329,6 +329,17 @@ def run_benchmark(n_runs: int = 50):
     base_res._base_rate_mean = statistics.mean(base_rate_list)
     base_res._base_rec_mean  = statistics.mean(base_recovered_list)
 
+    # Assign aggregate mean values directly to primary fields so any caller gets true Monte Carlo values
+    ai_res.total_recovered = ai_res._ai_rec_mean
+    ai_res.recovered_events = int(round((ai_res._ai_rate_mean / 100.0) * ai_res.total_events))
+    ai_res.failed_events = ai_res.total_events - ai_res.recovered_events
+    ai_res.net_roi = ai_res._ai_roi_mean
+
+    base_res.total_recovered = base_res._base_rec_mean
+    base_res.recovered_events = int(round((base_res._base_rate_mean / 100.0) * base_res.total_events))
+    base_res.failed_events = base_res.total_events - base_res.recovered_events
+    base_res.net_roi = base_res.total_recovered - base_res.channel_costs
+
     return base_res, ai_res
 
 

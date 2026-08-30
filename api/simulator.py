@@ -138,6 +138,42 @@ def _make_upi_event(cfg: dict) -> UPIAutopayEvent:
     )
 
 
+import random
+
+# ── Empirical channel conversion rates (aligned with benchmark.py) ────────────
+CHANNEL_CONVERSION_RATES = {
+    "mandate_renewal": 0.68,   # NPCI WhatsApp magic links
+    "smart_retry":     0.88,   # U30 during salary window (1st-7th)
+    "upi_collect":     0.65,   # Instant collect approval
+    "whatsapp_nudge":  0.72,   # Conversational payment link
+    "escalation":      0.0,    # Support queue — not instant auto-recovery
+}
+
+def evaluate_recovery_outcome(interventions: list[str], amount: float) -> tuple[bool, str, float]:
+    """
+    Evaluates realistic recovery outcome based on empirical conversion rates.
+    Returns (success: bool, status: str, amount_recovered: float).
+    """
+    if not interventions:
+        return False, "failed", 0.0
+
+    # If escalation is among interventions (e.g. TM max retries exhausted)
+    if "escalation" in interventions and len(interventions) <= 2:
+        return False, "escalated", 0.0
+
+    # Calculate combined success probability across active interventions
+    fail_prob = 1.0
+    for iv in interventions:
+        rate = CHANNEL_CONVERSION_RATES.get(iv, 0.50)
+        fail_prob *= (1.0 - rate)
+
+    success_prob = 1.0 - fail_prob
+    if random.random() < success_prob:
+        return True, "recovered", float(amount)
+    else:
+        return False, "failed", 0.0
+
+
 async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
     """
     Run a named scenario through the full agent pipeline
@@ -165,6 +201,8 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
             if result.action_url and not action_url:
                 action_url = result.action_url
 
+    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+
     ev = RecoveryEvent(
         id=upi_event.event_id,
         timestamp=datetime.now(IST).strftime("%H:%M:%S"),
@@ -180,7 +218,9 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
         intervention_msgs=iv_msgs,
         scheduled_at=scheduled_at,
         action_url=action_url,
-        success=bool(iv_types),
+        success=success,
+        status=status,
+        amount_recovered=amount_rec,
         scenario_name=cfg["name"],
     )
 
@@ -213,6 +253,8 @@ async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
             if result.action_url and not action_url:
                 action_url = result.action_url
 
+    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+
     ev = RecoveryEvent(
         id=upi_event.event_id,
         timestamp=datetime.now(IST).strftime("%H:%M:%S"),
@@ -228,7 +270,9 @@ async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
         intervention_msgs=iv_msgs,
         scheduled_at=scheduled_at,
         action_url=action_url,
-        success=bool(iv_types),
+        success=success,
+        status=status,
+        amount_recovered=amount_rec,
         scenario_name="Custom Webhook",
     )
     await store.add_event(ev)
@@ -289,6 +333,8 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
             if result.action_url and not action_url:
                 action_url = result.action_url
 
+    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+
     ev = RecoveryEvent(
         id=upi_event.event_id,
         timestamp=datetime.now(IST).strftime("%H:%M:%S"),
@@ -304,7 +350,9 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
         intervention_msgs=iv_msgs,
         scheduled_at=scheduled_at,
         action_url=action_url,
-        success=bool(iv_types),
+        success=success,
+        status=status,
+        amount_recovered=amount_rec,
         scenario_name=cfg["name"],
     )
     await store.add_event(ev)
