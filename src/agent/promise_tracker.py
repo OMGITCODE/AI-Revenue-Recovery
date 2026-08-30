@@ -121,6 +121,10 @@ class PromiseToPayTracker:
         notes:         str   = "",
     ) -> PromiseToPay:
         """Record a new customer promise."""
+        existing = next((p for p in self._store.values() if p.vpa == vpa and abs(p.amount - amount) < 1 and p.status == PromiseStatus.PENDING), None)
+        if existing:
+            return existing
+
         now = datetime.now(IST)
         p = PromiseToPay(
             promise_id   = str(uuid.uuid4())[:8].upper(),

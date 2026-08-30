@@ -119,10 +119,21 @@ class RecoveryLedger:
         channel:     str   = "",
         outcome:     str   = "pending",
     ) -> LedgerEntry:
+        now = datetime.now(IST)
+        for prev in reversed(self._entries[-10:]):
+            if (
+                prev.event_type == event_type
+                and prev.vpa == vpa
+                and abs(prev.amount - amount) < 0.01
+                and prev.reasoning == reasoning
+                and (now - prev.ts).total_seconds() < 1.5
+            ):
+                return prev
+
         cost = CHANNEL_COSTS.get(channel.lower().split("+")[0], 0.0)
         entry = LedgerEntry(
             ledger_id    = str(uuid.uuid4())[:8].upper(),
-            ts           = datetime.now(IST),
+            ts           = now,
             event_type   = event_type,
             vpa          = vpa,
             amount       = amount,
