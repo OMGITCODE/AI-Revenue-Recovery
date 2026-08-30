@@ -107,7 +107,7 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 | **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) — IVR, WhatsApp, interest calc, legal notices |
 | **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Append-only ledger: every decision with confidence score + plain-English reasoning; CSV/JSON export |
 | **Live REST API (25+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/ledger/export` |
-| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹189,225 recovered, +85 pts rate, 0 compliance violations |
+| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹1,39,092 mean uplift, +60 pts rate uplift, 0 compliance violations |
 
 ---
 
@@ -256,11 +256,13 @@ python -m pytest tests/ -v
 
 ## 🔭 What's Next (Architecture Roadmap)
 
-1. **Autonomous Hinglish Voice AI Recovery (IVR / Twilio + Localized TTS)**:
+1. **Redis-Backed Distributed Locks & Webhook Idempotency**:
+   - Production clustering with Redis distributed locking per `customer_vpa`/`invoice_id` and idempotency keys to handle duplicate or out-of-order gateway webhook delivery.
+2. **Autonomous Hinglish Voice AI Recovery (IVR / Twilio + Localized TTS)**:
    - Real-time conversational agent capable of dialect switching (Hindi, Hinglish, Tamil, Telugu) for high-value B2B invoice dunning and cart recovery.
-2. **Live Setu Account Aggregator (AA) FIU Consent Pipeline**:
+3. **Live Setu Account Aggregator (AA) FIU Consent Pipeline**:
    - Upgrading our balance check stub to production Financial Information User (FIU) consent flows for automated balance-verified debit execution.
-3. **Cross-Merchant Federated Thompson Sampling**:
+4. **Cross-Merchant Federated Thompson Sampling**:
    - Privacy-preserving federated bandit learning across merchant networks to share optimal failure recovery priors without exposing customer PII.
 
 ---
