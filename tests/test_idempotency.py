@@ -145,3 +145,108 @@ class TestWebhookIdempotencyAPI:
             stats = stats_res.json()
             assert stats["total_unique_events"] >= 1
             assert stats["duplicates_blocked"] >= 1
+
+
+class TestModuleDeduplication:
+    """Unit tests verifying duplicate protections across stateful modules."""
+
+    @pytest.mark.asyncio
+    async def test_event_store_deduplication(self):
+        from api.store import EventStore, RecoveryEvent
+        store = EventStore()
+        ev1 = RecoveryEvent(
+            id="EVT-DUP-001",
+            timestamp="12:00:00",
+            event_type="mandate.execution.failed",
+            failure_code="U30",
+            failure_reason="Insufficient funds",
+            customer_id="CUST-001",
+            customer_vpa="user@oksbi",
+            bank="SBI",
+            amount=999.0,
+            severity="high",
+            interventions=["smart_retry"],
+            intervention_msgs=["Scheduled"],
+            scheduled_at=None,
+            action_url=None,
+            success=True,
+        )
+        # Add once
+        await store.add_event(ev1)
+        assert len(store.get_events()) == 1
+        assert store.get_stats()["total_events"] == 1
+
+        # Add duplicate event with same ID
+        ev1_updated = RecoveryEvent(
+            id="EVT-DUP-001",
+            timestamp="12:00:01",
+            event_type="mandate.execution.failed",
+            failure_code="U30",
+            failure_reason="Insufficient funds",
+            customer_id="CUST-001",
+            customer_vpa="user@oksbi",
+            bank="SBI",
+            amount=999.0,
+            severity="high",
+            interventions=["smart_retry"],
+            intervention_msgs=["Updated message"],
+            scheduled_at=None,
+            action_url=None,
+            success=True,
+        )
+        await store.add_event(ev1_updated)
+        # Length and total_events should NOT duplicate
+        assert len(store.get_events()) == 1
+        assert store.get_stats()["total_events"] == 1
+        assert store.get_events()[0]["intervention_msgs"] == ["Updated message"]
+
+    def test_recovery_ledger_debounce_deduplication(self):
+        from src.agent.recovery_ledger import RecoveryLedger
+        ledger = RecoveryLedger()
+        e1 = ledger.log(
+            event_type="detect",
+            vpa="user@oksbi",
+            amount=999.0,
+            reasoning="U30 detected on SBI",
+            confidence=0.85,
+        )
+        e2 = ledger.log(
+            event_type="detect",
+            vpa="user@oksbi",
+            amount=999.0,
+            reasoning="U30 detected on SBI",
+            confidence=0.85,
+        )
+        # Rapid duplicate call must return the exact same ledger entry
+        assert e1.ledger_id == e2.ledger_id
+        assert len(ledger.all_entries()) == 1
+
+    def test_promise_tracker_deduplication(self):
+        from src.agent.promise_tracker import PromiseToPayTracker
+        tracker = PromiseToPayTracker()
+        p1 = tracker.create("rahul@oksbi", 999.0, "SBI", "U30", deadline_hours=24)
+        p2 = tracker.create("rahul@oksbi", 999.0, "SBI", "U30", deadline_hours=48)
+        assert p1.promise_id == p2.promise_id
+        assert len(tracker.all_promises()) == 1
+
+    def test_checkout_recovery_deduplication(self):
+        from src.agent.checkout_recovery import CheckoutRecoveryAgent
+        agent = CheckoutRecoveryAgent()
+        s1 = agent.record_drop_off("user@okaxis", "+91-9999999999", 1499.0, "Merchant A", "payment_page_exit")
+        s2 = agent.record_drop_off("user@okaxis", "+91-9999999999", 1499.0, "Merchant A", "payment_page_exit")
+        assert s1.session_id == s2.session_id
+        assert len(agent.all_sessions()) == 1
+
+    def test_b2b_chaser_deduplication(self):
+        from src.agent.b2b_chaser import B2BChaser
+        chaser = B2BChaser()
+        r1 = chaser.add_receivable("Debtor Inc", "debtor@okicici", "+91-9800000001", "INV-DUP-01", 50000.0, "2026-07-01")
+        r2 = chaser.add_receivable("Debtor Inc", "debtor@okicici", "+91-9800000001", "INV-DUP-01", 50000.0, "2026-07-01")
+        assert r1.receivable_id == r2.receivable_id
+        assert len(chaser.all_receivables()) == 1
+
+        # Chase throttling within 60s
+        act1 = chaser.chase(r1.receivable_id)
+        act2 = chaser.chase(r1.receivable_id)
+        assert act1.action_id == act2.action_id
+        assert len(r1.actions) == 1

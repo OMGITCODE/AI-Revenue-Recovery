@@ -5,9 +5,13 @@ with mock data so it runs without any API keys.
 """
 
 import asyncio
+import sys
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
 # ── Models ────────────────────────────────────────────────────────────────────

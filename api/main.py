@@ -269,24 +269,25 @@ async def _run_and_log(scenario_key: str):
 
     # Auto-create a Checkout Drop-off for applicable failure codes
     if ev.failure_code in _CHECKOUT_AUTO_CODES:
-        reason, lang = _CHECKOUT_AUTO_CODES[ev.failure_code]
-        checkout_agent.record_drop_off(
-            customer_vpa    = ev.customer_vpa,
-            customer_phone  = "",
-            cart_amount     = ev.amount,
-            merchant        = ev.bank + " Merchant",
-            drop_off_reason = reason,
-            language        = lang,
-        )
-        recovery_ledger.log(
-            event_type = "checkout",
-            vpa        = ev.customer_vpa,
-            amount     = ev.amount,
-            reasoning  = f"Auto checkout session from {ev.failure_code}: customer redirected to alternate payment. Hinglish nudge dispatched.",
-            confidence = 0.62,
-            channel    = "whatsapp",
-        )
-        modules_changed = True
+        if not checkout_agent.has_active(ev.customer_vpa, ev.amount):
+            reason, lang = _CHECKOUT_AUTO_CODES[ev.failure_code]
+            checkout_agent.record_drop_off(
+                customer_vpa    = ev.customer_vpa,
+                customer_phone  = "",
+                cart_amount     = ev.amount,
+                merchant        = ev.bank + " Merchant",
+                drop_off_reason = reason,
+                language        = lang,
+            )
+            recovery_ledger.log(
+                event_type = "checkout",
+                vpa        = ev.customer_vpa,
+                amount     = ev.amount,
+                reasoning  = f"Auto checkout session from {ev.failure_code}: customer redirected to alternate payment. Hinglish nudge dispatched.",
+                confidence = 0.62,
+                channel    = "whatsapp",
+            )
+            modules_changed = True
 
     # Broadcast SSE so browser panels refresh automatically
     if modules_changed:
@@ -406,9 +407,10 @@ async def seed_demo_data_endpoint():
     b2b_chaser.add_receivable("Mega Retail Ltd",   "megaretail@ybl",   "+91-9800000004", "INV-2026-004", 320000, "2026-05-15")
     b2b_chaser.add_receivable("CloudSoft India",   "cloudsoft@okicici","+91-9800000005", "INV-2026-005",   8900, "2026-08-20")
 
-    # Chase all of them automatically
+    # Chase receivables that haven't been chased yet
     for r in b2b_chaser.all_receivables():
-        b2b_chaser.chase(r.receivable_id)
+        if not r.actions:
+            b2b_chaser.chase(r.receivable_id)
 
     # Promise-to-Pay examples
     promise_tracker.create("rahul@oksbi",  999,  "SBI",      "U30",  deadline_hours=24,  notes="Customer called and promised by 5 PM")
@@ -421,37 +423,42 @@ async def seed_demo_data_endpoint():
     checkout_agent.record_drop_off("sunita@okicici", "+91-9700000003", 15999, "LuxeStore",   "upi_intent_abandoned", "english")
     checkout_agent.record_drop_off("raj@paytm",      "+91-9700000004",  349,  "FoodExpress", "bank_error_exit",     "hinglish")
 
-    # ── Seed Recovery Ledger with realistic demo entries ──────────────────────
-    e1  = recovery_ledger.log("decide",    "rahul@oksbi",      999,   "U30=insufficient funds. Salary credit expected 1 Sep (SBI). Scheduling retry for 10:00 AM IST.",                    0.82, "smart_retry")
-    e2  = recovery_ledger.log("intervene", "rahul@oksbi",      999,   "Smart retry scheduled: 01 Sep 10:00 AM IST. WhatsApp nudge sent with payment link fallback.",                  0.80, "whatsapp")
-    recovery_ledger.mark_outcome(e2.ledger_id, "success", 999)
+    # ── Seed Recovery Ledger with realistic demo entries (idempotent) ─────────
+    has_seed_entries = any(
+        e.vpa == "rahul@oksbi" and "U30=insufficient funds" in e.reasoning
+        for e in recovery_ledger.all_entries()
+    )
+    if not has_seed_entries:
+        e1  = recovery_ledger.log("decide",    "rahul@oksbi",      999,   "U30=insufficient funds. Salary credit expected 1 Sep (SBI). Scheduling retry for 10:00 AM IST.",                    0.82, "smart_retry")
+        e2  = recovery_ledger.log("intervene", "rahul@oksbi",      999,   "Smart retry scheduled: 01 Sep 10:00 AM IST. WhatsApp nudge sent with payment link fallback.",                  0.80, "whatsapp")
+        recovery_ledger.mark_outcome(e2.ledger_id, "success", 999)
 
-    e3  = recovery_ledger.log("guardrail", "priya@okhdfcbank", 499,   "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
-    e4  = recovery_ledger.log("intervene", "priya@okhdfcbank", 499,   "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
-    recovery_ledger.mark_outcome(e4.ledger_id, "pending", 0)
+        e3  = recovery_ledger.log("guardrail", "priya@okhdfcbank", 499,   "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
+        e4  = recovery_ledger.log("intervene", "priya@okhdfcbank", 499,   "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
+        recovery_ledger.mark_outcome(e4.ledger_id, "pending", 0)
 
-    e5  = recovery_ledger.log("guardrail", "sunita@okicici",  15999,  "U69=daily limit exceeded. GR7 [RBI CIRCUIT BREAKER]: Amount ₹15,999 > ₹15,000 — silent retry BLOCKED per NPCI/RBI circular.", 0.99, "upi_collect")
-    e6  = recovery_ledger.log("intervene", "sunita@okicici",  15999,  "UPI collect request sent with full amount and reason. Customer must approve in UPI app within 30 min.",         0.65, "upi_collect")
-    recovery_ledger.mark_outcome(e6.ledger_id, "pending", 0)
+        e5  = recovery_ledger.log("guardrail", "sunita@okicici",  15999,  "U69=daily limit exceeded. GR7 [RBI CIRCUIT BREAKER]: Amount ₹15,999 > ₹15,000 — silent retry BLOCKED per NPCI/RBI circular.", 0.99, "upi_collect")
+        e6  = recovery_ledger.log("intervene", "sunita@okicici",  15999,  "UPI collect request sent with full amount and reason. Customer must approve in UPI app within 30 min.",         0.65, "upi_collect")
+        recovery_ledger.mark_outcome(e6.ledger_id, "pending", 0)
 
-    e7  = recovery_ledger.log("guardrail", "vikram@ybl",       3200,  "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED.",          0.90, "")
-    recovery_ledger.mark_outcome(e7.ledger_id, "skipped", 0)
+        e7  = recovery_ledger.log("guardrail", "vikram@ybl",       3200,  "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED.",          0.90, "")
+        recovery_ledger.mark_outcome(e7.ledger_id, "skipped", 0)
 
-    e8  = recovery_ledger.log("decide",    "arjun@okicici",   1499,  "TM=tech error. 3 retries exhausted. GR2 fired. Auto-recovery failed. Routing to human support escalation.",     0.88, "escalation")
-    e9  = recovery_ledger.log("escalate",  "arjun@okicici",   1499,  "Ticket #ESC-1923 created in support queue. SLA: 4h response. Agent assigned. Customer notified via WhatsApp.",  0.75, "escalation")
-    recovery_ledger.mark_outcome(e9.ledger_id, "pending", 0)
+        e8  = recovery_ledger.log("decide",    "arjun@okicici",   1499,  "TM=tech error. 3 retries exhausted. GR2 fired. Auto-recovery failed. Routing to human support escalation.",     0.88, "escalation")
+        e9  = recovery_ledger.log("escalate",  "arjun@okicici",   1499,  "Ticket #ESC-1923 created in support queue. SLA: 4h response. Agent assigned. Customer notified via WhatsApp.",  0.75, "escalation")
+        recovery_ledger.mark_outcome(e9.ledger_id, "pending", 0)
 
-    e10 = recovery_ledger.log("decide",    "anita@paytm",      299,  "U13=mandate paused. Thompson Sampling selected smart_retry (UCB=0.71) over whatsapp_nudge (UCB=0.43).",          0.71, "smart_retry")
-    recovery_ledger.mark_outcome(e10.ledger_id, "success", 299)
+        e10 = recovery_ledger.log("decide",    "anita@paytm",      299,  "U13=mandate paused. Thompson Sampling selected smart_retry (UCB=0.71) over whatsapp_nudge (UCB=0.43).",          0.71, "smart_retry")
+        recovery_ledger.mark_outcome(e10.ledger_id, "success", 299)
 
-    e11 = recovery_ledger.log("b2b",       "startup@okaxis",  12500, "INV-2026-003: 59 days overdue, Tier C, bucket=31-60d. Hinglish IVR dispatched. Interest ₹337 accruing at 18% p.a.", 0.68, "ivr")
-    recovery_ledger.mark_outcome(e11.ledger_id, "pending", 0)
+        e11 = recovery_ledger.log("b2b",       "startup@okaxis",  12500, "INV-2026-003: 59 days overdue, Tier C, bucket=31-60d. Hinglish IVR dispatched. Interest ₹337 accruing at 18% p.a.", 0.68, "ivr")
+        recovery_ledger.mark_outcome(e11.ledger_id, "pending", 0)
 
-    e12 = recovery_ledger.log("checkout",  "meera@okaxis",    2499,  "Checkout abandoned at payment page. Hinglish nudge T+10min sent: 'Arey yaar! Sirf ek click baaki tha'. Recovery link generated.", 0.60, "whatsapp")
-    recovery_ledger.mark_outcome(e12.ledger_id, "pending", 0)
+        e12 = recovery_ledger.log("checkout",  "meera@okaxis",    2499,  "Checkout abandoned at payment page. Hinglish nudge T+10min sent: 'Arey yaar! Sirf ek click baaki tha'. Recovery link generated.", 0.60, "whatsapp")
+        recovery_ledger.mark_outcome(e12.ledger_id, "pending", 0)
 
-    e13 = recovery_ledger.log("intervene", "user@yesbank",    4999,  "U30: funds available post-salary credit (pattern: 3/3 previous payments completed within 2 days of salary). UPI collect sent.", 0.91, "upi_collect")
-    recovery_ledger.mark_outcome(e13.ledger_id, "success", 4999)
+        e13 = recovery_ledger.log("intervene", "user@yesbank",    4999,  "U30: funds available post-salary credit (pattern: 3/3 previous payments completed within 2 days of salary). UPI collect sent.", 0.91, "upi_collect")
+        recovery_ledger.mark_outcome(e13.ledger_id, "success", 4999)
 
     await _broadcast_modules_updated()
     return {"status": "seeded", "message": "Demo data loaded successfully"}

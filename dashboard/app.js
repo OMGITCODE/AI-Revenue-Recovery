@@ -57,13 +57,22 @@ async function loadInitial() {
   } catch (e) { console.warn('init load failed:', e); }
 }
 
-// â”€â”€ SSE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SSE ──────────────────────────────────────────────────────────────────────
 function connectSSE() {
   if (sse) sse.close();
   sse = new EventSource('/api/stream');
 
   sse.addEventListener('recovery_event', e => {
     const ev = JSON.parse(e.data);
+    const existingIdx = events.findIndex(x => x.id === ev.id);
+    if (existingIdx >= 0) {
+      events[existingIdx] = ev;
+      const existingRow = document.getElementById('event-row-' + ev.id);
+      if (existingRow) {
+        existingRow.replaceWith(makeRow(ev));
+      }
+      return;
+    }
     events.unshift(ev);
     if (events.length > 100) events.pop();
     prependRow(ev);
@@ -79,7 +88,7 @@ function connectSSE() {
   sse.onerror = () => setTimeout(connectSSE, 3000);
 }
 
-// â”€â”€ Stats sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats sync ────────────────────────────────────────────────────────────────
 function syncStats(s) {
   animCount('kpi-recovered',     s.total_recovered, true);
   set('kpi-events',              `${s.total_events} events processed`);
@@ -143,10 +152,17 @@ function bar(key, val, tot) {
   if (c) c.textContent = val;
 }
 
-// â”€â”€ Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Table ─────────────────────────────────────────────────────────────────────
 function rebuildTable() {
   const tbody = document.getElementById('events-tbody');
   tbody.innerHTML = '';
+  const seen = new Set();
+  events = events.filter(ev => {
+    if (!ev.id) return true;
+    if (seen.has(ev.id)) return false;
+    seen.add(ev.id);
+    return true;
+  });
   events.forEach(ev => tbody.appendChild(makeRow(ev)));
 }
 
@@ -154,6 +170,14 @@ function prependRow(ev) {
   const tbody = document.getElementById('events-tbody');
   const empty = document.getElementById('empty-row');
   if (empty) empty.remove();
+
+  if (ev.id) {
+    const existing = document.getElementById('event-row-' + ev.id);
+    if (existing) {
+      existing.replaceWith(makeRow(ev));
+      return;
+    }
+  }
 
   const row = makeRow(ev);
   row.classList.add('row-in', 'row-flash');
@@ -163,6 +187,7 @@ function prependRow(ev) {
 
 function makeRow(ev) {
   const tr = document.createElement('tr');
+  if (ev.id) tr.id = 'event-row-' + ev.id;
   tr.onclick = () => openDrawer(ev);
 
   const sev  = (ev.severity || 'medium').toLowerCase();

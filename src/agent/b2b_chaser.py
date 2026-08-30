@@ -334,6 +334,15 @@ class B2BChaser:
             )
             logger.info("[Hinglish IVR → %s] %s", r.debtor_phone, ivr_msg)
 
+        # Deduplicate rapid repeated chase dispatches within 60 seconds
+        if r.actions:
+            last_action = r.actions[-1]
+            if (
+                last_action.channel == tmpl["channel"]
+                and (datetime.now(IST) - last_action.executed_at).total_seconds() < 60
+            ):
+                return last_action
+
         action = ChaseAction(
             action_id   = "ACT-" + str(uuid.uuid4())[:6].upper(),
             action_type = tmpl["channel"].split("+")[0],

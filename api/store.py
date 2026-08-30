@@ -106,6 +106,14 @@ class EventStore:
 
     async def add_event(self, event: RecoveryEvent) -> None:
         async with self._lock:
+            # Deduplicate by event ID — if already exists, update in-place without double-counting stats
+            for idx, prev in enumerate(self._events):
+                if prev.id == event.id:
+                    self._events[idx] = event
+                    for q in self._subscribers:
+                        await q.put(event.to_dict())
+                    return
+
             self._events.appendleft(event)
             # Update stats
             self._stats.total_events += 1
