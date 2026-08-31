@@ -102,8 +102,10 @@ class ArmState:
         sd = math.sqrt(self.variance)
         return (max(0.0, m - 1.645 * sd), min(1.0, m + 1.645 * sd))
 
-    def sample(self) -> float:
+    def sample(self, rng: Optional[random.Random] = None) -> float:
         """Draw a sample from the Beta posterior distribution."""
+        if rng is not None:
+            return rng.betavariate(self.alpha, self.beta)
         return random.betavariate(self.alpha, self.beta)
 
 
@@ -215,6 +217,7 @@ class ThompsonSamplingEngine:
         customer_tier: str = "silver",
         trust_score: float = 0.5,
         allowed_actions: Optional[List[str]] = None,
+        rng: Optional[random.Random] = None,
     ) -> BanditDecision:
         """
         Samples posterior distributions for candidate arms and selects
@@ -246,7 +249,7 @@ class ThompsonSamplingEngine:
 
         for arm in candidate_arms:
             arm_state = self._get_or_create_arm(context_key, arm)
-            sampled_val = arm_state.sample()
+            sampled_val = arm_state.sample(rng=rng)
             samples[arm] = sampled_val
             means[arm] = arm_state.mean
 

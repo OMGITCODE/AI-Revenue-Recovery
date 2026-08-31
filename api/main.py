@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from api.store import store
 from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
-from src.agent.decision_engine import DecisionEngine
+from src.agent.decision_engine import DecisionEngine, infer_tier, CustomerTier
 from src.agent.bandit import bandit_engine, RecoveryArm, get_context_key, resolve_arm
 from src.agent.promise_tracker import promise_tracker
 from src.agent.checkout_recovery import checkout_agent, DropOffReason
@@ -553,7 +553,10 @@ async def fulfill_promise(promise_id: str):
 
     # Bayesian posterior update: reinforce P2P recovery channel
     cat = "insufficient_funds" if p.failure_code in ("U30", "U13") else ("technical_error" if p.failure_code in ("TM", "TE") else "mandate_inactive")
-    ckey = get_context_key(cat, "silver", "high")
+    tier_val = infer_tier(p.amount).value.lower()
+    score = promise_tracker.payer_trust_score(p.vpa)
+    trust_b = "high" if score >= 0.75 else ("med" if score >= 0.40 else "low")
+    ckey = get_context_key(cat, tier_val, trust_b)
     bandit_engine.update(context_key=ckey, arm=p.channel, success=True, amount_recovered=p.amount)
 
     return p.to_dict()
@@ -576,7 +579,10 @@ async def break_promise(promise_id: str):
 
     # Bayesian posterior update: record failure on missed commitment
     cat = "insufficient_funds" if p.failure_code in ("U30", "U13") else ("technical_error" if p.failure_code in ("TM", "TE") else "mandate_inactive")
-    ckey = get_context_key(cat, "silver", "low")
+    tier_val = infer_tier(p.amount).value.lower()
+    score = promise_tracker.payer_trust_score(p.vpa)
+    trust_b = "high" if score >= 0.75 else ("med" if score >= 0.40 else "low")
+    ckey = get_context_key(cat, tier_val, trust_b)
     bandit_engine.update(context_key=ckey, arm=p.channel, success=False, amount_recovered=0.0)
 
     return p.to_dict()
@@ -628,7 +634,8 @@ async def checkout_recovered(session_id: str):
     recovery_ledger.mark_outcome(e.ledger_id, "success", s.cart_amount)
 
     # Bayesian posterior update for checkout recovery
-    ckey = get_context_key("insufficient_funds", "silver", "med")
+    tier_val = infer_tier(s.cart_amount).value.lower()
+    ckey = get_context_key("insufficient_funds", tier_val, "med")
     bandit_engine.update(context_key=ckey, arm="whatsapp_nudge", success=True, amount_recovered=s.cart_amount)
 
     return s.to_dict()

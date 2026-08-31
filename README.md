@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-57%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-58%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -21,34 +21,34 @@ Outcomes are **probabilistic**, drawn from published Indian FinTech and payment 
 | Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
 | **Total Revenue at Stake** | ₹2,08,772 | ₹2,08,772 | — |
-| **Revenue Recovered** *(mean, n=50)* | **₹19,547** (deterministic) | **₹1,58,852 ± ₹20,545** | **+₹1,39,305 mean uplift** |
-| **Recovery Rate** *(mean ± std, n=50)* | 15.0% (6/40) | **75.0% ± 7.1%** | **+60.0 pts mean** |
+| **Revenue Recovered** *(mean, n=50)* | **₹19,547** (deterministic) | **₹1,55,751 ± ₹19,774** | **+₹1,36,204 mean uplift** |
+| **Recovery Rate** *(mean ± std, n=50)* | 15.0% (6/40) | **74.5% ± 5.6%** | **+59.5 pts mean** |
 | **BT01/BT02 Mandate Renewal** | 0% (blind retry) | **~68%** (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
 | **Compliance Violations (RBI/DND)** | 3 (silent retries + DND breaches) | **0 (100% compliant)** | **-3 eliminated** |
-| **Total Retries Fired** | 120 (blind flood) | **19 (salary-targeted)** | **-101 wasted retries** |
-| **Net ROI** *(sample run)* | **₹19,487** | **₹1,58,625** | **+₹1,39,138** |
+| **Total Retries Fired** | 120 (blind flood) | **8 (salary-targeted)** | **-112 wasted retries** |
+| **Net ROI** *(sample run)* | **₹19,487** | **₹1,55,536** | **+₹1,36,049** |
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 > 
-> ⚙️ *Conversion rate sources (cited inline in `benchmark.py`):*
-> - **Mandate Renewal (68%)**: Razorpay / BillDesk subscription CTR benchmark for instant WhatsApp/SMS re-registration links (vs. 0% for blind retries on revoked/expired mandates).
-> - **Salary-Window U30 (88%)**: NPCI UPI Autopay first-week cycle success rate during salary credit window (1st–7th) + Setu Account Aggregator pre-flight balance verification (vs. ~14% for blind month-end retries).
-> - **Technical Glitch Backoff (92%)**: NPCI / Bank switch transient timeout recovery rate after 15-min exponential backoff (Juspay / Razorpay gateway data).
-> - **UPI Collect (65%)**: Direct push-to-VPA collect request conversion from Indian merchant payment gateway benchmarks.
-> - **WhatsApp Nudge (72%)**: Meta / Gupshup conversational commerce benchmarks for interactive WhatsApp payment messages.
-> - **Human Escalation (85%)**: High-touch assisted recovery rate for high-value B2B/Tier A receivables.
+> ⚙️ *Modeled Recovery Channel Rates (evaluated with 20% sensitivity haircut):*
+> - **Mandate Renewal (68% modeled)**: 1-click WhatsApp/SMS re-registration enables customer self-cure (vs. 0% for blind retries on revoked/expired mandates).
+> - **Salary-Window U30 (88% modeled)**: Aligning retries with 1st–7th salary credit window + Setu Account Aggregator pre-flight verification (vs. ~14% for blind month-end retries).
+> - **Technical Glitch Backoff (92% modeled)**: 15-minute exponential backoff overcomes transient switch / network drops.
+> - **UPI Collect (65% modeled)**: Push-to-VPA collect request prompt for limit/decline scenarios.
+> - **WhatsApp Nudge (72% modeled)**: Interactive messaging with 1-click UPI intent fallback.
+> - **Human Escalation (85% modeled)**: Assisted high-touch outreach for high-value B2B/Tier A receivables.
 
 ### 🛡️ Robustness & Sensitivity Analysis (20% Pessimistic Haircut)
 
-To ensure claims do not rely on overly optimistic conversion assumptions, `benchmark.py` includes a built-in sensitivity test that applies a **20% haircut** across all channel conversion rates:
+To ensure claims do not rely on fragile or optimistic conversion assumptions, `benchmark.py` includes a built-in sensitivity test that applies a **20% pessimistic haircut** across all channel conversion rates:
 
 | Scenario | Baseline Recovery | RecoverIQ Recovery | Net Uplift |
 |---|---|---|---|
-| **Standard Modeled Rates** | ₹19,547 (15.0%) | **₹1,58,852 ± ₹20,545 (75.0%)** | **+₹1,39,305 (+60.0 pts)** |
-| **20% Pessimistic Haircut** | ₹19,547 (15.0%) | **₹1,27,469 ± ₹21,870 (60.7%)** | **+₹1,07,922 (+45.7 pts)** |
+| **Standard Modeled Rates** | ₹19,547 (15.0%) | **₹1,55,751 ± ₹19,774 (74.5%)** | **+₹1,36,204 (+59.5 pts)** |
+| **20% Pessimistic Haircut** | ₹19,547 (15.0%) | **₹1,26,981 ± ₹23,997 (59.6%)** | **+₹1,07,434 (+44.6 pts)** |
 
-Even under a strict 20% conversion haircut, RecoverIQ still recovers **₹1.27 Lakh+ (>60% recovery rate)**, proving that the agent's architectural advantage is robust to conservative rate shifts.
+**Key Takeaway**: Even under a 20% pessimistic haircut across every single channel, RecoverIQ recovers **₹1.26 Lakh+ (~60% recovery rate)** with a **+44.6 pts net gain**, proving that the agent's architectural advantage (NPCI code awareness, salary-window alignment, and guardrails) is completely robust to conservative rate shifts.
 
 
 ---
@@ -209,9 +209,9 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (57 passing tests)
+└── tests/                       # Test Suite (58 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
-    ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & benchmark tests (12 tests)
+    ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & deterministic benchmark tests (13 tests)
     └── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
 ```
 

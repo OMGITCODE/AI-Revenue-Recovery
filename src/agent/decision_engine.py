@@ -119,6 +119,7 @@ class DecisionEngine:
         daily_touches: int   = 0,
         trust_score:   float = 0.5,   # payer trust score from promise_tracker
         current_hour:  Optional[int] = None,
+        rng:           Optional[random.Random] = None,
     ) -> GuardrailDecision:
 
         tier       = infer_tier(amount)
@@ -225,6 +226,7 @@ class DecisionEngine:
                 customer_tier=tier.value,
                 trust_score=trust_score,
                 allowed_actions=allowed,
+                rng=rng,
             )
             bandit_res = bandit_decision_obj.to_dict()
 

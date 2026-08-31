@@ -112,6 +112,16 @@ class TestBenchmarkSuite:
         assert sens["ai_recovered_mean"] > sens["base_recovered"]
         assert sens["net_uplift_revenue"] > 50000
 
+    def test_benchmark_exact_reproducibility(self):
+        from benchmark import run_benchmark
+        b1, a1 = run_benchmark(n_runs=20)
+        b2, a2 = run_benchmark(n_runs=20)
+        assert a1.total_recovered == a2.total_recovered
+        assert a1.recovered_events == a2.recovered_events
+        assert a1.retries_fired == a2.retries_fired
+        assert a1._ai_rec_mean == a2._ai_rec_mean
+        assert a1._ai_rate_mean == a2._ai_rate_mean
+
 
 class TestLiveBanditLearningInAPI:
     def test_live_simulation_updates_bandit(self):
@@ -144,7 +154,7 @@ class TestLiveBanditLearningInAPI:
         client.post("/api/reset")
 
         p = promise_tracker.create("payer@oksbi", 1200.0, "SBI", "U30", deadline_hours=24, channel="whatsapp")
-        ckey = get_context_key("insufficient_funds", "silver", "high")
+        ckey = get_context_key("insufficient_funds", "bronze", "high")
         arm_state = bandit_engine._get_or_create_arm(ckey, RecoveryArm.WHATSAPP_PAY_LINK)
         initial_pulls = arm_state.total_pulls
         initial_alpha = arm_state.alpha
