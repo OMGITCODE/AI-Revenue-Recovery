@@ -21,7 +21,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import List
+from typing import Dict, List, Optional
 
 from ..utils.logger import get_logger
 
