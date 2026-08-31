@@ -348,10 +348,13 @@ def run_benchmark(
     ai_res._ai_rec_mean    = statistics.mean(ai_recovered_list)
     ai_res._ai_rec_std     = statistics.stdev(ai_recovered_list) if n_runs > 1 else 0
     ai_res._ai_roi_mean    = statistics.mean(ai_roi_list)
+    ai_res._ai_roi_std     = statistics.stdev(ai_roi_list) if n_runs > 1 else 0
     ai_res._n_runs         = n_runs
 
     base_res._base_rate_mean = statistics.mean(base_rate_list)
     base_res._base_rec_mean  = statistics.mean(base_recovered_list)
+    base_res._base_roi_mean  = statistics.mean(base_roi_list)
+    base_res._base_roi_std   = statistics.stdev(base_roi_list) if n_runs > 1 else 0
 
     # Assign aggregate mean values directly to primary fields
     ai_res.total_recovered = ai_res._ai_rec_mean
@@ -362,7 +365,7 @@ def run_benchmark(
     base_res.total_recovered = base_res._base_rec_mean
     base_res.recovered_events = int(round((base_res._base_rate_mean / 100.0) * base_res.total_events))
     base_res.failed_events = base_res.total_events - base_res.recovered_events
-    base_res.net_roi = base_res.total_recovered - base_res.channel_costs
+    base_res.net_roi = base_res._base_roi_mean
 
     return base_res, ai_res
 
@@ -400,6 +403,9 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     ai_rate_mean = getattr(ai, "_ai_rate_mean", ai_rate)
     ai_rate_std  = getattr(ai, "_ai_rate_std", 0)
 
+    ai_rec_str  = f"₹{ai_rec_mean:,.0f} ± ₹{ai_rec_std:,.0f}"
+    ai_rate_str = f"{ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%"
+
     print("\n" + "=" * 78)
     print(" 📊 EMPIRICAL BENCHMARK: BASELINE (FIXED RETRY) vs. RECOVERIQ AI AGENT")
     print(f" Dataset: 40 Real-World UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
@@ -410,8 +416,11 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     print(headers)
     print("-" * 78)
 
-    ai_rec_str  = f"₹{ai_rec_mean:,.0f} ± ₹{ai_rec_std:,.0f}"
-    ai_rate_str = f"{ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%"
+    ai_roi_mean = getattr(ai, "_ai_roi_mean", ai.net_roi)
+    ai_roi_std  = getattr(ai, "_ai_roi_std", 0)
+    base_roi_mean = getattr(base, "_base_roi_mean", base.net_roi)
+    ai_roi_str  = f"₹{ai_roi_mean:,.0f} ± ₹{ai_roi_std:,.0f}"
+    delta_roi_mean = ai_roi_mean - base_roi_mean
 
     metrics = [
         ("Total Scenarios Evaluated",     f"{base.total_events}",                   f"{ai.total_events}",    "—"),
@@ -421,7 +430,7 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
         ("Compliance Violations",         f"{base.compliance_violations}",           f"{ai.compliance_violations}", f"-{base.compliance_violations} (100% compliant)"),
         ("Total Retries Attempted",       f"{base.retries_fired} (blind)",           f"{ai.retries_fired}",  f"-{base.retries_fired - ai.retries_fired} (efficient)"),
         ("Intervention Channel Costs",    f"₹{base.channel_costs:,.2f}",            f"₹{ai.channel_costs:,.2f}", f"₹{ai.channel_costs - base.channel_costs:+,.2f}"),
-        ("Net ROI (sample run)",          f"₹{base.net_roi:,.0f}",                  f"₹{ai.net_roi:,.0f}",  f"+₹{delta_roi:,.0f} uplift"),
+        (f"Net ROI (n={n_runs})",         f"₹{base_roi_mean:,.0f} (fixed)",         ai_roi_str,             f"+₹{delta_roi_mean:,.0f} mean uplift"),
     ]
 
     for label, b_val, a_val, d_val in metrics:
@@ -448,11 +457,15 @@ def generate_markdown_table(base: PolicyResult, ai: PolicyResult) -> str:
     ai_rec_std  = getattr(ai, "_ai_rec_std", 0)
     ai_rate_mean = getattr(ai, "_ai_rate_mean", 0)
     ai_rate_std  = getattr(ai, "_ai_rate_std", 0)
+    ai_roi_mean = getattr(ai, "_ai_roi_mean", ai.net_roi)
+    ai_roi_std  = getattr(ai, "_ai_roi_std", 0)
     base_rate_mean = getattr(base, "_base_rate_mean", 0)
     base_rec_mean  = getattr(base, "_base_rec_mean", 0)
+    base_roi_mean  = getattr(base, "_base_roi_mean", base.net_roi)
 
     delta_rec  = ai_rec_mean - base_rec_mean
     rate_uplift = ai_rate_mean - base_rate_mean
+    delta_roi   = ai_roi_mean - base_roi_mean
 
     md = f"""| Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
@@ -463,7 +476,7 @@ def generate_markdown_table(base: PolicyResult, ai: PolicyResult) -> str:
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | ~88% (1st–7th IST + Setu AA) | +74 pts |
 | **Compliance Violations (RBI/DND)** | {base.compliance_violations} | **0 (100% compliant)** | **-{base.compliance_violations} eliminated** |
 | **Total Retries Fired** | {base.retries_fired} (blind flood) | **{ai.retries_fired} (targeted)** | **-{base.retries_fired - ai.retries_fired} wasted** |
-| **Net ROI** *(sample run)* | **₹{base.net_roi:,.0f}** | **₹{ai.net_roi:,.0f}** | **+₹{ai.net_roi - base.net_roi:,.0f}** |
+| **Net ROI** *(mean ± std, n={n_runs})* | **₹{base_roi_mean:,.0f}** | **₹{ai_roi_mean:,.0f} ± ₹{ai_roi_std:,.0f}** | **+₹{delta_roi:,.0f} mean uplift** |
 """
     return md
 

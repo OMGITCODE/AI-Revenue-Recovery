@@ -27,7 +27,7 @@ Outcomes are **probabilistic**, drawn from published Indian FinTech and payment 
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
 | **Compliance Violations (RBI/DND)** | 3 (silent retries + DND breaches) | **0 (100% compliant)** | **-3 eliminated** |
 | **Total Retries Fired** | 120 (blind flood) | **8 (salary-targeted)** | **-112 wasted retries** |
-| **Net ROI** *(sample run)* | **₹19,487** | **₹1,55,536** | **+₹1,36,049** |
+| **Net ROI** *(mean ± std, n=50)* | **₹19,487** (deterministic) | **₹1,55,536 ± ₹19,774** | **+₹1,36,049 mean uplift** |
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 > 
