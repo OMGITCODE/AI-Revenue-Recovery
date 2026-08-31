@@ -1,5 +1,16 @@
 'use strict';
 
+// ── XSS Sanitization Helper ──────────────────────────────────────────────────
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 let events = [];
 let sse    = null;
@@ -22,18 +33,6 @@ function toggleTheme() {
   if (icon) icon.textContent = next === 'dark' ? '☀️' : '🌙';
 }
 
-// â”€â”€ Toast notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function toast(msg, type = 'blue') {
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.textContent = msg;
-  document.body.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('toast-visible'));
-  setTimeout(() => {
-    el.classList.remove('toast-visible');
-    setTimeout(() => el.remove(), 400);
-  }, 3500);
-}
 
 // â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener('DOMContentLoaded', () => {
@@ -187,17 +186,17 @@ function prependRow(ev) {
 
 function makeRow(ev) {
   const tr = document.createElement('tr');
-  if (ev.id) tr.id = 'event-row-' + ev.id;
+  if (ev.id) tr.id = 'event-row-' + esc(ev.id);
   tr.onclick = () => openDrawer(ev);
 
-  const sev  = (ev.severity || 'medium').toLowerCase();
-  const code = (ev.failure_code || '').toUpperCase();
+  const sev  = esc((ev.severity || 'medium').toLowerCase());
+  const code = esc((ev.failure_code || '').toUpperCase());
 
   const ivHtml = (ev.interventions || []).map(iv => {
     let cls = '';
-    if (iv === 'escalation')    cls = ' esc';
+    if (iv === 'escalation')      cls = ' esc';
     if (iv === 'mandate_renewal') cls = ' renewal';
-    return `<span class="iv-tag${cls}">${ivName(iv)}</span>`;
+    return `<span class="iv-tag${cls}">${esc(ivName(iv))}</span>`;
   }).join('') || '<span class="muted" style="font-size:11px">—</span>';
 
   // Trust score badge (colour-coded)
@@ -205,16 +204,23 @@ function makeRow(ev) {
   const tsCls = ts >= 0.75 ? 'trust-high' : ts >= 0.40 ? 'trust-med' : 'trust-low';
   const tsTxt = (ts * 100).toFixed(0) + '%';
 
-  // Quick-create P2P action (stop click bubbling to row drawer)
-  const actHtml = `<button class="btn-act btn-blue" title="Create P2P from this event"
-    onclick="event.stopPropagation();quickCreateP2P('${ev.customer_vpa}',${ev.amount},'${ev.bank}','${ev.failure_code}')"
-  >+P2P</button>`;
+  // Quick-create P2P action (DOM button without raw string interpolation)
+  const actTd = document.createElement('td');
+  const actBtn = document.createElement('button');
+  actBtn.className = 'btn-act btn-blue';
+  actBtn.title = 'Create P2P from this event';
+  actBtn.textContent = '+P2P';
+  actBtn.onclick = (e) => {
+    e.stopPropagation();
+    quickCreateP2P(ev.customer_vpa || '', ev.amount || 0, ev.bank || '', ev.failure_code || '');
+  };
+  actTd.appendChild(actBtn);
 
   tr.innerHTML = `
-    <td class="muted" style="font-variant-numeric:tabular-nums;font-size:12px">${ev.timestamp || ''}</td>
+    <td class="muted" style="font-variant-numeric:tabular-nums;font-size:12px">${esc(ev.timestamp || '')}</td>
     <td><span class="code-tag">${code}</span></td>
-    <td class="mono">${ev.customer_vpa || ''}</td>
-    <td class="muted">${ev.bank || ''}</td>
+    <td class="mono">${esc(ev.customer_vpa || '')}</td>
+    <td class="muted">${esc(ev.bank || '')}</td>
     <td class="fw6">${fmtInr(ev.amount)}</td>
     <td><span class="sev-badge sev-${sev}">${cap(sev)}</span></td>
     <td><span class="trust-badge ${tsCls}" title="Payer trust score from P2P history">${tsTxt}</span></td>
@@ -223,40 +229,40 @@ function makeRow(ev) {
       ? '<span class="status-esc">🚨 Escalated</span>'
       : ev.success
       ? '<span class="status-ok">✓ Recovered</span>'
-      : '<span class="status-err">✗ Failed</span>'}</td>
-    <td>${actHtml}</td>`;
+      : '<span class="status-err">✗ Failed</span>'}</td>`;
+  tr.appendChild(actTd);
   return tr;
 }
 
-// â”€â”€ Drawer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Drawer ───────────────────────────────────────────────────────────────────
 function openDrawer(ev) {
-  const sev = (ev.severity || 'medium').toLowerCase();
+  const sev = esc((ev.severity || 'medium').toLowerCase());
 
   document.getElementById('drawer-title').textContent =
-    ev.scenario_name || `${ev.failure_code} Event`;
+    ev.scenario_name || `${ev.failure_code || ''} Event`;
   document.getElementById('drawer-sub').textContent =
     ev.failure_reason || '';
 
   const ivHtml = (ev.interventions || []).map((iv, i) => `
     <div class="iv-block">
-      <div class="iv-block-type">${ivName(iv)}</div>
-      <div class="iv-block-msg">${ev.intervention_msgs?.[i] || ''}</div>
+      <div class="iv-block-type">${esc(ivName(iv))}</div>
+      <div class="iv-block-msg">${esc(ev.intervention_msgs?.[i] || '')}</div>
     </div>`).join('') || '<p class="muted" style="font-size:12px">None</p>';
 
   document.getElementById('drawer-body').innerHTML = `
     <div class="dl-section">
       <div class="dl-section-title">Event</div>
-      ${row('Event Type',    ev.event_type)}
-      ${row('Failure Code',  `<span class="code-tag">${ev.failure_code}</span>`)}
-      ${row('Reason',        ev.failure_reason)}
-      ${row('Time',          ev.timestamp)}
-      ${row('Event ID',      `<span class="mono" style="font-size:11px">${ev.id}</span>`)}
+      ${row('Event Type',    esc(ev.event_type))}
+      ${row('Failure Code',  `<span class="code-tag">${esc(ev.failure_code)}</span>`)}
+      ${row('Reason',        esc(ev.failure_reason))}
+      ${row('Time',          esc(ev.timestamp))}
+      ${row('Event ID',      `<span class="mono" style="font-size:11px">${esc(ev.id)}</span>`)}
     </div>
     <div class="dl-section">
       <div class="dl-section-title">Customer</div>
-      ${row('Customer ID',   ev.customer_id)}
-      ${row('VPA',           `<span class="mono">${ev.customer_vpa}</span>`)}
-      ${row('Bank',          ev.bank)}
+      ${row('Customer ID',   esc(ev.customer_id))}
+      ${row('VPA',           `<span class="mono">${esc(ev.customer_vpa)}</span>`)}
+      ${row('Bank',          esc(ev.bank))}
       ${row('Amount',        `<strong>${fmtInr(ev.amount)}</strong>`)}
       ${row('Severity',      `<span class="sev-badge sev-${sev}">${cap(sev)}</span>`)}
     </div>
@@ -267,12 +273,12 @@ function openDrawer(ev) {
     ${ev.scheduled_at ? `
     <div class="dl-section">
       <div class="dl-section-title">Retry Schedule</div>
-      ${row('Scheduled At', ev.scheduled_at)}
+      ${row('Scheduled At', esc(ev.scheduled_at))}
     </div>` : ''}
     ${ev.action_url ? `
     <div class="dl-section">
       <div class="dl-section-title">Action URL</div>
-      <code style="font-size:11px;word-break:break-all;color:var(--blue)">${ev.action_url}</code>
+      <code style="font-size:11px;word-break:break-all;color:var(--blue)">${esc(ev.action_url)}</code>
     </div>` : ''}
     <div class="dl-section">
       <div class="dl-section-title">🔐 Payer Trust Score</div>
@@ -290,7 +296,7 @@ function openDrawer(ev) {
     <div class="dl-section">
       <div class="dl-section-title">🏦 Account Aggregator Check</div>
       ${row('Provider', 'Setu AA Sandbox (RBI-regulated)')}
-      ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${ev.aa_check}</span>`)}
+      ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.aa_check)}</span>`)}
       ${row('Why', '"We don\'t guess when the customer can pay — we ask, with consent, and check."')}
     </div>` : ''}`;
 
@@ -503,11 +509,11 @@ async function submitCustomForm(e) {
     toast(`Error: ${err.message}`, 'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '&#9654;&nbsp; Run Scenario';
+    btn.innerHTML = '▶&nbsp; Run Scenario';
   }
 }
 
-// â”€â”€ JSON Upload / Drop zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— JSON Upload / Drop zone —————————————————————————————————————————————————————
 function dzDragover(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.add('drag-over');
@@ -576,11 +582,11 @@ async function submitJsonUpload() {
     toast(`Error: ${err.message}`, 'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '&#9654;&nbsp; Run JSON Scenario';
+    btn.innerHTML = '▶&nbsp; Run JSON Scenario';
   }
 }
 
-// â”€â”€ Auto Demo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Auto Demo ———————————————————————————————————————————————————————————————————
 // Cycles through all scenarios automatically — great for live hackathon demos
 const AUTO_DEMO_KEYS     = ['u30', 'bt01', 'tm', 'u69', 'bt02', 'u13'];
 const AUTO_DEMO_INTERVAL = 3500; // ms between events
@@ -596,14 +602,14 @@ function toggleAutoDemo() {
     clearTimeout(_autoDemoTimer);
     _autoDemoTimer  = null;
     _autoDemoActive = false;
-    btn.innerHTML   = '&#9654; Auto Demo';
+    btn.innerHTML   = '▶ Auto Demo';
     btn.classList.remove('running');
     toast('Auto demo stopped', 'ok');
   } else {
     // Start
     _autoDemoActive = true;
     _autoDemoIdx    = 0;
-    btn.innerHTML   = '&#9646;&#9646; Stop Demo';
+    btn.innerHTML   = '|| Stop Demo';
     btn.classList.add('running');
     toast('Auto demo started — scenarios firing every 3.5s', 'ok');
     fireNextAutoDemo();
@@ -625,13 +631,13 @@ async function fireNextAutoDemo() {
   }
 }
 
-// â”€â”€ Module Panels: Promise-to-Pay, Checkout, B2B â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Module Panels: Promise-to-Pay, Checkout, B2B ─────────────────────────────
 
 async function loadModules() {
   await Promise.allSettled([loadP2P(), loadCheckout(), loadB2B(), loadLedger(), loadROI()]);
 }
 
-// â”€â”€ Promise-to-Pay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Promise-to-Pay ───────────────────────────────────────────────────────────
 
 async function loadP2P() {
   try {
@@ -655,36 +661,57 @@ function renderP2PTable(promises) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No promises recorded yet — run a scenario or create one via the form above</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = promises.map(p => {
+  tbody.innerHTML = '';
+  promises.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.id = `p2p-row-${esc(p.promise_id)}`;
     const deadline  = new Date(p.deadline).toLocaleString('en-IN', {
       day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true
     });
-    const overdue   = p.is_overdue ? ' âš ï¸' : '';
-    const statusCls = `p2p-${p.status}`;
+    const overdue   = p.is_overdue ? ' ⚠️' : '';
+    const statusCls = `p2p-${esc(p.status)}`;
     const isPending = p.status === 'pending';
-    const btns = isPending
-      ? `<div class="row-actions">
-           <button class="btn-act btn-green" onclick="p2pFulfil('${p.promise_id}',this)">✓ Fulfilled</button>
-           <button class="btn-act btn-red"   onclick="p2pBreak('${p.promise_id}',this)">✗ Broken</button>
-         </div>`
-      : `<span class="muted" style="font-size:11px">${p.status.toUpperCase()}</span>`;
-    return `<tr id="p2p-row-${p.promise_id}">
-      <td class="mono fw6">${p.promise_id}</td>
-      <td>${p.vpa}</td>
+
+    tr.innerHTML = `
+      <td class="mono fw6">${esc(p.promise_id)}</td>
+      <td>${esc(p.vpa)}</td>
       <td class="fw6">${fmtInr(p.amount)}</td>
       <td class="${p.is_overdue ? 'status-err' : 'muted'}">${deadline}${overdue}</td>
-      <td class="muted">${p.channel}</td>
-      <td class="${statusCls}">${p.status.toUpperCase()}</td>
-      <td class="muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.notes}">${p.notes || '—'}</td>
-      <td>${btns}</td>
-    </tr>`;
-  }).join('');
+      <td class="muted">${esc(p.channel)}</td>
+      <td class="${statusCls}">${esc(p.status.toUpperCase())}</td>
+      <td class="muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.notes)}">${esc(p.notes || '—')}</td>
+      <td class="p2p-actions-td"></td>
+    `;
+    const actionTd = tr.querySelector('.p2p-actions-td');
+    if (isPending) {
+      const actDiv = document.createElement('div');
+      actDiv.className = 'row-actions';
+      const fulfillBtn = document.createElement('button');
+      fulfillBtn.className = 'btn-act btn-green';
+      fulfillBtn.textContent = '✓ Fulfilled';
+      fulfillBtn.onclick = function() { p2pFulfil(p.promise_id, this); };
+      const breakBtn = document.createElement('button');
+      breakBtn.className = 'btn-act btn-red';
+      breakBtn.textContent = '✗ Broken';
+      breakBtn.onclick = function() { p2pBreak(p.promise_id, this); };
+      actDiv.appendChild(fulfillBtn);
+      actDiv.appendChild(breakBtn);
+      actionTd.appendChild(actDiv);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.style.fontSize = '11px';
+      span.textContent = p.status.toUpperCase();
+      actionTd.appendChild(span);
+    }
+    tbody.appendChild(tr);
+  });
 }
 
 async function p2pFulfil(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    await fetch(`/api/promises/${id}/fulfill`, {method:'POST'});
+    await fetch(`/api/promises/${encodeURIComponent(id)}/fulfill`, {method:'POST'});
     toast(`✓ Promise ${id} marked FULFILLED — ledger updated`, 'green');
     await loadP2P(); await loadLedger(); await loadROI();
   } catch(e) { toast('Failed: ' + e.message, 'red'); btn.disabled = false; btn.textContent = '✓ Fulfilled'; }
@@ -693,13 +720,13 @@ async function p2pFulfil(id, btn) {
 async function p2pBreak(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    await fetch(`/api/promises/${id}/break`, {method:'POST'});
+    await fetch(`/api/promises/${encodeURIComponent(id)}/break`, {method:'POST'});
     toast(`✗ Promise ${id} marked BROKEN — escalation logged`, 'red');
     await loadP2P(); await loadLedger(); await loadROI();
   } catch(e) { toast('Failed: ' + e.message, 'red'); btn.disabled = false; btn.textContent = '✗ Broken'; }
 }
 
-// â”€â”€ Checkout Drop-off â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Checkout Drop-off ────────────────────────────────────────────────────────
 
 async function loadCheckout() {
   try {
@@ -740,35 +767,51 @@ function renderCheckoutTable(sessions) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No drop-off sessions yet</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = sessions.map(s => {
-    const reason = REASON_LABELS[s.drop_off_reason] || s.drop_off_reason;
+  tbody.innerHTML = '';
+  sessions.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.id = `chk-row-${esc(s.session_id)}`;
+    const reason = REASON_LABELS[s.drop_off_reason] || s.drop_off_reason || 'Unknown';
     const stCls  = CHK_STATUS_CLS[s.status] || 'muted';
     const isOpen = s.status === 'open' || s.status === 'contacted';
-    const btn    = isOpen
-      ? `<button class="btn-act btn-green" onclick="chkRecover('${s.session_id}',this)">✓ Recovered</button>`
-      : `<span class="muted" style="font-size:11px">${s.status.toUpperCase()}</span>`;
-    return `<tr id="chk-row-${s.session_id}">
-      <td class="mono fw6">${s.session_id}</td>
-      <td>${s.customer_vpa}</td>
+
+    tr.innerHTML = `
+      <td class="mono fw6">${esc(s.session_id)}</td>
+      <td>${esc(s.customer_vpa)}</td>
       <td class="fw6">${fmtInr(s.cart_amount)}</td>
-      <td><span class="reason-badge">${reason}</span></td>
-      <td class="${stCls}">${s.status.toUpperCase()}</td>
-      <td><span class="chk-msg" title="${s.recovery_message}">${s.recovery_message || '—'}</span></td>
-      <td>${btn}</td>
-    </tr>`;
-  }).join('');
+      <td><span class="reason-badge">${esc(reason)}</span></td>
+      <td class="${stCls}">${esc(s.status.toUpperCase())}</td>
+      <td><span class="chk-msg" title="${esc(s.recovery_message)}">${esc(s.recovery_message || '—')}</span></td>
+      <td class="chk-actions-td"></td>
+    `;
+    const actionTd = tr.querySelector('.chk-actions-td');
+    if (isOpen) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-act btn-green';
+      btn.textContent = '✓ Recovered';
+      btn.onclick = function() { chkRecover(s.session_id, this); };
+      actionTd.appendChild(btn);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.style.fontSize = '11px';
+      span.textContent = s.status.toUpperCase();
+      actionTd.appendChild(span);
+    }
+    tbody.appendChild(tr);
+  });
 }
 
 async function chkRecover(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    await fetch(`/api/checkout/${id}/recover`, {method:'POST'});
+    await fetch(`/api/checkout/${encodeURIComponent(id)}/recover`, {method:'POST'});
     toast(`✓ Checkout ${id} marked RECOVERED — payment confirmed, ledger updated`, 'green');
     await loadCheckout(); await loadLedger(); await loadROI();
   } catch(e) { toast('Failed: ' + e.message, 'red'); btn.disabled = false; btn.textContent = '✓ Recovered'; }
 }
 
-// â”€â”€ B2B Receivables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── B2B Receivables ──────────────────────────────────────────────────────────
 
 async function loadB2B() {
   try {
@@ -827,39 +870,60 @@ function renderB2BTable(receivables) {
     tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><p>No receivables loaded</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = receivables.map(r => {
+  tbody.innerHTML = '';
+  receivables.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.id = `b2b-row-${esc(r.receivable_id)}`;
     const bucketCls = BUCKET_CLS[r.aging_bucket] || '';
-    const tierCls   = `tier-${r.debtor_tier.toLowerCase()}`;
+    const tierCls   = `tier-${esc((r.debtor_tier || '').toLowerCase())}`;
     const stCls     = B2B_STATUS_CLS[r.status] || 'muted';
     const lastAct   = r.actions && r.actions.length
-      ? `<span class="muted" title="${r.actions[r.actions.length-1].message}">${r.actions[r.actions.length-1].channel}</span>`
+      ? `<span class="muted" title="${esc(r.actions[r.actions.length-1].message)}">${esc(r.actions[r.actions.length-1].channel)}</span>`
       : '<span class="muted">—</span>';
     const canAct = r.status !== 'settled' && r.status !== 'written_off';
-    const btns   = canAct
-      ? `<div class="row-actions">
-           <button class="btn-act btn-blue"  onclick="b2bChase('${r.receivable_id}',this)">↺ Chase</button>
-           <button class="btn-act btn-green" onclick="b2bSettle('${r.receivable_id}','${r.debtor_name}',${r.amount},this)">₹ Settle</button>
-         </div>`
-      : `<span class="muted" style="font-size:11px">${r.status.toUpperCase()}</span>`;
-    return `<tr id="b2b-row-${r.receivable_id}">
-      <td class="mono fw6">${r.invoice_number}</td>
-      <td>${r.debtor_name}</td>
+
+    tr.innerHTML = `
+      <td class="mono fw6">${esc(r.invoice_number)}</td>
+      <td>${esc(r.debtor_name)}</td>
       <td class="fw6">${fmtInr(r.amount)}</td>
       <td class="${r.days_overdue > 60 ? 'status-err' : r.days_overdue > 30 ? 'p2p-pending' : 'muted'}">${r.days_overdue}d</td>
-      <td><span class="bucket-badge ${bucketCls}">${r.aging_bucket}</span></td>
-      <td class="${tierCls}">Tier ${r.debtor_tier}</td>
+      <td><span class="bucket-badge ${bucketCls}">${esc(r.aging_bucket)}</span></td>
+      <td class="${tierCls}">Tier ${esc(r.debtor_tier)}</td>
       <td class="muted">${fmtInr(r.interest_accrued)}</td>
-      <td class="${stCls}">${r.status.toUpperCase()}</td>
+      <td class="${stCls}">${esc(r.status.toUpperCase())}</td>
       <td>${lastAct}</td>
-      <td>${btns}</td>
-    </tr>`;
-  }).join('');
+      <td class="b2b-actions-td"></td>
+    `;
+    const actionTd = tr.querySelector('.b2b-actions-td');
+    if (canAct) {
+      const actDiv = document.createElement('div');
+      actDiv.className = 'row-actions';
+      const chaseBtn = document.createElement('button');
+      chaseBtn.className = 'btn-act btn-blue';
+      chaseBtn.textContent = '↺ Chase';
+      chaseBtn.onclick = function() { b2bChase(r.receivable_id, this); };
+      const settleBtn = document.createElement('button');
+      settleBtn.className = 'btn-act btn-green';
+      settleBtn.textContent = '₹ Settle';
+      settleBtn.onclick = function() { b2bSettle(r.receivable_id, r.debtor_name, r.amount, this); };
+      actDiv.appendChild(chaseBtn);
+      actDiv.appendChild(settleBtn);
+      actionTd.appendChild(actDiv);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.style.fontSize = '11px';
+      span.textContent = r.status.toUpperCase();
+      actionTd.appendChild(span);
+    }
+    tbody.appendChild(tr);
+  });
 }
 
 async function b2bChase(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    const res  = await fetch(`/api/b2b/receivables/${id}/chase`, {method:'POST'});
+    const res  = await fetch(`/api/b2b/receivables/${encodeURIComponent(id)}/chase`, {method:'POST'});
     const data = await res.json();
     toast(`↺ Chase dispatched via ${data.channel || 'channel'} — message sent & ledger logged`, 'blue');
     await loadB2B(); await loadLedger(); await loadROI();
@@ -868,11 +932,10 @@ async function b2bChase(id, btn) {
 }
 
 async function b2bSettle(id, name, amount, btn) {
-  // Open proper settle dialog instead of browser prompt()
   openSettleDialog(id, name, amount);
 }
 
-// â”€â”€ Recovery Ledger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Recovery Ledger ──────────────────────────────────────────────────────────
 
 const CHANNEL_UNIT_COSTS = {
   whatsapp: 0.50, sms: 0.15, ivr: 1.50, email: 0.05,
@@ -916,21 +979,21 @@ function renderLedgerTable(entries) {
     return;
   }
   tbody.innerHTML = entries.map(e => {
-    const typeCls    = `ledger-type type-${e.event_type}`;
+    const typeCls    = `ledger-type type-${esc(e.event_type)}`;
     const outcomeCls = LEDGER_OUTCOME_CLS[e.outcome] || 'muted';
     return `<tr>
-      <td class="mono muted">${e.ts}</td>
-      <td><span class="${typeCls}">${e.event_type}</span></td>
-      <td class="muted">${e.vpa}</td>
+      <td class="mono muted">${esc(e.ts)}</td>
+      <td><span class="${typeCls}">${esc(e.event_type)}</span></td>
+      <td class="muted">${esc(e.vpa)}</td>
       <td class="fw6">${fmtInr(e.amount)}</td>
       <td>${confPips(e.confidence)}</td>
-      <td><span class="ledger-reasoning" title="${e.reasoning}">${e.reasoning}</span></td>
-      <td class="${outcomeCls}">${e.outcome.toUpperCase()}</td>
+      <td><span class="ledger-reasoning" title="${esc(e.reasoning)}">${esc(e.reasoning)}</span></td>
+      <td class="${outcomeCls}">${esc(e.outcome.toUpperCase())}</td>
     </tr>`;
   }).join('');
 }
 
-// â”€â”€ Recovery ROI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Recovery ROI ─────────────────────────────────────────────────────────────
 
 async function loadROI() {
   try {
@@ -1312,19 +1375,19 @@ function appendChatBubble(type, text, meta) {
 
   let extraHtml = '';
   if (type === 'user') {
-    extraHtml = `<div class="wa-bubble-meta"><span>${meta.from || 'Customer'}</span> · <span>${meta.time}</span></div>`;
+    extraHtml = `<div class="wa-bubble-meta"><span>${esc(meta.from || 'Customer')}</span> · <span>${esc(meta.time || '')}</span></div>`;
   } else {
-    const intentClass = `tag-${meta.intent || 'promise'}`;
+    const intentClass = `tag-${esc(meta.intent || 'promise')}`;
     extraHtml = `
       <div class="wa-bubble-meta">
-        <span class="wa-chip-tag ${intentClass}">${(meta.intent || 'AI AGENT').toUpperCase()} ${Math.round((meta.confidence || 0.9) * 100)}%</span>
-        <span>${meta.time}</span>
+        <span class="wa-chip-tag ${intentClass}">${esc((meta.intent || 'AI AGENT').toUpperCase())} ${Math.round((meta.confidence || 0.9) * 100)}%</span>
+        <span>${esc(meta.time || '')}</span>
       </div>
-      <div class="wa-bubble-action">⚡ ${meta.action || 'Recovery workflow updated'}</div>
+      <div class="wa-bubble-action">⚡ ${esc(meta.action || 'Recovery workflow updated')}</div>
     `;
   }
 
-  wrap.innerHTML = `<div class="wa-bubble ${type}">${text}</div>${extraHtml}`;
+  wrap.innerHTML = `<div class="wa-bubble ${type}">${esc(text)}</div>${extraHtml}`;
   win.appendChild(wrap);
   win.scrollTop = win.scrollHeight;
 }
