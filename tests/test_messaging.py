@@ -241,3 +241,39 @@ class TestTwilioInboundWebhook:
         )
         assert res_invalid.status_code == 401
         assert "Invalid Twilio webhook signature" in res_invalid.json()["detail"]
+
+
+class TestAPISecurityAndAuth:
+    def test_security_headers_present(self):
+        res = client.get("/api/health")
+        assert res.status_code == 200
+        assert res.headers.get("X-Content-Type-Options") == "nosniff"
+        assert res.headers.get("X-Frame-Options") == "SAMEORIGIN"
+        assert res.headers.get("X-XSS-Protection") == "1; mode=block"
+
+    def test_api_key_auth_environment_control(self, monkeypatch):
+        api_key = "prod_api_key_secret_888"
+        monkeypatch.setenv("RECOVERIQ_API_KEY", api_key)
+
+        # 1. Public route accessible without API key
+        res_public = client.get("/api/health")
+        assert res_public.status_code == 200
+
+        # 2. Protected control route blocked without API key -> 401
+        res_blocked = client.post("/api/reset")
+        assert res_blocked.status_code == 401
+        assert "Unauthorized" in res_blocked.json()["detail"]
+
+        # 3. Protected control route blocked with invalid API key -> 401
+        res_invalid = client.post("/api/reset", headers={"X-API-Key": "wrong_key"})
+        assert res_invalid.status_code == 401
+
+        # 4. Protected control route allowed with valid X-API-Key -> 200
+        res_valid_header = client.post("/api/reset", headers={"X-API-Key": api_key})
+        assert res_valid_header.status_code == 200
+        assert res_valid_header.json()["status"] == "reset"
+
+        # 5. Protected control route allowed with valid Bearer token -> 200
+        res_valid_bearer = client.post("/api/reset", headers={"Authorization": f"Bearer {api_key}"})
+        assert res_valid_bearer.status_code == 200
+        assert res_valid_bearer.json()["status"] == "reset"

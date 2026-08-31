@@ -52,28 +52,96 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ── Configurable CORS & Security ──────────────────────────────────────────────
+CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*").strip()
+ALLOWED_ORIGINS = (
+    [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
+    if CORS_ORIGINS_RAW != "*"
+    else ["*"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True if ALLOWED_ORIGINS != ["*"] else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Ensure static JS/CSS are always served as UTF-8 so ₹ and — never mangle.
+# ── API Key & Security Headers Middleware ─────────────────────────────────────
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
-class Utf8CharsetMiddleware(BaseHTTPMiddleware):
+# Public routes exempt from API Key authentication when RECOVERIQ_API_KEY is configured
+PUBLIC_ROUTE_PREFIXES = (
+    "/",
+    "/static",
+    "/api/health",
+    "/api/events",
+    "/api/stats",
+    "/api/scenarios",
+    "/api/stream",
+    "/api/webhook",             # HMAC signature protected
+    "/api/webhook/whatsapp",    # HMAC signature protected
+    "/api/whatsapp/inbound/samples",
+    "/api/benchmark",
+    "/api/bandit",
+    "/api/idempotency",
+    "/api/roi",
+    "/api/suppression/list",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+)
+
+class SecurityAndAuthMiddleware(BaseHTTPMiddleware):
+    """
+    Production-grade security middleware:
+    1. Enforces OWASP security headers (nosniff, SAMEORIGIN, XSS-Protection).
+    2. Enforces UTF-8 charset on text/JS/CSS assets.
+    3. Enforces RECOVERIQ_API_KEY on mutating/admin control routes when configured.
+       (In default demo/development mode with no key set, allows open access for zero-friction evaluation).
+    """
     async def dispatch(self, request: StarletteRequest, call_next):
+        path = request.url.path
+        api_key_required = os.getenv("RECOVERIQ_API_KEY", "").strip()
+
+        # Enforce API Key authentication if configured and path is a protected control endpoint
+        if api_key_required and not any(path == p or path.startswith(p + "/") for p in PUBLIC_ROUTE_PREFIXES):
+            provided_key = (
+                request.headers.get("X-API-Key")
+                or request.headers.get("x-api-key")
+                or ""
+            )
+            if not provided_key:
+                auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+                if auth_header.lower().startswith("bearer "):
+                    provided_key = auth_header[7:].strip()
+
+            import hmac
+            if not provided_key or not hmac.compare_digest(provided_key, api_key_required):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unauthorized: Invalid or missing API key (X-API-Key header required)"},
+                )
+
         response = await call_next(request)
+
+        # 1. OWASP Security Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # 2. UTF-8 Charset enforcement for JSON/text/JS/CSS
         ct = response.headers.get("content-type", "")
         if ct and "charset" not in ct and any(
             t in ct for t in ("javascript", "css", "text/plain")
         ):
             response.headers["content-type"] = ct.rstrip("; ") + "; charset=utf-8"
+
         return response
 
-app.add_middleware(Utf8CharsetMiddleware)
+app.add_middleware(SecurityAndAuthMiddleware)
 
 # Serve dashboard static files
 DASHBOARD = ROOT / "dashboard"
