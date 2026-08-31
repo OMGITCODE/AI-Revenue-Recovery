@@ -78,50 +78,56 @@ app.add_middleware(
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
-# Public routes exempt from API Key authentication when RECOVERIQ_API_KEY is configured
-PUBLIC_ROUTE_PREFIXES = (
+# Exact read-only public endpoints exempt from API Key authentication when RECOVERIQ_API_KEY is configured
+PUBLIC_EXACT_PATHS = {
     "/",
-    "/static",
     "/api/health",
-    "/api/events",
     "/api/stats",
     "/api/scenarios",
+    "/api/events",
     "/api/stream",
     "/api/ledger",              # Ledger inspect and CSV/JSON export
+    "/api/ledger/export",
     "/api/roi",
     "/api/bandit",
     "/api/benchmark",
     "/api/idempotency",
-    "/api/promises",
-    "/api/checkout",
-    "/api/b2b",
-    "/api/decide",
-    "/api/customer",
-    "/api/customers",
     "/api/suppression/list",
-    "/api/pattern",
-    "/api/webhook",             # HMAC signature protected
-    "/api/webhook/whatsapp",    # HMAC signature protected
     "/api/whatsapp/inbound/samples",
     "/docs",
     "/openapi.json",
     "/redoc",
+}
+
+# Prefix-based public paths (static assets & signature-protected webhook ingestion)
+PUBLIC_PREFIX_PATHS = (
+    "/static",
+    "/api/webhook",             # HMAC / signature protected (Razorpay, Twilio)
 )
+
+def is_public_route(path: str) -> bool:
+    """Returns True if the request path is explicitly public/exempt from API key auth."""
+    norm = path.rstrip("/") or "/"
+    if norm in PUBLIC_EXACT_PATHS:
+        return True
+    if any(path == p or path.startswith(p + "/") for p in PUBLIC_PREFIX_PATHS):
+        return True
+    return False
 
 class SecurityAndAuthMiddleware(BaseHTTPMiddleware):
     """
     Production-grade security middleware:
     1. Enforces OWASP security headers (nosniff, SAMEORIGIN, XSS-Protection).
     2. Enforces UTF-8 charset on text/JS/CSS assets.
-    3. Enforces RECOVERIQ_API_KEY on mutating/admin control routes when configured.
+    3. Enforces RECOVERIQ_API_KEY on mutating/admin control routes and customer PII endpoints when configured.
        (In default demo/development mode with no key set, allows open access for zero-friction evaluation).
     """
     async def dispatch(self, request: StarletteRequest, call_next):
         path = request.url.path
         api_key_required = settings.recoveriq_api_key.strip()
 
-        # Enforce API Key authentication if configured and path is a protected control endpoint
-        if api_key_required and not any(path == p or path.startswith(p + "/") for p in PUBLIC_ROUTE_PREFIXES):
+        # Enforce API Key authentication if configured and path is not explicitly public
+        if api_key_required and not is_public_route(path):
             provided_key = (
                 request.headers.get("X-API-Key")
                 or request.headers.get("x-api-key")

@@ -277,3 +277,60 @@ class TestAPISecurityAndAuth:
         res_valid_bearer = client.post("/api/reset", headers={"Authorization": f"Bearer {api_key}"})
         assert res_valid_bearer.status_code == 200
         assert res_valid_bearer.json()["status"] == "reset"
+
+    def test_state_mutating_and_pii_routes_require_api_key(self, monkeypatch):
+        api_key = "prod_api_key_secret_888"
+        monkeypatch.setenv("RECOVERIQ_API_KEY", api_key)
+
+        # Test exact routes reported in issue:
+        # A. State Mutating: POST /api/b2b/receivables -> 401 without key, 200 with key
+        b2b_payload = {
+            "debtor_name": "Secure Acme Corp",
+            "debtor_vpa": "acme@okhdfcbank",
+            "debtor_phone": "+919876543210",
+            "invoice_number": "INV-SEC-001",
+            "amount": 75000.0,
+            "due_date": "2026-08-01",
+        }
+        res_b2b_blocked = client.post("/api/b2b/receivables", json=b2b_payload)
+        assert res_b2b_blocked.status_code == 401
+        res_b2b_auth = client.post("/api/b2b/receivables", json=b2b_payload, headers={"X-API-Key": api_key})
+        assert res_b2b_auth.status_code == 200
+        rec_id = res_b2b_auth.json()["receivable_id"]
+
+        # B. State Mutating: POST /api/b2b/receivables/{id}/settle -> 401 without key, 200 with key
+        res_settle_blocked = client.post(f"/api/b2b/receivables/{rec_id}/settle")
+        assert res_settle_blocked.status_code == 401
+        res_settle_auth = client.post(f"/api/b2b/receivables/{rec_id}/settle", headers={"X-API-Key": api_key})
+        assert res_settle_auth.status_code == 200
+
+        # C. PII-exposing: GET /api/customers -> 401 without key, 200 with key
+        res_cust_blocked = client.get("/api/customers")
+        assert res_cust_blocked.status_code == 401
+        res_cust_auth = client.get("/api/customers", headers={"X-API-Key": api_key})
+        assert res_cust_auth.status_code == 200
+
+        # D. PII-exposing: GET /api/customer/{identifier}/history -> 401 without key, 200 with key
+        res_hist_blocked = client.get("/api/customer/rahul@oksbi/history")
+        assert res_hist_blocked.status_code == 401
+        res_hist_auth = client.get("/api/customer/rahul@oksbi/history", headers={"X-API-Key": api_key})
+        assert res_hist_auth.status_code == 200
+
+        # E. AI Execution: POST /api/decide -> 401 without key, 200 with key
+        decide_payload = {
+            "failure_code": "U30",
+            "mandate_state": "active",
+            "amount": 1000.0,
+            "customer_vpa": "test@upi",
+        }
+        res_decide_blocked = client.post("/api/decide", json=decide_payload)
+        assert res_decide_blocked.status_code == 401
+        res_decide_auth = client.post("/api/decide", json=decide_payload, headers={"X-API-Key": api_key})
+        assert res_decide_auth.status_code == 200
+
+        # F. Read-only stats and telemetry remain public
+        assert client.get("/api/health").status_code == 200
+        assert client.get("/api/stats").status_code == 200
+        assert client.get("/api/scenarios").status_code == 200
+        assert client.get("/api/events").status_code == 200
+

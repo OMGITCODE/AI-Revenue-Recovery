@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-113%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-114%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -212,7 +212,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 113 Tests across 7 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 114 Tests across 7 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -222,8 +222,8 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Hinglish Inbound NLP & WhatsApp** | `tests/test_inbound_whatsapp.py` | **15 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, etc.), promise date parsing, trust score adjustments, compliance holds. |
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
-| **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **13 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth. |
-| **Total Test Suite** | `pytest tests/` | **113 passing** | **100% test pass rate in ~4.5s** |
+| **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
+| **Total Test Suite** | `pytest tests/` | **114 passing** | **100% test pass rate in ~4.5s** |
 
 
 ---
