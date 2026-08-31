@@ -102,3 +102,93 @@ class TestBenchmarkSuite:
         assert data["ai_agent"]["recovery_rate_pct"] > data["baseline"]["recovery_rate_pct"]
         assert data["ai_agent"]["total_recovered"] > data["baseline"]["total_recovered"]
         assert data["delta"]["violations_eliminated"] > 0
+        assert "sensitivity_analysis_20pct_haircut" in data
+
+    def test_benchmark_sensitivity_analysis(self):
+        from benchmark import run_sensitivity_analysis
+        sens = run_sensitivity_analysis(n_runs=10, haircut_pct=0.20)
+        assert sens["haircut_pct"] == 20
+        assert sens["ai_rate_mean"] > sens["base_rate"]
+        assert sens["ai_recovered_mean"] > sens["base_recovered"]
+        assert sens["net_uplift_revenue"] > 50000
+
+
+class TestLiveBanditLearningInAPI:
+    def test_live_simulation_updates_bandit(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        from src.agent.bandit import bandit_engine
+
+        client = TestClient(app)
+        client.post("/api/reset")
+
+        # Simulate U30 scenario
+        res = client.post("/api/simulate/u30")
+        assert res.status_code == 200
+
+        # Verify bandit was updated in real time
+        total_pulls = sum(
+            st.total_pulls
+            for arms in bandit_engine._contexts.values()
+            for st in arms.values()
+        )
+        assert total_pulls > 0
+
+    def test_live_p2p_fulfillment_updates_bandit(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        from src.agent.bandit import bandit_engine, get_context_key, RecoveryArm
+        from src.agent.promise_tracker import promise_tracker
+
+        client = TestClient(app)
+        client.post("/api/reset")
+
+        p = promise_tracker.create("payer@oksbi", 1200.0, "SBI", "U30", deadline_hours=24, channel="whatsapp")
+        ckey = get_context_key("insufficient_funds", "silver", "high")
+        arm_state = bandit_engine._get_or_create_arm(ckey, RecoveryArm.WHATSAPP_PAY_LINK)
+        initial_pulls = arm_state.total_pulls
+        initial_alpha = arm_state.alpha
+
+        res = client.post(f"/api/promises/{p.promise_id}/fulfill")
+        assert res.status_code == 200
+        assert arm_state.total_pulls == initial_pulls + 1
+        assert arm_state.alpha == initial_alpha + 1.0
+
+    def test_live_checkout_recovery_updates_bandit(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        from src.agent.bandit import bandit_engine, get_context_key, RecoveryArm
+        from src.agent.checkout_recovery import checkout_agent
+
+        client = TestClient(app)
+        client.post("/api/reset")
+
+        s = checkout_agent.record_drop_off("user@oksbi", "+91-9999999999", 2500.0, "Merchant A", "payment_page_exit")
+        ckey = get_context_key("insufficient_funds", "silver", "med")
+        arm_state = bandit_engine._get_or_create_arm(ckey, RecoveryArm.WHATSAPP_PAY_LINK)
+        initial_pulls = arm_state.total_pulls
+
+        res = client.post(f"/api/checkout/{s.session_id}/recover")
+        assert res.status_code == 200
+        assert arm_state.total_pulls == initial_pulls + 1
+        assert arm_state.total_revenue_recovered >= 2500.0
+
+    def test_live_b2b_settle_updates_bandit(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        from src.agent.bandit import bandit_engine, get_context_key, RecoveryArm
+        from src.agent.b2b_chaser import b2b_chaser
+
+        client = TestClient(app)
+        client.post("/api/reset")
+
+        r = b2b_chaser.add_receivable("Corp Ltd", "corp@okhdfc", "+91-9800000001", "INV-99", 50000, "2026-07-01")
+        ckey = get_context_key("b2b_overdue", "silver", "med")
+        arm_state = bandit_engine._get_or_create_arm(ckey, RecoveryArm.B2B_IVR_CHASER)
+        initial_pulls = arm_state.total_pulls
+
+        res = client.post(f"/api/b2b/receivables/{r.receivable_id}/settle?amount_received=50000")
+        assert res.status_code == 200
+        assert arm_state.total_pulls == initial_pulls + 1
+        assert arm_state.total_revenue_recovered >= 50000.0
+

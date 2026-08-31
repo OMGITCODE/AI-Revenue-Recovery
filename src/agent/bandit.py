@@ -39,6 +39,31 @@ class RecoveryArm(str, Enum):
     HUMAN_ESCALATION      = "escalation"              # Route to high-touch support
 
 
+def resolve_arm(arm: RecoveryArm | str) -> RecoveryArm:
+    """Resolve an arm string or enum to a valid RecoveryArm enum."""
+    if isinstance(arm, RecoveryArm):
+        return arm
+    val = str(arm).lower().strip()
+    if val in ("whatsapp", "whatsapp_nudge", "checkout_link"):
+        return RecoveryArm.WHATSAPP_PAY_LINK
+    if val in ("smart_retry", "smart_retry_salary"):
+        return RecoveryArm.SMART_RETRY_SALARY
+    if val in ("smart_retry_immediate",):
+        return RecoveryArm.SMART_RETRY_IMMEDIATE
+    if val in ("upi_collect",):
+        return RecoveryArm.UPI_COLLECT_DIRECT
+    if val in ("mandate_renewal", "mandate_re_register"):
+        return RecoveryArm.MANDATE_RE_REGISTER
+    if val in ("ivr", "b2b_ivr_chaser", "b2b_settlement"):
+        return RecoveryArm.B2B_IVR_CHASER
+    if val in ("escalation", "human_escalation"):
+        return RecoveryArm.HUMAN_ESCALATION
+    for member in RecoveryArm:
+        if member.value == val or member.name.lower() == val:
+            return member
+    return RecoveryArm.WHATSAPP_PAY_LINK
+
+
 # ── Context Cluster ───────────────────────────────────────────────────────────
 
 def get_context_key(failure_category: str, tier: str, trust_bucket: str) -> str:
@@ -169,12 +194,19 @@ class ThompsonSamplingEngine:
                             beta=b,
                         )
 
-    def _get_or_create_arm(self, context_key: str, arm: RecoveryArm) -> ArmState:
+    def reset(self):
+        """Reset all context posterior distributions back to initial empirical priors."""
+        self._contexts.clear()
+        self._init_default_priors()
+        logger.info("Bandit engine reset to initial empirical priors.")
+
+    def _get_or_create_arm(self, context_key: str, arm: RecoveryArm | str) -> ArmState:
+        resolved = resolve_arm(arm)
         if context_key not in self._contexts:
             self._contexts[context_key] = {}
-        if arm not in self._contexts[context_key]:
-            self._contexts[context_key][arm] = ArmState(arm=arm, alpha=2.0, beta=2.0)
-        return self._contexts[context_key][arm]
+        if resolved not in self._contexts[context_key]:
+            self._contexts[context_key][resolved] = ArmState(arm=resolved, alpha=2.0, beta=2.0)
+        return self._contexts[context_key][resolved]
 
     def select_best_arm(
         self,
@@ -197,8 +229,7 @@ class ThompsonSamplingEngine:
 
         if allowed_actions:
             candidate_arms = [
-                RecoveryArm(a) for a in allowed_actions
-                if a in [e.value for e in RecoveryArm]
+                resolve_arm(a) for a in allowed_actions
             ]
         else:
             candidate_arms = list(self._contexts.get(context_key, {}).keys())
@@ -253,14 +284,15 @@ class ThompsonSamplingEngine:
     def update(
         self,
         context_key: str,
-        arm: RecoveryArm,
+        arm: RecoveryArm | str,
         success: bool,
         amount_recovered: float = 0.0,
     ):
         """
         Bayesian update: Incorporate real feedback to update posterior distribution.
         """
-        arm_state = self._get_or_create_arm(context_key, arm)
+        resolved_arm = resolve_arm(arm)
+        arm_state = self._get_or_create_arm(context_key, resolved_arm)
         arm_state.total_pulls += 1
         if success:
             arm_state.alpha += 1.0
@@ -269,8 +301,9 @@ class ThompsonSamplingEngine:
             arm_state.beta += 1.0
 
         logger.info(
-            "Bandit updated: %s [%s] -> Alpha=%.1f Beta=%.1f (New Mean=%.2f)",
-            context_key, arm.value, arm_state.alpha, arm_state.beta, arm_state.mean
+            "Bandit updated: %s [%s] -> Alpha=%.1f Beta=%.1f (New Mean=%.2f, Total Pulls=%d, Recovered=₹%.2f)",
+            context_key, resolved_arm.value, arm_state.alpha, arm_state.beta, arm_state.mean,
+            arm_state.total_pulls, arm_state.total_revenue_recovered,
         )
 
     def get_summary(self) -> dict:

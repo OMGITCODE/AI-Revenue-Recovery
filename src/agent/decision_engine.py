@@ -118,6 +118,7 @@ class DecisionEngine:
         has_promise:   bool  = False,
         daily_touches: int   = 0,
         trust_score:   float = 0.5,   # payer trust score from promise_tracker
+        current_hour:  Optional[int] = None,
     ) -> GuardrailDecision:
 
         tier       = infer_tier(amount)
@@ -150,8 +151,7 @@ class DecisionEngine:
             logger.info("GR3: Mandate %s — forcing mandate_renewal path", mandate_state)
 
         # ── Guardrail 4: Time-of-day DND gate (TRAI compliance) ──────────────
-        now_ist = datetime.now(IST)
-        hour    = now_ist.hour
+        hour = current_hour if current_hour is not None else datetime.now(IST).hour
         in_dnd  = hour >= self.DND_START_HOUR or hour < self.DND_END_HOUR
         if in_dnd:
             self._block(allowed, blocked, "whatsapp_nudge")

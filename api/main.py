@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 from api.store import store
 from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
 from src.agent.decision_engine import DecisionEngine
+from src.agent.bandit import bandit_engine, RecoveryArm, get_context_key, resolve_arm
 from src.agent.promise_tracker import promise_tracker
 from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.b2b_chaser import b2b_chaser, AgingBucket
@@ -233,11 +234,21 @@ async def _run_and_log(scenario_key: str):
             confidence = 0.68,
             channel    = channel,
         )
-        if not decision.guardrails_fired:
-            outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
-            rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
-            recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
-    elif decision.guardrails_fired:
+        outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
+        rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
+        recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
+        # Online Bayesian Posterior Update
+        if decision.bandit_decision:
+            ckey = decision.bandit_decision.get("context_key")
+            selected_arm = decision.bandit_decision.get("selected_arm") or channel
+            if ckey:
+                bandit_engine.update(
+                    context_key=ckey,
+                    arm=selected_arm,
+                    success=(outcome == "success"),
+                    amount_recovered=rec_amt,
+                )
+    elif not decision.approved:
         recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
 
     # ── 4) Cross-wiring: auto-create linked panel records ─────────────────────
@@ -384,6 +395,7 @@ async def reset():
     recovery_ledger._entries.clear()
     idempotency_manager.clear()
     customer_locks.clear()
+    bandit_engine.reset()
     await _broadcast_modules_updated()
     return {"status": "reset"}
 
@@ -460,6 +472,11 @@ async def seed_demo_data_endpoint():
         e13 = recovery_ledger.log("intervene", "user@yesbank",    4999,  "U30: funds available post-salary credit (pattern: 3/3 previous payments completed within 2 days of salary). UPI collect sent.", 0.91, "upi_collect")
         recovery_ledger.mark_outcome(e13.ledger_id, "success", 4999)
 
+        # Seed bandit online knowledge with verified initial outcomes
+        bandit_engine.update("insufficient_funds:silver:high", "smart_retry", True, 999)
+        bandit_engine.update("insufficient_funds:silver:med", "smart_retry", True, 299)
+        bandit_engine.update("insufficient_funds:gold:high", "upi_collect", True, 4999)
+
     await _broadcast_modules_updated()
     return {"status": "seeded", "message": "Demo data loaded successfully"}
 
@@ -533,6 +550,12 @@ async def fulfill_promise(promise_id: str):
         channel    = p.channel,
     )
     recovery_ledger.mark_outcome(e.ledger_id, "success", p.amount)
+
+    # Bayesian posterior update: reinforce P2P recovery channel
+    cat = "insufficient_funds" if p.failure_code in ("U30", "U13") else ("technical_error" if p.failure_code in ("TM", "TE") else "mandate_inactive")
+    ckey = get_context_key(cat, "silver", "high")
+    bandit_engine.update(context_key=ckey, arm=p.channel, success=True, amount_recovered=p.amount)
+
     return p.to_dict()
 
 @app.post("/api/promises/{promise_id}/break")
@@ -550,6 +573,12 @@ async def break_promise(promise_id: str):
         channel    = "escalation",
     )
     recovery_ledger.mark_outcome(e.ledger_id, "failure", 0)
+
+    # Bayesian posterior update: record failure on missed commitment
+    cat = "insufficient_funds" if p.failure_code in ("U30", "U13") else ("technical_error" if p.failure_code in ("TM", "TE") else "mandate_inactive")
+    ckey = get_context_key(cat, "silver", "low")
+    bandit_engine.update(context_key=ckey, arm=p.channel, success=False, amount_recovered=0.0)
+
     return p.to_dict()
 
 
@@ -597,6 +626,11 @@ async def checkout_recovered(session_id: str):
         channel    = "checkout_link",
     )
     recovery_ledger.mark_outcome(e.ledger_id, "success", s.cart_amount)
+
+    # Bayesian posterior update for checkout recovery
+    ckey = get_context_key("insufficient_funds", "silver", "med")
+    bandit_engine.update(context_key=ckey, arm="whatsapp_nudge", success=True, amount_recovered=s.cart_amount)
+
     return s.to_dict()
 
 
@@ -657,6 +691,12 @@ async def settle_receivable(receivable_id: str, amount_received: float = 0):
         channel    = "b2b_settlement",
     )
     recovery_ledger.mark_outcome(e.ledger_id, "success", amount_received or r.amount)
+
+    # Bayesian posterior update for B2B collection
+    tier_val = r.debtor_tier.value.lower() if hasattr(r.debtor_tier, "value") else str(r.debtor_tier).lower()
+    ckey = get_context_key("b2b_overdue", tier_val if tier_val in ("bronze", "silver", "gold", "platinum") else "silver", "med")
+    bandit_engine.update(context_key=ckey, arm="ivr", success=True, amount_recovered=amount_received or r.amount)
+
     return r.to_dict()
 
 @app.get("/api/b2b")
@@ -748,8 +788,9 @@ async def get_bandit_state():
 @app.get("/api/benchmark")
 async def run_benchmark_endpoint():
     """Runs empirical benchmark comparing fixed retry baseline vs RecoverIQ AI Agent across Monte Carlo runs."""
-    from benchmark import run_benchmark
+    from benchmark import run_benchmark, run_sensitivity_analysis
     b, a = run_benchmark(n_runs=50)
+    sens = run_sensitivity_analysis(n_runs=50, haircut_pct=0.20)
 
     n_runs = getattr(a, "_n_runs", 50)
     ai_rec_mean = getattr(a, "_ai_rec_mean", a.total_recovered)
@@ -762,7 +803,7 @@ async def run_benchmark_endpoint():
 
     return {
         "n_runs": n_runs,
-        "methodology": "Monte Carlo (n=50) — probabilistic outcomes per published NPCI/industry conversion rates",
+        "methodology": "Monte Carlo (n=50) — probabilistic outcomes per published Indian FinTech conversion rates",
         "baseline": {
             "total_at_stake": b.total_at_stake,
             "total_recovered": round(base_rec_mean, 2),
@@ -788,7 +829,8 @@ async def run_benchmark_endpoint():
             "recovery_rate_pts": round(ai_rate_mean - base_rate_mean, 1),
             "net_roi_uplift": round(ai_roi_mean - b.net_roi, 2),
             "violations_eliminated": b.compliance_violations - a.compliance_violations,
-        }
+        },
+        "sensitivity_analysis_20pct_haircut": sens,
     }
 
 
