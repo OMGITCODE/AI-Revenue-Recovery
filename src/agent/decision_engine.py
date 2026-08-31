@@ -17,6 +17,7 @@ Guardrails enforced:
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
@@ -120,8 +121,10 @@ class DecisionEngine:
         trust_score:   float = 0.5,   # payer trust score from promise_tracker
         current_hour:  Optional[int] = None,
         rng:           Optional[random.Random] = None,
+        customer_vpa:  str   = "",
     ) -> GuardrailDecision:
 
+        active_rng = rng if rng is not None else random.Random()
         tier       = infer_tier(amount)
         allowed    = list(self.ALL_ACTIONS)
         blocked    = []
@@ -200,6 +203,31 @@ class DecisionEngine:
                 daily_touches,
             )
 
+        # ── Guardrail 9: Inbound Suppression & Compliance Blacklist ──────────
+        # If customer reported wrong number, active dispute, or financial hardship,
+        # suppress automated retries and nudges per RBI Fair Practices Code.
+        if customer_vpa:
+            try:
+                from .whatsapp_inbound import suppression_registry
+                is_suppressed, supp_reason = suppression_registry.is_suppressed(customer_vpa)
+                if is_suppressed:
+                    if supp_reason == "permanently_blacklisted_wrong_number":
+                        logger.warning("GR9 [COMPLIANCE]: %s is permanently blacklisted (wrong number/opt-out) — suppressing all actions", customer_vpa)
+                        return GuardrailDecision(
+                            approved=False, allowed_actions=[], blocked_actions=self.ALL_ACTIONS,
+                            guardrails_fired=["compliance_blacklist_wrong_number"],
+                            customer_tier=tier, retry_budget_left=0,
+                            reason=f"Customer {customer_vpa} permanently opt-out/wrong number. All communications blocked.",
+                        )
+                    else:
+                        self._block(allowed, blocked, "smart_retry")
+                        self._block(allowed, blocked, "whatsapp_nudge")
+                        self._block(allowed, blocked, "upi_collect")
+                        fired.append(f"suppression_{supp_reason}")
+                        logger.info("GR9: Active hold (%s) for %s — suppressing automated retries/nudges", supp_reason, customer_vpa)
+            except Exception as e:
+                logger.debug("Suppression registry check skipped: %s", e)
+
         approved = len(allowed) > 0
         trust_label = (
             "HIGH" if trust_score >= 0.75 else
@@ -226,7 +254,7 @@ class DecisionEngine:
                 customer_tier=tier.value,
                 trust_score=trust_score,
                 allowed_actions=allowed,
-                rng=rng,
+                rng=active_rng,
             )
             bandit_res = bandit_decision_obj.to_dict()
 

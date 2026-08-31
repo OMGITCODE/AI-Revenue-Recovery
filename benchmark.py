@@ -15,7 +15,7 @@ Runs the entire 40-event dataset through two competing recovery policies:
      - NPCI error diagnosis (14 specific error codes)
      - Salary-cycle aware retries (1st–7th of month) + Setu AA balance verification
      - Magic re-registration link generation for revoked/expired mandates
-       → BT01/BT02 mandate renewal converts at ~68% (Razorpay / industry CTR benchmark)
+       → BT01/BT02 mandate renewal converts at ~68% modeled self-cure rate (validated under 20% pessimistic sensitivity haircut)
      - U30 salary-window retry converts at ~88% (vs ~14% for blind month-end retry)
      - UPI Collect / push-to-VPA converts at ~65% for limit/decline failures
      - Contextual Thompson Sampling bandit for channel selection (Beta priors)

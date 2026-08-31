@@ -102,11 +102,9 @@ class ArmState:
         sd = math.sqrt(self.variance)
         return (max(0.0, m - 1.645 * sd), min(1.0, m + 1.645 * sd))
 
-    def sample(self, rng: Optional[random.Random] = None) -> float:
-        """Draw a sample from the Beta posterior distribution."""
-        if rng is not None:
-            return rng.betavariate(self.alpha, self.beta)
-        return random.betavariate(self.alpha, self.beta)
+    def sample(self, rng: random.Random) -> float:
+        """Draw a sample from the Beta posterior distribution using the provided RNG instance."""
+        return rng.betavariate(self.alpha, self.beta)
 
 
 @dataclass
@@ -223,6 +221,7 @@ class ThompsonSamplingEngine:
         Samples posterior distributions for candidate arms and selects
         the arm that maximizes Expected Recovery Utility.
         """
+        active_rng = rng if rng is not None else random.Random()
         trust_bucket = "high" if trust_score >= 0.75 else ("med" if trust_score >= 0.40 else "low")
         context_key = get_context_key(failure_category, customer_tier, trust_bucket)
 
@@ -249,7 +248,7 @@ class ThompsonSamplingEngine:
 
         for arm in candidate_arms:
             arm_state = self._get_or_create_arm(context_key, arm)
-            sampled_val = arm_state.sample(rng=rng)
+            sampled_val = arm_state.sample(active_rng)
             samples[arm] = sampled_val
             means[arm] = arm_state.mean
 

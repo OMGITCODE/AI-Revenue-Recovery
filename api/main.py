@@ -31,6 +31,7 @@ from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.b2b_chaser import b2b_chaser, AgingBucket
 from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.idempotency import idempotency_manager, customer_locks
+from src.agent.whatsapp_inbound import whatsapp_inbound_handler, suppression_registry, InboundIntent
 from src.integrations.setu_aa import setu_aa
 
 _decision_engine = DecisionEngine()
@@ -396,6 +397,7 @@ async def reset():
     idempotency_manager.clear()
     customer_locks.clear()
     bandit_engine.reset()
+    suppression_registry.reset()
     await _broadcast_modules_updated()
     return {"status": "reset"}
 
@@ -909,6 +911,89 @@ if False:  # dead code block — kept for reference
     # Checkout recovery
     e12 = recovery_ledger.log("checkout", "meera@okaxis",     2499,   "Checkout abandoned at payment page. Hinglish nudge T+10min sent: 'Arey yaar! Sirf ek click baaki tha'. Recovery link generated.",  0.60, "whatsapp")
     recovery_ledger.mark_outcome(e12.ledger_id, "pending", 0)
+
+
+# ── 2-Way Conversational WhatsApp Inbound ───────────────────────────────────────
+
+class InboundWhatsAppRequest(BaseModel):
+    from_phone:   str = ""
+    customer_vpa: str = "user@upi"
+    message:      str
+    amount:       float = 999.0
+
+
+@app.post("/api/webhook/whatsapp/inbound")
+async def webhook_whatsapp_inbound(req: InboundWhatsAppRequest):
+    """
+    2-Way Conversational Recovery Webhook:
+    Receives customer WhatsApp reply in Hinglish/English, classifies intent into:
+      - promise       -> creates Promise-to-Pay, halts automated retries
+      - already_paid  -> initiates 24h bank reconciliation verification hold
+      - dispute       -> stops retries, escalates to human dispute queue
+      - hardship      -> grants 30-day compassionate pause (RBI Fair Practices)
+      - wrong_number  -> permanent compliance blacklist suppression
+    """
+    res = whatsapp_inbound_handler.handle_inbound(
+        from_phone=req.from_phone,
+        customer_vpa=req.customer_vpa,
+        message=req.message,
+        amount=req.amount,
+    )
+    await _broadcast_modules_updated()
+    return res.to_dict()
+
+
+@app.get("/api/whatsapp/inbound/samples")
+async def inbound_samples():
+    """Returns typical Hinglish & English inbound test messages for demo evaluation."""
+    return [
+        {
+            "intent": "promise",
+            "message": "Bhai kal pakka pay kar dunga, abhi travel kar raha hu",
+            "description": "Customer promises payment by tomorrow (24h)",
+        },
+        {
+            "intent": "promise",
+            "message": "Salary 5th ko aayegi tab transfer kar dungi",
+            "description": "Customer salary-cycle commitment (96h)",
+        },
+        {
+            "intent": "already_paid",
+            "message": "Mera account se ₹999 debit ho gaya hai check your statement",
+            "description": "Claims transaction already deducted (24h verification hold)",
+        },
+        {
+            "intent": "dispute",
+            "message": "Maine ye service cancel kar di thi, refund karo fraud mat karo",
+            "description": "Charge dispute & cancellation request (Human escalation)",
+        },
+        {
+            "intent": "hardship",
+            "message": "Meri job chali gayi hai aur hospital emergency hai, abhi paise nahi hain",
+            "description": "Medical / financial distress relief request (30d pause)",
+        },
+        {
+            "intent": "wrong_number",
+            "message": "Galat number hai bhai, stop messaging me not my account",
+            "description": "Wrong contact info / opt-out (Permanent blacklist)",
+        },
+    ]
+
+
+@app.get("/api/suppression/list")
+async def get_suppressed_list():
+    """Returns active compliance blacklists and temporary holds."""
+    return {
+        "permanent_blacklist": list(suppression_registry._permanent_blacklist),
+        "active_holds": {
+            k: {
+                "hold_type": v["hold_type"],
+                "expires_at": v["expires_at"].isoformat(),
+                "reason": v["reason"],
+            }
+            for k, v in suppression_registry._active_holds.items()
+        },
+    }
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────────────

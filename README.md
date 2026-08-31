@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-58%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-73%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -114,8 +114,9 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 
 | Module | File | Key Innovation |
 |---|---|---|
+| **2-Way Conversational Recovery** | `src/agent/whatsapp_inbound.py` | Hinglish inbound intent classification (Promise, Already Paid, Dispute, Hardship, Wrong Number) + compliance holds |
 | **Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Beta-Bernoulli MAB — learns optimal channel per failure context, 48 contextual clusters with domain priors |
-| **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 8 RBI/TRAI guardrails (GR1–GR8): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, daily contact cap |
+| **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 9 RBI/TRAI guardrails (GR1–GR9): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, compliance blacklist |
 | **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | Event deduplication cache with TTL + per-VPA async mutex locks — prevents duplicate retries & race conditions |
 | **UPI Autopay Recovery** | `src/agent/upi_detector.py` | 14 NPCI error codes mapped to intelligent recovery — differentiates permanent (`BT01`, `BT02`) from transient (`U30`, `TM`) |
 | **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Reschedules `U30` retries to 1st–7th of month (10:00 AM IST) — avoids month-end dry balance trap |
@@ -124,8 +125,8 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 | **Checkout Drop-off Recovery** | `src/agent/checkout_recovery.py` | Hinglish conversational WhatsApp nudges at T+10min — recovers abandoned carts with 1-click UPI fallback |
 | **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) — IVR, WhatsApp, interest calc, legal notices |
 | **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Append-only ledger: every decision with confidence score + plain-English reasoning; CSV/JSON export |
-| **Live REST API (25+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/ledger/export` |
-| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹1,39,092 mean uplift, +60 pts rate uplift, 0 compliance violations |
+| **Live REST API (28+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/webhook/whatsapp/inbound` |
+| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹1,36,204 mean uplift, +59.5 pts rate uplift, 0 compliance violations |
 
 
 ---
@@ -209,8 +210,9 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (58 passing tests)
+└── tests/                       # Test Suite (73 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
+    ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & deterministic benchmark tests (13 tests)
     └── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
 ```

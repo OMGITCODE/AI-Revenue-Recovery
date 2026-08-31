@@ -187,6 +187,10 @@ class PromiseToPayTracker:
             for p in self._store.values()
         )
 
+    def active_promises_for_vpa(self, vpa: str) -> List[PromiseToPay]:
+        """Returns all currently pending promises for a given VPA."""
+        return [p for p in self._store.values() if p.vpa == vpa and p.status == PromiseStatus.PENDING]
+
     def get(self, promise_id: str) -> Optional[PromiseToPay]:
         return self._store.get(promise_id)
 
