@@ -160,6 +160,58 @@ During development and testing, we encountered three significant real-world tech
 
 ## 🏗️ Architecture & Project Structure
 
+### 🔄 End-to-End System Architecture
+
+```mermaid
+flowchart TD
+    subgraph INGRESS["1. Event Ingress & Webhook Ingestion"]
+        RZP["Razorpay UPI Webhooks<br/>(payment.failed / autopay)"]
+        INBOUND_WA["Inbound Twilio / WhatsApp<br/>(/api/webhook/whatsapp/twilio)"]
+        CART["Checkout & B2B Invoices<br/>(/api/checkout/drop · /api/b2b)"]
+    end
+
+    subgraph IDEMPOTENCY["2. Idempotency & Concurrency Safety Layer"]
+        LOCKS["Per-Customer Async Mutex Locks<br/>(Prevents Concurrent Webhook Race Conditions)"]
+        DEDUP["Event Deduplication Cache with TTL<br/>(Rejects Duplicate Delivery from Gateways)"]
+    end
+
+    subgraph DIAGNOSIS["3. NPCI Root-Cause Diagnosis & NLP"]
+        NPCI_DIAG["UPIAutopayDetector<br/><b>14 NPCI Error Codes</b><br/>(U30, BT01, BT02, TM, BA, U69, etc.)"]
+        H_CLASS["Hinglish Inbound Intent Classifier<br/>(PROMISE, ALREADY_PAID, DISPUTE, HARDSHIP)"]
+    end
+
+    subgraph DECISION["4. AI Decision & Policy Engine"]
+        GUARDRAILS["Deterministic Guardrails Engine (GR1–GR9)<br/>• RBI >₹15k Circular Compliance  • TRAI DND 21:00-08:00 Window<br/>• Max 3 Lifetime Retries Cap      • Active P2P Harassment Suppression"]
+        BANDIT["Bayesian Contextual Multi-Armed Bandit<br/><b>Thompson Sampling: θ ~ Beta(α, β)</b><br/>48 Context Clusters (Tier × Code × Trust Score)<br/>Online Bayesian Posterior Updating"]
+    end
+
+    subgraph INTERVENTIONS["5. Multi-Channel Recovery Dispatch"]
+        RETRY_SCHED["Salary-Cycle Retry Scheduler<br/>(1st–7th of Month + Setu AA Stub)"]
+        RENEWAL["1-Click Mandate Re-registration<br/>(Interactive Magic Link via WhatsApp)"]
+        COLLECT["UPI Collect Request<br/>(Push-to-VPA via Razorpay)"]
+        MESSAGING["Twilio WhatsApp & SMS Messenger<br/>(Live API with Safe Mock Fallback)"]
+        ESCALATION["Assisted Human Escalation<br/>(High-Touch B2B / Tier A Priority)"]
+    end
+
+    subgraph AUDIT_UI["6. Auditability, Ledger & Observability"]
+        LEDGER["Recovery Audit Ledger<br/>(Append-Only · Plain-English Reason · Confidence)"]
+        P2P_TRACKER["Promise-to-Pay Tracker<br/>(Continuous Payer Trust Score 0.0–1.0)"]
+        SSE_STREAM["FastAPI Real-Time SSE Stream<br/>(/api/stream)"]
+        DASHBOARD["RecoverIQ Live Web Dashboard<br/>(Razorpay-Style Dark UI · Live Counters)"]
+    end
+
+    INGRESS --> LOCKS --> DEDUP --> DIAGNOSIS
+    DIAGNOSIS --> GUARDRAILS --> BANDIT
+    BANDIT --> INTERVENTIONS
+    INTERVENTIONS --> LEDGER
+    INTERVENTIONS --> P2P_TRACKER
+    LEDGER --> SSE_STREAM
+    P2P_TRACKER --> SSE_STREAM
+    SSE_STREAM --> DASHBOARD
+```
+
+### 📂 Directory & Component Structure
+
 ```
 ai-revenue-recovery-agent/
 ├── benchmark.py                 # Empirical benchmark (Baseline vs RecoverIQ)
