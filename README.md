@@ -115,6 +115,7 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 | Module | File | Key Innovation |
 |---|---|---|
 | **2-Way Conversational Recovery** | `src/agent/whatsapp_inbound.py` | Hinglish inbound intent classification (Promise, Already Paid, Dispute, Hardship, Wrong Number) + compliance holds |
+| **Live Twilio WhatsApp & SMS** | `src/integrations/messaging.py` | Twilio API client with lazy init, DLT-registration awareness, sandbox routing & seamless mock fallback |
 | **Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Beta-Bernoulli MAB — learns optimal channel per failure context, 48 contextual clusters with domain priors |
 | **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 9 RBI/TRAI guardrails (GR1–GR9): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, compliance blacklist |
 | **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | Event deduplication cache with TTL + per-VPA async mutex locks — prevents duplicate retries & race conditions |
@@ -201,6 +202,7 @@ ai-revenue-recovery-agent/
 │   │   └── orchestrator.py      # ⚠️ V1 prototype [REFERENCE ONLY] — live pipeline is api/main.py
 │   │
 │   ├── integrations/            # External APIs
+│   │   ├── messaging.py         # Twilio WhatsApp & SMS client (live API & mock fallback)
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
 │   │   └── setu_aa.py           # Setu Account Aggregator balance stub
 │   │
