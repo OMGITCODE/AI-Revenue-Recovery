@@ -270,25 +270,54 @@ python -m pytest tests/ -v
 
 ---
 
-## 🌐 Live 2-Way WhatsApp & Local Testing with Ngrok
+## 🌐 2-Way Conversational WhatsApp Recovery & Inbound Architecture
 
 RecoverIQ supports both an in-dashboard interactive WhatsApp simulator and live 2-way WhatsApp via **Twilio Sandbox**:
 
-```
-[Customer WhatsApp on Real Phone]
-                │
-                ▼ (Inbound message via Twilio)
-    [ngrok https tunnel :8000]
-                │
-                ▼ (Form POST application/x-www-form-urlencoded)
-[POST /api/webhook/whatsapp/twilio] ──► [Hinglish Intent Classifier]
-                                                    │
-                   ┌────────────────────────────────┴────────────────────────────────┐
-                   ▼                                                                 ▼
-      [Promise-to-Pay / Settle]                                    [Dispute / Hardship / Wrong Number]
-     • Create P2P Commitment                                      • Halt all automated retries
-     • Suppress aggressive nudges                                  • 24h/30d hold or blacklist (GR9)
-     • Update Bandit priors                                       • Log to Audit Ledger
+```mermaid
+flowchart TD
+    subgraph CHANNELS["WhatsApp Channels"]
+        PHONE["Customer Phone / Judge WhatsApp"]
+        TWILIO["Twilio WhatsApp Sandbox"]
+        SIM_UI["Interactive Web Simulator UI"]
+
+        PHONE -- "Reply Message" --> TWILIO
+        TWILIO -. "Live Delivery" .-> PHONE
+    end
+
+    subgraph BACKEND["Backend Core"]
+        WH_TWILIO["/api/webhook/whatsapp/twilio<br/><i>(Form-Encoded)</i>"]
+        WH_INBOUND["/api/webhook/whatsapp/inbound<br/><i>(JSON API)</i>"]
+
+        UPI_INTERVENTIONS["src/agent/upi_interventions.py"]
+        MESSAGING["src/integrations/messaging.py"]
+        INBOUND_AGENT["src/agent/whatsapp_inbound.py<br/><b>(Hinglish Intent Classifier)</b>"]
+        PROMISE_TRACKER["src/agent/promise_tracker.py"]
+        LEDGER["src/agent/recovery_ledger.py<br/><b>(Audit Decision Log)</b>"]
+
+        TWILIO -- "Inbound Webhook (via ngrok tunnel)" --> WH_TWILIO
+        SIM_UI -- "Simulate Reply" --> WH_INBOUND
+
+        WH_TWILIO --> INBOUND_AGENT
+        WH_INBOUND --> INBOUND_AGENT
+
+        UPI_INTERVENTIONS -- "Outbound Nudge" --> MESSAGING
+        INBOUND_AGENT -- "Hinglish AI Reply" --> MESSAGING
+
+        MESSAGING -- "Live Mode (Twilio REST API)" --> TWILIO
+        MESSAGING -- "Mock Mode / Test Mode" --> LEDGER
+
+        INBOUND_AGENT -- "Intent: PROMISE / DISPUTE / HARDSHIP" --> PROMISE_TRACKER
+        INBOUND_AGENT -- "Audit Log" --> LEDGER
+    end
+
+    subgraph FRONTEND["Real-Time Frontend"]
+        SSE["SSE /api/stream"]
+        DASHBOARD["RecoverIQ Web Dashboard"]
+
+        INBOUND_AGENT -- "Real-time Push" --> SSE
+        SSE --> DASHBOARD
+    end
 ```
 
 ### Setting Up Live Twilio + Ngrok Tunneling:
