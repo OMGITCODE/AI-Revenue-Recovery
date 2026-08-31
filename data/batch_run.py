@@ -18,13 +18,7 @@ import time
 import sys
 from pathlib import Path
 
-try:
-    import requests
-except ImportError:
-    print("[!] 'requests' not found. Installing...")
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"])
-    import requests
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000"
 DATASET  = Path(__file__).parent / "upi_failures_dataset.json"
@@ -52,7 +46,7 @@ def run_all(scenarios, delay: float = 0.3):
         print(f"        Code={code}  Bank={bank}  Amount={fmt_inr(amount)}")
 
         try:
-            r = requests.post(f"{BASE_URL}/api/custom", json=sc, timeout=10)
+            r = httpx.post(f"{BASE_URL}/api/custom", json=sc, timeout=10)
             if r.status_code == 200:
                 ev = r.json()
                 ivs = ", ".join(ev.get("interventions", [])) or "none"
@@ -63,7 +57,7 @@ def run_all(scenarios, delay: float = 0.3):
                 detail = r.json().get("detail", r.text)
                 print(f"        ✗ Error {r.status_code}: {detail}")
                 failed += 1
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             print(f"        ✗ Cannot connect to {BASE_URL}. Is the server running?")
             print("          Run: python -m uvicorn api.main:app --port 8000")
             sys.exit(1)
@@ -108,7 +102,7 @@ def main():
     # Optional reset
     if args.reset:
         try:
-            r = requests.post(f"{BASE_URL}/api/reset", timeout=5)
+            r = httpx.post(f"{BASE_URL}/api/reset", timeout=5)
             if r.status_code == 200:
                 print("[i] Dashboard cleared.")
             else:
