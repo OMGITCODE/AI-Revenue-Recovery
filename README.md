@@ -210,11 +210,12 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (73 passing tests)
+└── tests/                       # Test Suite (82 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
     ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & deterministic benchmark tests (13 tests)
-    └── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
+    ├── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
+    └── test_messaging.py        # Twilio WhatsApp/SMS client, live/mock isolation & Form webhook (9 tests)
 ```
 
 ---
@@ -255,16 +256,63 @@ python -X utf8 demo.py
 ### 4. Launch the Live Dashboard & API
 
 ```bash
-uvicorn api.main:app --port 8000 --reload
+# Explicit UTF-8 encoding flag prevents console character mangling on Windows
+python -X utf8 -m uvicorn api.main:app --port 8000 --reload
 ```
-Open **`http://localhost:8000`** in your browser to view the live dashboard.
+Open **`http://localhost:8000`** in your browser to view the live interactive dashboard and conversational simulator.
 
 ### 5. Run the Automated Test Suite
 
 ```bash
 python -m pytest tests/ -v
-# 52 passed in ~3.3s
+# 82 passed in ~5.9s
 ```
+
+---
+
+## 🌐 Live 2-Way WhatsApp & Local Testing with Ngrok
+
+RecoverIQ supports both an in-dashboard interactive WhatsApp simulator and live 2-way WhatsApp via **Twilio Sandbox**:
+
+```
+[Customer WhatsApp on Real Phone]
+                │
+                ▼ (Inbound message via Twilio)
+    [ngrok https tunnel :8000]
+                │
+                ▼ (Form POST application/x-www-form-urlencoded)
+[POST /api/webhook/whatsapp/twilio] ──► [Hinglish Intent Classifier]
+                                                    │
+                   ┌────────────────────────────────┴────────────────────────────────┐
+                   ▼                                                                 ▼
+      [Promise-to-Pay / Settle]                                    [Dispute / Hardship / Wrong Number]
+     • Create P2P Commitment                                      • Halt all automated retries
+     • Suppress aggressive nudges                                  • 24h/30d hold or blacklist (GR9)
+     • Update Bandit priors                                       • Log to Audit Ledger
+```
+
+### Setting Up Live Twilio + Ngrok Tunneling:
+
+1. **Configure Twilio Credentials** in `.env`:
+   ```env
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=your_auth_token_here
+   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ```
+2. **Start the FastAPI Server**:
+   ```bash
+   python -X utf8 -m uvicorn api.main:app --port 8000 --reload
+   ```
+3. **Expose Local Port 8000 via ngrok**:
+   ```bash
+   ngrok http 8000
+   ```
+4. **Configure Twilio Webhook**:
+   - Go to **Twilio Console** $\rightarrow$ **Messaging** $\rightarrow$ **Try WhatsApp** $\rightarrow$ **Sandbox Settings**.
+   - Under **"WHEN A MESSAGE COMES IN"**, enter your public ngrok URL:
+     `https://<your-subdomain>.ngrok-free.app/api/webhook/whatsapp/twilio`
+   - Set method to **HTTP POST** and save.
+5. **Send a WhatsApp message** from your phone (e.g. *"Bhai kal salary aate hi pay kar dunga"* or *"Paise already kat gaye check statement"*). Watch RecoverIQ classify intent in real time, adjust Payer Trust Scores, trigger compliance holds, and update the dashboard live!
 
 ---
 
@@ -279,6 +327,10 @@ python -m pytest tests/ -v
 | `GET` | `/api/ledger/export?format=json`| Exports complete compliance ledger as structured JSON |
 | `GET` | `/api/roi` | Returns real-time ROI breakdown (net ₹ recovered minus channel costs) |
 | `POST`| `/api/webhook` | Ingests gateway webhooks with duplicate rejection & concurrency locks |
+| `POST`| `/api/webhook/whatsapp/twilio` | Ingests live inbound Twilio WhatsApp webhooks (Form-encoded) |
+| `POST`| `/api/webhook/whatsapp/inbound` | Ingests simulated / JSON inbound WhatsApp messages |
+| `GET` | `/api/webhook/whatsapp/samples` | Returns sample Hinglish inbound messages and intents |
+| `GET` | `/api/suppression/list` | Returns active compliance blacklists and temporary holds |
 | `POST`| `/api/decide` | Evaluates guardrails and Thompson Sampling for a custom failure event |
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |

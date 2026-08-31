@@ -18,9 +18,16 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-# ── Path setup ────────────────────────────────────────────────────────────────
+# ── Path & Console Encoding setup ─────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from api.store import store
 from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
@@ -1049,3 +1056,9 @@ async def stream(request: Request):
             store.unsubscribe(queue)
 
     return EventSourceResponse(generator())
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+
