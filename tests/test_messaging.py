@@ -154,3 +154,90 @@ class TestTwilioInboundWebhook:
         is_suppressed, reason = suppression_registry.is_suppressed("+919811223344")
         assert is_suppressed is True
         assert "wrong_number" in reason
+
+    def test_razorpay_webhook_signature_verification(self, monkeypatch):
+        import hmac
+        import hashlib
+        import json
+
+        secret = "rzp_test_secret_xyz"
+        monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", secret)
+
+        payload = {
+            "event": "payment.failed",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_sig_test_001",
+                        "amount": 99900,
+                        "currency": "INR",
+                        "status": "failed",
+                        "method": "upi",
+                        "vpa": "signature_test@oksbi",
+                        "error_code": "BAD_REQUEST_ERROR",
+                        "error_description": "Payment failed",
+                        "error_reason": "payment_failed",
+                        "notes": {"failure_code": "U30", "bank": "SBI"},
+                    }
+                }
+            }
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+
+        # 1. Valid Signature -> 200 OK
+        valid_sig = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+        res_valid = client.post(
+            "/api/webhook",
+            content=body_bytes,
+            headers={"Content-Type": "application/json", "X-Razorpay-Signature": valid_sig},
+        )
+        assert res_valid.status_code == 200
+
+        # 2. Invalid Signature -> 401 Unauthorized
+        res_invalid = client.post(
+            "/api/webhook",
+            content=body_bytes,
+            headers={"Content-Type": "application/json", "X-Razorpay-Signature": "invalid_tampered_sig"},
+        )
+        assert res_invalid.status_code == 401
+        assert "Invalid Razorpay webhook signature" in res_invalid.json()["detail"]
+
+    def test_twilio_webhook_signature_verification(self, monkeypatch):
+        import hmac
+        import hashlib
+        import base64
+
+        auth_token = "twilio_auth_token_secret_123"
+        monkeypatch.setenv("TWILIO_AUTH_TOKEN", auth_token)
+
+        form_data = {
+            "From": "whatsapp:+919876543210",
+            "Body": "Kal payment kar dunga pakka",
+        }
+        url = "http://testserver/api/webhook/whatsapp/twilio"
+
+        # Compute valid Twilio HMAC-SHA1 signature
+        s = url
+        for k in sorted(form_data.keys()):
+            s += f"{k}{form_data[k]}"
+        valid_sig = base64.b64encode(
+            hmac.new(auth_token.encode("utf-8"), s.encode("utf-8"), hashlib.sha1).digest()
+        ).decode("utf-8")
+
+        # 1. Valid Signature -> 200 OK
+        res_valid = client.post(
+            "/api/webhook/whatsapp/twilio",
+            data=form_data,
+            headers={"X-Twilio-Signature": valid_sig},
+        )
+        assert res_valid.status_code == 200
+        assert res_valid.json()["status"] == "ok"
+
+        # 2. Invalid Signature -> 401 Unauthorized
+        res_invalid = client.post(
+            "/api/webhook/whatsapp/twilio",
+            data=form_data,
+            headers={"X-Twilio-Signature": "invalid_forged_twilio_signature"},
+        )
+        assert res_invalid.status_code == 401
+        assert "Invalid Twilio webhook signature" in res_invalid.json()["detail"]

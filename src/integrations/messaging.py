@@ -54,6 +54,38 @@ logger = get_logger(__name__)
 DEFAULT_SANDBOX_WHATSAPP = "whatsapp:+14155238886"
 
 
+def verify_twilio_signature(
+    url: str,
+    post_data: dict,
+    twilio_signature: str,
+    auth_token: str,
+) -> bool:
+    """
+    Verify that an inbound webhook payload came from Twilio.
+
+    Twilio signs requests using HMAC-SHA1 over the URL concatenated with
+    alphabetically sorted POST parameters.
+    Reference: https://www.twilio.com/docs/usage/security#validating-requests
+    """
+    if not auth_token or not twilio_signature:
+        return False
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(auth_token)
+        return validator.validate(url, post_data, twilio_signature)
+    except Exception:
+        import hmac
+        import hashlib
+        import base64
+        s = url
+        for k in sorted(post_data.keys()):
+            s += f"{k}{post_data[k]}"
+        expected = base64.b64encode(
+            hmac.new(auth_token.encode("utf-8"), s.encode("utf-8"), hashlib.sha1).digest()
+        ).decode("utf-8")
+        return hmac.compare_digest(expected, twilio_signature)
+
+
 @dataclass
 class MessageResult:
     channel: str                       # "whatsapp" | "sms"

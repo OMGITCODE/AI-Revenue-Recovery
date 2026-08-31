@@ -40,7 +40,8 @@ from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.idempotency import idempotency_manager, customer_locks
 from src.agent.whatsapp_inbound import whatsapp_inbound_handler, suppression_registry, InboundIntent
 from src.integrations.setu_aa import setu_aa
-from src.integrations.messaging import messenger
+from src.integrations.messaging import messenger, verify_twilio_signature
+from src.integrations.razorpay_upi import verify_webhook_signature
 
 _decision_engine = DecisionEngine()
 
@@ -318,17 +319,30 @@ async def _run_and_log(scenario_key: str):
 
 @app.post("/api/webhook")
 async def webhook(request: Request):
-    """Accept a raw Razorpay-style webhook payload with idempotency deduplication & concurrency locking."""
+    """Accept a raw Razorpay-style webhook payload with HMAC-SHA256 signature verification, idempotency deduplication & concurrency locking."""
+    # 1. Read raw body bytes for HMAC signature verification
+    body_bytes = await request.body()
+    if not body_bytes:
+        raise HTTPException(status_code=400, detail="Empty request payload")
+
+    # 2. Cryptographic signature verification (Razorpay HMAC-SHA256)
+    rzp_sig = request.headers.get("X-Razorpay-Signature") or request.headers.get("x-razorpay-signature") or ""
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
+
+    if webhook_secret:
+        if not rzp_sig or not verify_webhook_signature(body_bytes, rzp_sig, webhook_secret):
+            raise HTTPException(status_code=401, detail="Invalid Razorpay webhook signature")
+
     try:
-        payload = await request.json()
+        payload = json.loads(body_bytes.decode("utf-8"))
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # 1. Deterministic event ID resolution (Header → Payload ID → Content Hash)
+    # 3. Deterministic event ID resolution (Header → Payload ID → Content Hash)
     headers_dict = dict(request.headers)
     event_id = idempotency_manager.compute_event_id(payload, headers_dict)
 
-    # 2. Idempotency check: catch duplicate webhooks within TTL window
+    # 4. Idempotency check: catch duplicate webhooks within TTL window
     if await idempotency_manager.is_duplicate(event_id):
         cached = await idempotency_manager.get_cached_response(event_id)
         return JSONResponse(
@@ -341,13 +355,13 @@ async def webhook(request: Request):
             },
         )
 
-    # 3. Extract customer VPA for async concurrency serialization
+    # 5. Extract customer VPA for async concurrency serialization
     vpa = "default_customer"
     if isinstance(payload, dict):
         entity = payload.get("payload", {}).get("payment", {}).get("entity", {}) or payload
         vpa = entity.get("vpa") or entity.get("customer_vpa") or entity.get("email") or "default_customer"
 
-    # 4. Acquire per-customer mutex lock to prevent concurrent state corruption
+    # 6. Acquire per-customer mutex lock to prevent concurrent state corruption
     lock = await customer_locks.lock_for(vpa)
     async with lock:
         ev = await run_custom_webhook(payload)
@@ -952,12 +966,27 @@ async def webhook_whatsapp_inbound(req: InboundWhatsAppRequest):
 
 
 @app.post("/api/webhook/whatsapp/twilio")
-async def webhook_whatsapp_twilio(From: str = Form(...), Body: str = Form(...)):
+async def webhook_whatsapp_twilio(
+    request: Request,
+    From: str = Form(...),
+    Body: str = Form(...),
+):
     """
     Twilio WhatsApp Webhook:
     Set as Twilio's 'WHEN A MESSAGE COMES IN' callback URL in Twilio WhatsApp Sandbox settings.
-    Twilio POSTs application/x-www-form-urlencoded data (From, Body).
+    Twilio POSTs application/x-www-form-urlencoded data (From, Body) with X-Twilio-Signature.
     """
+    form_data = await request.form()
+    post_dict = dict(form_data)
+
+    twilio_sig = request.headers.get("X-Twilio-Signature") or request.headers.get("x-twilio-signature") or ""
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+
+    if auth_token:
+        # In live mode with auth token, enforce HMAC-SHA1 signature verification
+        if not twilio_sig or not verify_twilio_signature(str(request.url), post_dict, twilio_sig, auth_token):
+            raise HTTPException(status_code=401, detail="Invalid Twilio webhook signature")
+
     phone = From.replace("whatsapp:", "").strip()
     res = whatsapp_inbound_handler.handle_inbound(
         from_phone=phone,
