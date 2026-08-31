@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RecoverIQ — UPI Autopay Recovery · Razorpay Buildathon</title>
   <meta name="description" content="AI agent that detects, diagnoses and recovers failed UPI Autopay transactions in real time." />
+  <script>
+    (function() {
+      var theme = localStorage.getItem('riq-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260831-3" />
+  <link rel="stylesheet" href="/static/style.css?v=20260831-4" />
 </head>
 <body>
 
@@ -28,7 +34,7 @@
   <div class="nav-actions">
     <span class="nav-badge">Demo Mode</span>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
-      <span id="theme-icon">🌙</span>
+      <span id="theme-icon">☀️</span>
     </button>
     <button class="btn-ghost auto-demo-btn" id="auto-demo-btn" onclick="toggleAutoDemo()" title="Auto-fire scenarios for live demo">
       ▶ Auto Demo

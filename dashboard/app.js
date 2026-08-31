@@ -1,15 +1,15 @@
 'use strict';
 
-// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── State ────────────────────────────────────────────────────────────────────
 let events = [];
 let sse    = null;
 
-// â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Theme ────────────────────────────────────────────────────────────────────
 function initTheme() {
-  const saved = localStorage.getItem('riq-theme') || 'light';
+  const saved = localStorage.getItem('riq-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
   const icon = document.getElementById('theme-icon');
-  if (icon) icon.textContent = saved === 'dark' ? '☀️' : '🌙';
+  if (icon) icon.textContent = saved === 'dark' ? '☀️' : '🌙';
 }
 
 function toggleTheme() {
