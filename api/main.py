@@ -411,40 +411,49 @@ async def webhook(request: Request):
     headers_dict = dict(request.headers)
     event_id = idempotency_manager.compute_event_id(payload, headers_dict)
 
-    # 4. Idempotency check: catch duplicate webhooks within TTL window
-    if await idempotency_manager.is_duplicate(event_id):
-        cached = await idempotency_manager.get_cached_response(event_id)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "duplicate_ignored",
-                "event_id": event_id,
-                "message": "Idempotent webhook skipped — duplicate event already processed",
-                "cached_event": cached,
-            },
-        )
-
-    # 5. Extract customer VPA for async concurrency serialization
+    # 4. Extract customer VPA for async concurrency serialization
     vpa = "default_customer"
     if isinstance(payload, dict):
         entity = payload.get("payload", {}).get("payment", {}).get("entity", {}) or payload
         vpa = entity.get("vpa") or entity.get("customer_vpa") or entity.get("email") or "default_customer"
 
-    # 6. Acquire per-customer mutex lock to prevent concurrent state corruption
+    # 5. Atomic Idempotency Reservation (Reserve-then-Process)
+    is_duplicate, record = await idempotency_manager.try_acquire(event_id, vpa)
+    if is_duplicate:
+        cached = record.response_payload if record else None
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "duplicate_ignored",
+                "event_id": event_id,
+                "message": "Idempotent webhook skipped — duplicate event already processed or in-progress",
+                "cached_event": cached,
+            },
+        )
+
+    # 6. Acquire per-customer mutex lock to serialize execution
     lock = await customer_locks.lock_for(vpa)
     async with lock:
-        ev = await run_custom_webhook(payload)
-        if not ev:
-            raise HTTPException(status_code=422, detail="Could not parse webhook payload")
+        try:
+            ev = await run_custom_webhook(payload)
+            if not ev:
+                await idempotency_manager.release_reservation(event_id)
+                raise HTTPException(status_code=422, detail="Could not parse webhook payload")
 
-        result_dict = ev.to_dict()
-        await idempotency_manager.record_processed(
-            event_id=event_id,
-            vpa=ev.customer_vpa or vpa,
-            status="processed",
-            response_payload=result_dict,
-        )
-        return result_dict
+            result_dict = ev.to_dict()
+            await idempotency_manager.record_processed(
+                event_id=event_id,
+                vpa=ev.customer_vpa or vpa,
+                status="processed",
+                response_payload=result_dict,
+            )
+            return result_dict
+        except Exception:
+            # Release in-progress reservation on error if no response was recorded
+            cached = await idempotency_manager.get_cached_response(event_id)
+            if cached is None:
+                await idempotency_manager.release_reservation(event_id)
+            raise
 
 
 @app.get("/api/idempotency")

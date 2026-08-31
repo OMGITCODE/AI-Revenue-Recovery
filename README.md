@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-86%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-87%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -186,16 +186,16 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 86 Tests across 5 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 87 Tests across 5 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
 | **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **34 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI ₹15k rule, TRAI DND windows, and full pipeline. |
 | **Hinglish Inbound NLP & WhatsApp** | `tests/test_inbound_whatsapp.py` | **15 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, etc.), promise date parsing, trust score adjustments, compliance holds. |
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
-| **Idempotency & Concurrency** | `tests/test_idempotency.py` | **11 tests** | Webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
+| **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **13 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth. |
-| **Total Test Suite** | `pytest tests/` | **86 passing** | **100% test pass rate in ~3.0s** |
+| **Total Test Suite** | `pytest tests/` | **87 passing** | **100% test pass rate in ~3.0s** |
 
 
 ---
@@ -332,11 +332,11 @@ ai-revenue-recovery-agent/
 │   └── utils/
 │       └── logger.py            # IST-timestamped structured logging
 │
-└── tests/                       # Test Suite (86 passing tests)
+└── tests/                       # Test Suite (87 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, pipeline tests (34 tests)
     ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & deterministic benchmark tests (13 tests)
-    ├── test_idempotency.py      # Webhook idempotency, concurrency locks & module deduplication (11 tests)
+    ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     └── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (13 tests)
 ```
 
@@ -387,7 +387,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 86 passed in ~3.2s
+# 87 passed in ~3.2s
 ```
 
 ---

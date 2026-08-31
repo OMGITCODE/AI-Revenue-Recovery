@@ -66,6 +66,46 @@ class IdempotencyManager:
         serialized = json.dumps(payload, sort_keys=True, default=str)
         return "hash_" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:24]
 
+    async def try_acquire(self, event_id: str, vpa: str = "") -> tuple[bool, Optional[IdempotencyRecord]]:
+        """
+        Atomically reserve the idempotency key in a single step (Reserve-then-Process).
+        
+        Returns:
+            (is_duplicate, record)
+            - If is_duplicate is True: Event already processed or in-flight (reject duplicate).
+            - If is_duplicate is False: Successfully claimed reservation with status="in_progress".
+        """
+        self._cleanup_expired()
+        async with self._lock:
+            record = self._records.get(event_id)
+            if record is not None:
+                record.touches_count += 1
+                self._duplicate_count += 1
+                logger.info(
+                    "Idempotency: Duplicate webhook detected for event_id=%s (status=%s, touches=%d)",
+                    event_id,
+                    record.status,
+                    record.touches_count,
+                )
+                return True, record
+
+            # Claim reservation atomically
+            new_record = IdempotencyRecord(
+                event_id=event_id,
+                vpa=vpa,
+                status="in_progress",
+                created_at=time.time(),
+            )
+            self._records[event_id] = new_record
+            return False, new_record
+
+    async def release_reservation(self, event_id: str):
+        """Release reservation if processing failed so subsequent retries can be attempted."""
+        async with self._lock:
+            record = self._records.get(event_id)
+            if record and record.status == "in_progress":
+                del self._records[event_id]
+
     async def is_duplicate(self, event_id: str) -> bool:
         """Check if an event ID was already processed within the TTL window."""
         self._cleanup_expired()
@@ -95,16 +135,23 @@ class IdempotencyManager:
         status: str = "processed",
         response_payload: Optional[Dict[str, Any]] = None,
     ) -> IdempotencyRecord:
-        """Store newly processed event in the idempotency ledger."""
+        """Store newly processed event in the idempotency ledger (updating in_progress reservation)."""
         async with self._lock:
-            record = IdempotencyRecord(
-                event_id=event_id,
-                vpa=vpa,
-                status=status,
-                created_at=time.time(),
-                response_payload=response_payload,
-            )
-            self._records[event_id] = record
+            record = self._records.get(event_id)
+            if record is not None:
+                record.status = status
+                record.response_payload = response_payload
+                if vpa:
+                    record.vpa = vpa
+            else:
+                record = IdempotencyRecord(
+                    event_id=event_id,
+                    vpa=vpa,
+                    status=status,
+                    created_at=time.time(),
+                    response_payload=response_payload,
+                )
+                self._records[event_id] = record
             logger.info("Idempotency: Recorded event_id=%s for vpa=%s", event_id, vpa)
             return record
 

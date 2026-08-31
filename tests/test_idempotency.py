@@ -146,6 +146,46 @@ class TestWebhookIdempotencyAPI:
             assert stats["total_unique_events"] >= 1
             assert stats["duplicates_blocked"] >= 1
 
+    @pytest.mark.asyncio
+    async def test_concurrent_webhook_duplicate_race_safety(self):
+        """Stress-test concurrent identical webhooks fired simultaneously in parallel."""
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post("/api/reset")
+
+            payload = {
+                "entity": "event",
+                "event": "payment.failed",
+                "payload": {
+                    "payment": {
+                        "entity": {
+                            "id": "pay_concurrent_001",
+                            "amount": 149900,
+                            "vpa": "parallel_user@okhdfc",
+                            "notes": {"failure_code": "U30", "bank": "HDFC"},
+                        }
+                    }
+                }
+            }
+            headers = {"X-Razorpay-Event-Id": "evt_concurrent_race_001"}
+
+            # Fire 5 identical requests concurrently
+            responses = await asyncio.gather(*[
+                client.post("/api/webhook", json=payload, headers=headers)
+                for _ in range(5)
+            ])
+
+            statuses = [r.status_code for r in responses]
+            assert all(s == 200 for s in statuses)
+
+            data = [r.json() for r in responses]
+            # Exactly ONE request should be the main processed execution
+            processed = [d for d in data if d.get("status") != "duplicate_ignored"]
+            duplicates = [d for d in data if d.get("status") == "duplicate_ignored"]
+
+            assert len(processed) == 1
+            assert len(duplicates) == 4
+
 
 class TestModuleDeduplication:
     """Unit tests verifying duplicate protections across stateful modules."""
