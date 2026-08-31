@@ -29,6 +29,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+from src.config import settings
 from api.store import store
 from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
 from src.agent.decision_engine import DecisionEngine, infer_tier, CustomerTier
@@ -53,7 +54,7 @@ app = FastAPI(
 )
 
 # ── Configurable CORS & Security ──────────────────────────────────────────────
-CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*").strip()
+CORS_ORIGINS_RAW = settings.cors_origins.strip()
 ALLOWED_ORIGINS = (
     [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
     if CORS_ORIGINS_RAW != "*"
@@ -104,7 +105,7 @@ class SecurityAndAuthMiddleware(BaseHTTPMiddleware):
     """
     async def dispatch(self, request: StarletteRequest, call_next):
         path = request.url.path
-        api_key_required = os.getenv("RECOVERIQ_API_KEY", "").strip()
+        api_key_required = settings.recoveriq_api_key.strip()
 
         # Enforce API Key authentication if configured and path is a protected control endpoint
         if api_key_required and not any(path == p or path.startswith(p + "/") for p in PUBLIC_ROUTE_PREFIXES):
@@ -395,7 +396,7 @@ async def webhook(request: Request):
 
     # 2. Cryptographic signature verification (Razorpay HMAC-SHA256)
     rzp_sig = request.headers.get("X-Razorpay-Signature") or request.headers.get("x-razorpay-signature") or ""
-    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
+    webhook_secret = settings.razorpay_webhook_secret.strip()
 
     if webhook_secret:
         if not rzp_sig or not verify_webhook_signature(body_bytes, rzp_sig, webhook_secret):
@@ -1048,7 +1049,7 @@ async def webhook_whatsapp_twilio(
     post_dict = dict(form_data)
 
     twilio_sig = request.headers.get("X-Twilio-Signature") or request.headers.get("x-twilio-signature") or ""
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    auth_token = settings.twilio_auth_token.strip()
 
     if auth_token:
         # In live mode with auth token, enforce HMAC-SHA1 signature verification

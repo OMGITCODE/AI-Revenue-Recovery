@@ -41,10 +41,10 @@ you're wired to real Razorpay webhooks carrying real customer phones.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Optional
 
+from src.config import settings
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -108,12 +108,12 @@ class MessagingClient:
 
     def __init__(self, force_mock: bool = False):
         self.force_mock = force_mock
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-        self.whatsapp_from = os.getenv("TWILIO_WHATSAPP_FROM", DEFAULT_SANDBOX_WHATSAPP).strip()
-        self.sms_from = os.getenv("TWILIO_SMS_FROM", "").strip()
-        self.demo_whatsapp_override = os.getenv("DEMO_RECIPIENT_WHATSAPP", "").strip()
-        self.demo_sms_override = os.getenv("DEMO_RECIPIENT_SMS", "").strip()
+        self.account_sid = settings.twilio_account_sid.strip()
+        self.auth_token = settings.twilio_auth_token.strip()
+        self.whatsapp_from = settings.twilio_whatsapp_from.strip() or DEFAULT_SANDBOX_WHATSAPP
+        self.sms_from = settings.twilio_sms_from.strip()
+        self.demo_whatsapp_override = settings.demo_recipient_whatsapp.strip()
+        self.demo_sms_override = settings.demo_recipient_sms.strip()
 
         self._client = None
         if not self.force_mock and self.account_sid and self.auth_token:

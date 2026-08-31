@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+from src.config import settings
+
 # ── Data models ───────────────────────────────────────────────────────────────
 
 @dataclass
@@ -76,8 +78,8 @@ class SetuAAClient:
 
     To go live:
       pip install setu-aa-sdk
-      client = SetuAAClient(client_id=os.getenv("SETU_CLIENT_ID"),
-                             secret=os.getenv("SETU_CLIENT_SECRET"))
+      client = SetuAAClient(client_id=settings.setu_client_id,
+                             secret=settings.setu_client_secret)
     """
 
     SANDBOX_BASE = "https://bridge.setu.co/aa-sandbox"   # real Setu sandbox URL

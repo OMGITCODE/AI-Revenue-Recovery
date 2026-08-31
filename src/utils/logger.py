@@ -17,11 +17,10 @@ from __future__ import annotations
 
 import logging
 import logging.config
-import os
 import sys
 from datetime import datetime, timedelta, timezone
-
 import structlog
+from src.config import settings
 
 # ── IST timezone ──────────────────────────────────────────────────────────────
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -29,8 +28,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # ── Config ────────────────────────────────────────────────────────────────────
 # Set LOG_LEVEL=DEBUG in .env or environment to increase verbosity.
 # Set LOG_FORMAT=json for structured JSON output (production / log aggregators).
-_LOG_LEVEL  = os.getenv("LOG_LEVEL", "INFO").upper()
-_LOG_FORMAT = os.getenv("LOG_FORMAT", "console")   # "console" | "json"
+_LOG_LEVEL  = settings.log_level.upper()
+_LOG_FORMAT = settings.log_format   # "console" | "json"
 
 _CONFIGURED = False   # guard against double-setup
 
