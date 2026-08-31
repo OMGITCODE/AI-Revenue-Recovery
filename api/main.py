@@ -43,6 +43,8 @@ from src.agent.b2b_chaser import b2b_chaser, AgingBucket
 from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.idempotency import idempotency_manager, customer_locks
 from src.agent.whatsapp_inbound import whatsapp_inbound_handler, suppression_registry, InboundIntent
+from src.agent.spend_pattern import spend_pattern_tracker
+from src.agent.customer_identity import customer_identity_registry, normalize_identifier
 from src.integrations.setu_aa import setu_aa
 from src.integrations.messaging import messenger, verify_twilio_signature
 from src.integrations.razorpay_upi import verify_webhook_signature
@@ -94,7 +96,10 @@ PUBLIC_ROUTE_PREFIXES = (
     "/api/checkout",
     "/api/b2b",
     "/api/decide",
+    "/api/customer",
+    "/api/customers",
     "/api/suppression/list",
+    "/api/pattern",
     "/api/webhook",             # HMAC signature protected
     "/api/webhook/whatsapp",    # HMAC signature protected
     "/api/whatsapp/inbound/samples",
@@ -332,6 +337,8 @@ async def reset():
     customer_locks.clear()
     bandit_engine.reset()
     suppression_registry.reset()
+    spend_pattern_tracker.reset_history()
+    customer_identity_registry.reset()
     await _broadcast_modules_updated()
     return {"status": "reset"}
 
@@ -414,6 +421,18 @@ async def seed_demo_data_endpoint():
         bandit_engine.update("insufficient_funds:silver:high", "smart_retry", True, 999)
         bandit_engine.update("insufficient_funds:silver:med", "smart_retry", True, 299)
         bandit_engine.update("insufficient_funds:gold:high", "upi_collect", True, 4999)
+
+    # ── Seed full realistic recovery events spectrum if store has few items ───
+    if len(store._events) < 5:
+        demo_scenario_keys = [
+            "spike_critical", "normal_variation", "u30", "u29", "bt01",
+            "bt02", "u13", "tm", "u69", "ba", "xb", "te", "rb", "u66", "rbi_threshold"
+        ]
+        for sk in demo_scenario_keys:
+            try:
+                await run_scenario(sk)
+            except Exception:
+                pass
 
     await _broadcast_modules_updated()
     return {"status": "seeded", "message": "Demo data loaded successfully"}
@@ -524,6 +543,117 @@ async def break_promise(promise_id: str):
     bandit_engine.update(context_key=ckey, arm=p.channel, success=False, amount_recovered=0.0)
 
     return p.to_dict()
+
+
+# ── Spend Pattern & Critical Spike Anomaly Engine ─────────────────────────────
+
+class PatternAnalyzeRequest(BaseModel):
+    vpa:            str = ""
+    customer_id:    str = ""
+    amount:         float
+    history:        list[float] | None = Field(default=None)
+
+PatternAnalyzeRequest.model_rebuild()
+
+class PatternRecordRequest(BaseModel):
+    vpa:            str = ""
+    customer_id:    str = ""
+    amount:         float
+
+PatternRecordRequest.model_rebuild()
+
+@app.get("/api/pattern/history")
+async def get_pattern_history(vpa: str = "", customer_id: str = ""):
+    ident = vpa or customer_id
+    profile = spend_pattern_tracker.get_profile(vpa=vpa, customer_id=customer_id)
+    return {
+        "vpa": vpa,
+        "customer_id": customer_id,
+        "canonical_id": customer_identity_registry.resolve_canonical_id(vpa, customer_id),
+        "history": spend_pattern_tracker.get_history(vpa=vpa, customer_id=customer_id),
+        "profile": profile.to_dict(),
+    }
+
+@app.post("/api/pattern/analyze")
+async def analyze_pattern(req: PatternAnalyzeRequest):
+    res = spend_pattern_tracker.analyze(
+        vpa=req.vpa,
+        current_amount=req.amount,
+        custom_history=req.history,
+        customer_id=req.customer_id,
+    )
+    return res.to_dict()
+
+@app.post("/api/pattern/record")
+async def record_pattern_txn(req: PatternRecordRequest):
+    spend_pattern_tracker.record_transaction(
+        vpa=req.vpa,
+        amount=req.amount,
+        customer_id=req.customer_id,
+    )
+    profile = spend_pattern_tracker.get_profile(vpa=req.vpa, customer_id=req.customer_id)
+    return {
+        "status": "ok",
+        "vpa": req.vpa,
+        "customer_id": req.customer_id,
+        "canonical_id": customer_identity_registry.resolve_canonical_id(req.vpa, req.customer_id),
+        "recorded_amount": req.amount,
+        "profile": profile.to_dict(),
+    }
+
+
+# ── Customer Identity 360 & Unified Behavioral History ────────────────────────
+
+@app.get("/api/customer/{identifier}/history")
+async def get_customer_history(identifier: str):
+    """
+    Returns the unified 360-degree behavioral history and profile for a customer across all their aliases.
+    """
+    prof = customer_identity_registry.get_or_create_profile(identifier)
+    cid = prof.canonical_id
+    spend_prof = spend_pattern_tracker.get_profile(cid)
+    spend_hist = spend_pattern_tracker.get_history(cid)
+    trust_score = promise_tracker.payer_trust_score(cid)
+    is_supp, supp_reason = suppression_registry.is_suppressed(cid)
+    promises = [p.to_dict() for p in promise_tracker.all_promises() if promise_tracker._matches_person(p, cid)]
+    customer_events = store.get_events_for_customer(cid)
+    ledger_entries = [
+        e.to_dict() for e in recovery_ledger.all_entries()
+        if customer_identity_registry.is_same_person(e.vpa, cid)
+    ]
+    return {
+        "canonical_id": cid,
+        "profile": prof.to_dict(),
+        "spend_profile": spend_prof.to_dict(),
+        "spend_history": spend_hist,
+        "trust_score": trust_score,
+        "is_suppressed": is_supp,
+        "suppression_reason": supp_reason,
+        "promises": promises,
+        "events": customer_events,
+        "ledger_entries": ledger_entries,
+        "total_events_count": len(customer_events),
+        "total_ledger_decisions": len(ledger_entries),
+    }
+
+@app.get("/api/customers")
+async def list_customers():
+    """List all registered customer identities and summary stats."""
+    profiles = customer_identity_registry.all_profiles()
+    res = []
+    for p in profiles:
+        cid = p.canonical_id
+        hist = spend_pattern_tracker.get_history(cid)
+        trust = promise_tracker.payer_trust_score(cid)
+        events_cnt = len(store.get_events_for_customer(cid))
+        res.append({
+            **p.to_dict(),
+            "transaction_count": len(hist),
+            "trust_score": trust,
+            "events_count": events_cnt,
+        })
+    return {"total_customers": len(res), "customers": res}
+
 
 
 # ── Checkout Drop-off Recovery ───────────────────────────────────────────────────

@@ -4,6 +4,8 @@ Promise-to-Pay (P2P) Tracker.
 Tracks explicit customer commitments to pay by a specific date.
 Integrates with the DecisionEngine — an active P2P suppresses nudges
 so we never harass a customer who already made a commitment.
+Resolves customer identity so promises created under any alias (VPA, customer ID, phone)
+consistently inform the customer's behavioral trust score and suppress redundant nudges.
 
 States:
     pending   → customer has promised, awaiting payment
@@ -11,8 +13,7 @@ States:
     broken    → deadline passed, no payment (triggers B2B chaser tier-up)
     expired   → cancelled by agent/system
 
-Storage: In-memory dict keyed by (vpa, amount).
-In production, swap for Redis / Postgres.
+Storage: In-memory dict keyed by promise_id.
 """
 
 from __future__ import annotations
@@ -21,9 +22,10 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from ..utils.logger import get_logger
+from .customer_identity import customer_identity_registry, normalize_identifier
 
 logger = get_logger(__name__)
 
@@ -49,6 +51,7 @@ class PromiseToPay:
     failure_code:  str
     promised_at:   datetime
     deadline:      datetime
+    customer_id:   str           = ""
     status:        PromiseStatus = PromiseStatus.PENDING
     channel:       str           = "whatsapp"   # how the promise was captured
     notes:         str           = ""
@@ -71,6 +74,7 @@ class PromiseToPay:
         return {
             "promise_id":            self.promise_id,
             "vpa":                   self.vpa,
+            "customer_id":           self.customer_id,
             "amount":                self.amount,
             "bank":                  self.bank,
             "failure_code":          self.failure_code,
@@ -90,23 +94,26 @@ class PromiseToPay:
 
 class PromiseToPayTracker:
     """
-    Central registry for P2P promises.
-
-    Usage:
-        tracker = promise_tracker          # global singleton
-        p = tracker.create(vpa, amount, bank, failure_code, deadline_hours=48)
-        tracker.fulfill(promise_id)
-        tracker.check_broken()             # call periodically to sweep overdue
-        is_active = tracker.has_active(vpa, amount)
+    Central registry for P2P promises with cross-alias customer identity resolution.
     """
 
     def __init__(self):
         self._store: Dict[str, PromiseToPay] = {}
 
-    # Alias so api/main.py reset can do: promise_tracker._promises.clear()
     @property
     def _promises(self) -> Dict[str, PromiseToPay]:
         return self._store
+
+    def _matches_person(self, p: PromiseToPay, identifier: str) -> bool:
+        """True if the promise belongs to the same person as identifier."""
+        if not identifier:
+            return False
+        if p.vpa == identifier or p.customer_id == identifier:
+            return True
+        return (
+            customer_identity_registry.is_same_person(p.vpa, identifier)
+            or (bool(p.customer_id) and customer_identity_registry.is_same_person(p.customer_id, identifier))
+        )
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
@@ -114,21 +121,36 @@ class PromiseToPayTracker:
         self,
         vpa:           str,
         amount:        float,
-        bank:          str,
-        failure_code:  str,
-        deadline_hours: float = 48,
-        channel:       str   = "whatsapp",
-        notes:         str   = "",
+        bank:          str           = "UPI",
+        failure_code:  str           = "U30",
+        deadline_hours: float        = 48,
+        channel:       str           = "whatsapp",
+        notes:         str           = "",
+        customer_id:   str           = "",
+        phone:         str           = "",
     ) -> PromiseToPay:
-        """Record a new customer promise."""
-        existing = next((p for p in self._store.values() if p.vpa == vpa and abs(p.amount - amount) < 1 and p.status == PromiseStatus.PENDING), None)
+        """Record a new customer promise, linking any provided aliases."""
+        if vpa or customer_id or phone:
+            customer_identity_registry.resolve_canonical_id(vpa, customer_id, phone)
+
+        # Check existing pending promise for the same person and amount
+        existing = next(
+            (
+                p for p in self._store.values()
+                if self._matches_person(p, vpa or customer_id or phone)
+                and abs(p.amount - amount) < 1
+                and p.status == PromiseStatus.PENDING
+            ),
+            None,
+        )
         if existing:
             return existing
 
         now = datetime.now(IST)
         p = PromiseToPay(
             promise_id   = str(uuid.uuid4())[:8].upper(),
-            vpa          = vpa,
+            vpa          = vpa or f"user_{customer_id or phone or 'anon'}@upi",
+            customer_id  = customer_id,
             amount       = amount,
             bank         = bank,
             failure_code = failure_code,
@@ -139,8 +161,8 @@ class PromiseToPayTracker:
         )
         self._store[p.promise_id] = p
         logger.info(
-            "P2P created: %s | vpa=%s | ₹%.0f | deadline=%s",
-            p.promise_id, vpa, amount, p.deadline.strftime("%d %b %H:%M IST"),
+            "P2P created: %s | vpa=%s | cust=%s | ₹%.0f | deadline=%s",
+            p.promise_id, p.vpa, p.customer_id, amount, p.deadline.strftime("%d %b %H:%M IST"),
         )
         return p
 
@@ -180,16 +202,16 @@ class PromiseToPayTracker:
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
-    def has_active(self, vpa: str, amount: float) -> bool:
-        """True if customer has a pending promise for this amount."""
+    def has_active(self, identifier: str, amount: float) -> bool:
+        """True if customer has a pending promise for this amount across any alias."""
         return any(
-            p.vpa == vpa and abs(p.amount - amount) < 1 and p.status == PromiseStatus.PENDING
+            self._matches_person(p, identifier) and abs(p.amount - amount) < 1 and p.status == PromiseStatus.PENDING
             for p in self._store.values()
         )
 
-    def active_promises_for_vpa(self, vpa: str) -> List[PromiseToPay]:
-        """Returns all currently pending promises for a given VPA."""
-        return [p for p in self._store.values() if p.vpa == vpa and p.status == PromiseStatus.PENDING]
+    def active_promises_for_vpa(self, identifier: str) -> List[PromiseToPay]:
+        """Returns all currently pending promises for a given customer identifier / alias."""
+        return [p for p in self._store.values() if self._matches_person(p, identifier) and p.status == PromiseStatus.PENDING]
 
     def get(self, promise_id: str) -> Optional[PromiseToPay]:
         return self._store.get(promise_id)
@@ -203,23 +225,23 @@ class PromiseToPayTracker:
     def broken(self) -> List[PromiseToPay]:
         return [p for p in self._store.values() if p.status == PromiseStatus.BROKEN]
 
-    def payer_trust_score(self, vpa: str) -> float:
+    def fulfill_active(self, identifier: str, amount: Optional[float] = None) -> Optional[PromiseToPay]:
+        """Fulfill any active pending promise for a customer across aliases upon successful recovery."""
+        for p in list(self._store.values()):
+            if self._matches_person(p, identifier) and p.status == PromiseStatus.PENDING:
+                if amount is None or abs(p.amount - amount) < 1:
+                    return self.fulfill(p.promise_id)
+        return None
+
+    def payer_trust_score(self, identifier: str) -> float:
         """
         Compute a CRED-style trust score (0.0 – 1.0) from this payer's
-        Promise-to-Pay history.  A higher score means the customer has a
-        strong track record of keeping commitments — the Decision Engine
-        uses this to be *less* aggressive with retries (they'll self-cure)
-        or *more* lenient with retry timing.
-
-        Algorithm:
-          - No history          → neutral 0.5  (benefit of the doubt)
-          - fulfilled / total   → base rate
-          - Recency-weighted:   recent promises count 2×
-          - Broken promises     subtract 0.15 each (capped at floor 0.05)
-
-        In production: feed this into Thompson Sampling as a prior.
+        Promise-to-Pay history across all their linked identifiers/aliases.
         """
-        history = [p for p in self._store.values() if p.vpa == vpa]
+        if not identifier:
+            return 0.5
+
+        history = [p for p in self._store.values() if self._matches_person(p, identifier)]
         if not history:
             return 0.5   # neutral — no data
 
@@ -228,21 +250,32 @@ class PromiseToPayTracker:
 
         weighted_fulfilled = 0.0
         weighted_total     = 0.0
+        broken_cnt         = 0
+        fulfilled_cnt      = 0
+        pending_cnt        = 0
+
         for i, p in enumerate(history):
             weight = 2.0 if i == 0 else 1.0   # most-recent counts double
-            weighted_total += weight
             if p.status == PromiseStatus.FULFILLED:
                 weighted_fulfilled += weight
+                weighted_total += weight
+                fulfilled_cnt += 1
+            elif p.status == PromiseStatus.BROKEN:
+                weighted_total += weight
+                broken_cnt += 1
+            elif p.status == PromiseStatus.PENDING:
+                weighted_fulfilled += weight * 0.50
+                weighted_total += weight
+                pending_cnt += 1
 
-        base_rate  = weighted_fulfilled / weighted_total if weighted_total else 0.5
-        # Penalise broken promises
-        broken_cnt = sum(1 for p in history if p.status == PromiseStatus.BROKEN)
-        score      = base_rate - (broken_cnt * 0.15)
-        score      = round(max(0.05, min(1.0, score)), 2)
+        base_rate = (weighted_fulfilled / weighted_total) if weighted_total > 0 else 0.50
+        # Penalise broken promises, boost verified fulfillment track record
+        score = base_rate - (broken_cnt * 0.15) + (fulfilled_cnt * 0.05)
+        score = round(max(0.05, min(0.98, score)), 2)
 
         logger.debug(
-            "TrustScore vpa=%s history=%d fulfilled=%.1f broken=%d score=%.2f",
-            vpa, len(history), weighted_fulfilled, broken_cnt, score,
+            "TrustScore ident=%s history=%d fulfilled=%d broken=%d pending=%d score=%.2f",
+            identifier, len(history), fulfilled_cnt, broken_cnt, pending_cnt, score,
         )
         return score
 

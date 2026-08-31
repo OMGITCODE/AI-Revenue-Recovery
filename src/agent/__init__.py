@@ -23,6 +23,18 @@ from .whatsapp_inbound import (
 )
 from .retry_scheduler import UPIRetryScheduler
 from .idempotency import idempotency_manager, customer_locks, IdempotencyManager, CustomerConcurrencyLock
+from .spend_pattern import (
+    spend_pattern_tracker,
+    SpendPatternTracker,
+    SpendProfile,
+    PatternAnalysisResult,
+)
+from .customer_identity import (
+    customer_identity_registry,
+    CustomerIdentityRegistry,
+    CustomerProfile,
+    normalize_identifier,
+)
 
 __all__ = [
     "RiskType",
@@ -58,4 +70,12 @@ __all__ = [
     "customer_locks",
     "IdempotencyManager",
     "CustomerConcurrencyLock",
+    "spend_pattern_tracker",
+    "SpendPatternTracker",
+    "SpendProfile",
+    "PatternAnalysisResult",
+    "customer_identity_registry",
+    "CustomerIdentityRegistry",
+    "CustomerProfile",
+    "normalize_identifier",
 ]

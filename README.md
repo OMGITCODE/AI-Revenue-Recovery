@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-90%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-113%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -123,19 +123,33 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 - **Broken Promise Penalty**: $-0.15$ deduction per broken commitment.
 - **Adaptive Execution**: High-trust payers ($>0.75$) receive gentle, non-intrusive self-cure windows; low-trust payers trigger automated escalation.
 
+### 3. Unified Customer Identity Graph & Behavioral History
+In production UPI Autopay and recurring commerce, the same customer interacts across multiple identifiers (Customer IDs, multiple VPAs like `@oksbi` or `@okhdfcbank`, phone numbers, and emails). RecoverIQ includes a bi-directional **Customer Identity Graph (`CustomerIdentityRegistry`)**:
+- **Automatic Identity Merging**: Merges disjoint identifiers into a unified canonical profile (`cust:identifier`) as cross-identifying transactions occur.
+- **Shared Spend Baselines**: Transactions recorded under any alias automatically update the customer's centralized rolling spend profile.
+- **Cross-Alias Suppression & Compliance**: Hardship holds, dispute pauses, or permanent opt-outs received on WhatsApp (by phone) immediately suppress automated retry attempts across all of that customer's linked VPAs.
+- **Unified Touch Caps**: Outbound contact frequency (max 3 daily touches) and retry budgets evaluate across all aliases, preventing customer harassment.
+
+### 4. Spend Pattern Anomaly Engine & Anti-Depletion Guardrails (GR10)
+RecoverIQ models personalized historical spend baselines (mean, median, range, and standard deviation) for every customer profile:
+- **Sudden Upward Spike Detection**: Flags transactions that drastically exceed historical patterns (e.g. ₹70,000 debit on a subscriber with a ₹100 typical spend baseline $\implies 335\times$ spike).
+- **Anti-Depletion Protection (GR10)**: Automatically blocks blind silent retries for critical spend spikes to protect payers from unauthorized overdraft or account depletion, routing them instead to interactive customer consent channels.
+
 ---
 
 ## 🎯 Full-Spectrum System Architecture & Component Breakdown
 
 RecoverIQ is built as a modular, high-throughput autonomous revenue recovery architecture. Below is the complete catalog of all components across the codebase:
 
-### 🤖 1. Core AI & Decision Systems (`src/agent/` — 15 Modules)
+### 🤖 1. Core AI & Decision Systems (`src/agent/` — 14 Modules)
 
 | Module | File | Responsibility & Key Innovation |
 |---|---|---|
+| **Customer Identity Registry** | `src/agent/customer_identity.py` | Canonical identity graph resolving and merging fragmented customer identifiers (`customer_id`, multiple VPAs, phone numbers, and emails) into a unified profile. Synchronizes behavioral history, cumulative daily touches, retry counts, and compliance holds. |
 | **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
-| **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 9 hard deterministic RBI & TRAI compliance guardrails (GR1–GR9): ₹15k Autopay pre-debit circular ceiling, TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, and compliance blacklists. |
-| **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active. |
+| **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): ₹15k Autopay pre-debit circular ceiling, TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
+| **Spend Pattern & Anomaly Engine** | `src/agent/spend_pattern.py` | Calculates rolling statistical profiles (mean, median, range, std dev) per canonical customer profile and detects sudden upward spikes (e.g. 9x+ multiplier on micro-ticket payers), blocking blind automatic retries to protect customers from unexpected account depletion. |
+| **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active and auto-fulfilling upon recovery. |
 | **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Immutable, append-only regulatory audit ledger recording every intervention decision, confidence score, plain-English reasoning, channel costs, and verified recovery. Supports live streaming and CSV/JSON export. |
 | **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | TTL-based SHA-256 event deduplication cache + per-customer VPA async mutex locks (`asyncio.Lock`), preventing duplicate retry dispatches and race conditions from webhook retries. |
 | **2-Way Conversational WhatsApp NLP** | `src/agent/whatsapp_inbound.py` | Real-time Hinglish NLP intent classification (`PROMISE`, `ALREADY_PAID`, `DISPUTE`, `HARDSHIP`, `WRONG_NUMBER`), extracting commitment dates, adjusting trust scores, and triggering compliance holds. |
@@ -198,16 +212,18 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 90 Tests across 5 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 113 Tests across 7 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
 | **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI ₹15k rule, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
+| **Customer Identity Graph** | `tests/test_customer_identity.py` | **9 tests** | Canonical alias resolution, multi-identifier merging, cross-alias touch caps, shared spend baselines, and REST profile API. |
+| **Spend Pattern & Spike Anomalies** | `tests/test_spend_pattern.py` | **14 tests** | Rolling statistical profiles, micro-ticket 9x+ spike detection, repeat-user guardrail isolation, trust score stability, and REST API. |
 | **Hinglish Inbound NLP & WhatsApp** | `tests/test_inbound_whatsapp.py` | **15 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, etc.), promise date parsing, trust score adjustments, compliance holds. |
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **13 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth. |
-| **Total Test Suite** | `pytest tests/` | **90 passing** | **100% test pass rate in ~3.0s** |
+| **Total Test Suite** | `pytest tests/` | **113 passing** | **100% test pass rate in ~4.5s** |
 
 
 ---
@@ -236,6 +252,12 @@ During development and testing, we encountered three significant real-world tech
   3. **Strictly Idempotent State Transitions**: Added state-guard checks across `PromiseToPayTracker.fulfill/break`, `CheckoutRecoveryAgent.mark_recovered`, and `B2BChaser.settle`.
   4. **Dynamic Stats Computation**: Replaced error-prone incremental counters in `EventStore` with dynamic aggregation computed directly from active events, eliminating statistics drift.
 
+### 4. Multi-Identifier Alias Fragmentation & Blind Spike Depletion
+* **The Bug:** Customers in India often use different VPAs (e.g. `@oksbi` vs. `@okhdfcbank`), phone numbers, and customer IDs across transactions. This led to fragmented spend profiles, split touch counters (exceeding the daily contact cap), and missing customer history. Furthermore, blind automated retries on sudden $300\times+$ spikes (e.g. ₹70,000 debit on a ₹100 typical micro-ticket user) risked customer account depletion.
+* **The Fix:**
+  1. **Canonical Customer Identity Graph (`CustomerIdentityRegistry`)**: Resolves and merges fragmented identifiers (`customer_id`, VPAs, phones, emails) into a unified profile (`cust:identifier`), unifying rolling spend history, daily touch limits, and compliance holds across all aliases.
+  2. **Anti-Depletion Spend Pattern Guardrail (GR10)**: Built `SpendPatternTracker` to analyze transaction amounts against the user's historical spend baseline (mean, range, std dev). Massive upward spikes trigger a critical safety block on silent automated retries, routing them to interactive customer confirmation.
+
 ---
 
 ## 🏗️ Architecture & Project Structure
@@ -250,18 +272,20 @@ flowchart TD
         CART["Checkout & B2B Invoices<br/>(/api/checkout/drop · /api/b2b)"]
     end
 
-    subgraph IDEMPOTENCY["2. Idempotency & Concurrency Safety Layer"]
-        LOCKS["Per-Customer Async Mutex Locks<br/>(Prevents Concurrent Webhook Race Conditions)"]
-        DEDUP["Event Deduplication Cache with TTL<br/>(Rejects Duplicate Delivery from Gateways)"]
+    subgraph IDENTITY["2. Identity Resolution & Concurrency Layer"]
+        ID_GRAPH["CustomerIdentityRegistry<br/><b>Canonical Identity Graph</b><br/>(Merges VPAs, Phones, Customer IDs)"]
+        LOCKS["Per-Customer Async Mutex Locks<br/>(Prevents Webhook Race Conditions)"]
+        DEDUP["Event Deduplication Cache with TTL<br/>(Rejects Duplicate Gateway Deliveries)"]
     end
 
-    subgraph DIAGNOSIS["3. NPCI Root-Cause Diagnosis & NLP"]
+    subgraph DIAGNOSIS["3. Diagnosis, Spend Anomaly & NLP"]
         NPCI_DIAG["UPIAutopayDetector<br/><b>14 NPCI Error Codes</b><br/>(U30, BT01, BT02, TM, BA, U69, etc.)"]
+        SPEND_PAT["SpendPatternTracker<br/><b>Historical Spend Profiler</b><br/>(Spike Ratio & Anomaly Z-Score)"]
         H_CLASS["Hinglish Inbound Intent Classifier<br/>(PROMISE, ALREADY_PAID, DISPUTE, HARDSHIP)"]
     end
 
     subgraph DECISION["4. AI Decision & Policy Engine"]
-        GUARDRAILS["Deterministic Guardrails Engine (GR1–GR9)<br/>• RBI >₹15k Circular Compliance  • TRAI DND 21:00-08:00 Window<br/>• Max 3 Lifetime Retries Cap      • Active P2P Harassment Suppression"]
+        GUARDRAILS["Deterministic Guardrails Engine (GR1–GR10)<br/>• RBI >₹15k Ceiling  • TRAI DND (21:00-08:00)<br/>• Max 3 Retries Cap   • Active P2P Suppression<br/>• GR10 Anti-Depletion Spike Protection"]
         BANDIT["Bayesian Contextual Multi-Armed Bandit<br/><b>Thompson Sampling: θ ~ Beta(α, β)</b><br/>48 Context Clusters (Tier × Code × Trust Score)<br/>Online Bayesian Posterior Updating"]
     end
 
@@ -273,20 +297,23 @@ flowchart TD
         ESCALATION["Assisted Human Escalation<br/>(High-Touch B2B / Tier A Priority)"]
     end
 
-    subgraph AUDIT_UI["6. Auditability, Ledger & Observability"]
+    subgraph AUDIT_UI["6. Observability & Customer 360"]
         LEDGER["Recovery Audit Ledger<br/>(Append-Only · Plain-English Reason · Confidence)"]
         P2P_TRACKER["Promise-to-Pay Tracker<br/>(Continuous Payer Trust Score 0.0–1.0)"]
+        CUST_360["Customer 360 Profile & Behavioral History<br/>(/api/customer/{id}/history)"]
         SSE_STREAM["FastAPI Real-Time SSE Stream<br/>(/api/stream)"]
-        DASHBOARD["RecoverIQ Live Web Dashboard<br/>(Razorpay-Style Dark UI · Live Counters)"]
+        DASHBOARD["RecoverIQ Live Web Dashboard<br/>(Customer 360 Drawer · Live Search Filter)"]
     end
 
-    INGRESS --> LOCKS --> DEDUP --> DIAGNOSIS
+    INGRESS --> LOCKS --> DEDUP --> ID_GRAPH
+    ID_GRAPH --> DIAGNOSIS
     DIAGNOSIS --> GUARDRAILS --> BANDIT
     BANDIT --> INTERVENTIONS
     INTERVENTIONS --> LEDGER
     INTERVENTIONS --> P2P_TRACKER
     LEDGER --> SSE_STREAM
     P2P_TRACKER --> SSE_STREAM
+    ID_GRAPH --> CUST_360 --> SSE_STREAM
     SSE_STREAM --> DASHBOARD
 ```
 
@@ -318,6 +345,8 @@ ai-revenue-recovery-agent/
 │   ├── config.py                # Pydantic environment configuration
 │   │
 │   ├── agent/                   # Production AI Logic & Decision Engines
+│   │   ├── customer_identity.py # Canonical Customer Identity Graph & Alias Matcher
+│   │   ├── spend_pattern.py     # Rolling spend profile & anomaly spike detector
 │   │   ├── bandit.py            # Bayesian Contextual Thompson Sampling MAB
 │   │   ├── decision_engine.py   # RBI (GR7/GR8) & TRAI Guardrails Engine
 │   │   ├── idempotency.py       # Event deduplication cache & concurrency locks
@@ -346,8 +375,10 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (90 passing tests)
+└── tests/                       # Test Suite (113 passing tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
+    ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
+    ├── test_spend_pattern.py    # Historical profile & critical spike anomaly tests (14 tests)
     ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
@@ -485,6 +516,13 @@ flowchart TD
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/api/customers` | Lists all active canonical customer profiles and alias mappings |
+| `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, compliance holds, and event ledger |
+| `GET` | `/api/pattern/history` | Retrieves statistical spend profile (mean, median, range, std dev) for a customer VPA/ID |
+| `POST`| `/api/pattern/analyze` | Evaluates a transaction amount against customer baseline for critical upward spikes (GR10) |
+| `GET` | `/api/scenarios` | Lists all 14 curated real-world failure scenario configurations |
+| `POST`| `/api/simulate/{scenario_key}` | Executes a named failure scenario through the complete detection, guardrail, bandit, and intervention pipeline |
+| `GET` | `/api/stats` | Returns real-time aggregated recovery metrics, active event counts, and recovery rate |
 | `GET` | `/api/benchmark` | Runs Monte Carlo benchmark simulation and returns ₹ delta & uplift statistics |
 | `GET` | `/api/bandit` | Inspects current Thompson Sampling Beta posterior distributions $(\alpha, \beta)$ |
 | `GET` | `/api/idempotency` | Inspects active idempotency deduplication cache & active mutex locks |
@@ -500,6 +538,7 @@ flowchart TD
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |
 | `POST`| `/api/b2b/receivables` | Adds B2B invoice and triggers automated dunning sequence |
+| `POST`| `/api/reset` | Resets all active events, audit ledgers, promises, and resets spend histories to initial seeds |
 | `GET` | `/api/stream` | Server-Sent Events (SSE) live event stream for frontend dashboard |
 
 ---

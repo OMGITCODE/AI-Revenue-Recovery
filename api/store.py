@@ -11,6 +11,8 @@ from collections import deque
 from typing import Any
 import asyncio
 
+from src.agent.customer_identity import customer_identity_registry, normalize_identifier
+
 IST = timezone(timedelta(hours=5, minutes=30))
 
 @dataclass
@@ -36,29 +38,37 @@ class RecoveryEvent:
     aa_check:           str   = ""   # AA balance result summary string
     status:             str   = "recovered" # recovered / escalated / failed
     amount_recovered:   float = 0.0
+    pattern_spike_ratio: float = 1.0  # ratio to historical baseline mean/median
+    is_pattern_critical: bool  = False # True if sudden upward critical spike
+    pattern_summary:     str   = ""   # Plain-English summary of spend pattern check
+    pattern_baseline:    str   = ""   # e.g. "₹100 (range ₹89–₹149)"
 
     def to_dict(self) -> dict:
         return {
-            "id":               self.id,
-            "timestamp":        self.timestamp,
-            "event_type":       self.event_type,
-            "failure_code":     self.failure_code,
-            "failure_reason":   self.failure_reason,
-            "customer_id":      self.customer_id,
-            "customer_vpa":     self.customer_vpa,
-            "bank":             self.bank,
-            "amount":           self.amount,
-            "severity":         self.severity,
-            "interventions":    self.interventions,
-            "intervention_msgs": self.intervention_msgs,
-            "scheduled_at":     self.scheduled_at,
-            "action_url":       self.action_url,
-            "success":          self.success,
-            "scenario_name":    self.scenario_name,
-            "trust_score":      self.trust_score,
-            "aa_check":         self.aa_check,
-            "status":           self.status,
-            "amount_recovered": self.amount_recovered,
+            "id":                  self.id,
+            "timestamp":           self.timestamp,
+            "event_type":          self.event_type,
+            "failure_code":        self.failure_code,
+            "failure_reason":      self.failure_reason,
+            "customer_id":         self.customer_id,
+            "customer_vpa":        self.customer_vpa,
+            "bank":                self.bank,
+            "amount":              self.amount,
+            "severity":            self.severity,
+            "interventions":       self.interventions,
+            "intervention_msgs":   self.intervention_msgs,
+            "scheduled_at":        self.scheduled_at,
+            "action_url":          self.action_url,
+            "success":             self.success,
+            "scenario_name":       self.scenario_name,
+            "trust_score":         self.trust_score,
+            "aa_check":            self.aa_check,
+            "status":              self.status,
+            "amount_recovered":    self.amount_recovered,
+            "pattern_spike_ratio": round(self.pattern_spike_ratio, 2),
+            "is_pattern_critical": self.is_pattern_critical,
+            "pattern_summary":     self.pattern_summary,
+            "pattern_baseline":    self.pattern_baseline,
         }
 
 
@@ -132,6 +142,21 @@ class EventStore:
 
     def get_events(self, limit: int = 50) -> list[dict]:
         return [e.to_dict() for e in list(self._events)[:limit]]
+
+    def get_events_for_customer(self, identifier: str) -> list[dict]:
+        """Return all events for a specific person across all known aliases."""
+        if not identifier:
+            return []
+        matches = []
+        for e in self._events:
+            if (
+                e.customer_vpa == identifier
+                or e.customer_id == identifier
+                or customer_identity_registry.is_same_person(e.customer_vpa, identifier)
+                or customer_identity_registry.is_same_person(e.customer_id, identifier)
+            ):
+                matches.append(e.to_dict())
+        return matches
 
     def get_stats(self) -> dict:
         stats = Stats()

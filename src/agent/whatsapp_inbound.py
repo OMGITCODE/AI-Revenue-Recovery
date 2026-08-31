@@ -27,6 +27,7 @@ from datetime import datetime, timezone, timedelta
 
 from .recovery_ledger import ledger as recovery_ledger
 from .promise_tracker import promise_tracker
+from .customer_identity import customer_identity_registry, normalize_identifier
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -47,7 +48,7 @@ class InboundIntent(str, Enum):
 class ContactSuppressionRegistry:
     """
     Maintains active and permanent suppression lists to guarantee compliance
-    with RBI Fair Practices Code and TRAI DND regulations.
+    with RBI Fair Practices Code and TRAI DND regulations across all customer aliases.
     """
 
     def __init__(self):
@@ -55,38 +56,57 @@ class ContactSuppressionRegistry:
         self._active_holds: Dict[str, Dict] = {}          # Disputes, hardship, already-paid
 
     def suppress_permanently(self, identifier: str, reason: str = "wrong_number"):
-        """Permanent suppression — no automated attempts or nudges allowed ever."""
-        clean = identifier.strip().lower()
+        """Permanent suppression — no automated attempts or nudges allowed ever across all aliases."""
+        clean = normalize_identifier(identifier)
         if clean:
             self._permanent_blacklist.add(clean)
-            logger.warning("[COMPLIANCE] Permanent contact suppression activated for %s | reason=%s", clean, reason)
+            cid = customer_identity_registry.resolve_canonical_id(clean)
+            self._permanent_blacklist.add(cid)
+            for alias in customer_identity_registry.get_all_aliases(clean):
+                self._permanent_blacklist.add(alias)
+            logger.warning("[COMPLIANCE] Permanent contact suppression activated for %s (%s) | reason=%s", clean, cid, reason)
 
     def set_hold(self, identifier: str, hold_type: str, duration_hours: int = 72, reason: str = ""):
-        """Temporary hold — suppresses automated retries and nudges for a duration."""
-        clean = identifier.strip().lower()
+        """Temporary hold — suppresses automated retries and nudges for a duration across all aliases."""
+        clean = normalize_identifier(identifier)
         if clean:
             expires_at = datetime.now(IST) + timedelta(hours=duration_hours)
-            self._active_holds[clean] = {
+            hold_data = {
                 "hold_type": hold_type,
                 "expires_at": expires_at,
                 "reason": reason,
             }
-            logger.info("[HOLD] Active hold for %s | type=%s | expires=%s", clean, hold_type, expires_at.strftime("%Y-%m-%d %H:%M IST"))
+            self._active_holds[clean] = hold_data
+            cid = customer_identity_registry.resolve_canonical_id(clean)
+            self._active_holds[cid] = hold_data
+            for alias in customer_identity_registry.get_all_aliases(clean):
+                self._active_holds[alias] = hold_data
+            logger.info("[HOLD] Active hold for %s (%s) | type=%s | expires=%s", clean, cid, hold_type, expires_at.strftime("%Y-%m-%d %H:%M IST"))
 
     def is_suppressed(self, identifier: str) -> Tuple[bool, Optional[str]]:
-        """Returns (is_suppressed, reason) if any active or permanent suppression applies."""
-        clean = identifier.strip().lower()
+        """Returns (is_suppressed, reason) if any active or permanent suppression applies to this person."""
+        clean = normalize_identifier(identifier)
         if not clean:
             return False, None
-        if clean in self._permanent_blacklist:
-            return True, "permanently_blacklisted_wrong_number"
-        
-        if clean in self._active_holds:
-            hold = self._active_holds[clean]
-            if datetime.now(IST) < hold["expires_at"]:
-                return True, f"active_hold_{hold['hold_type']}"
-            else:
-                del self._active_holds[clean]
+
+        # Check all aliases belonging to this person
+        aliases_to_check = {clean}
+        cid = customer_identity_registry.resolve_canonical_id(clean)
+        aliases_to_check.add(cid)
+        aliases_to_check.update(customer_identity_registry.get_all_aliases(clean))
+
+        for alias in aliases_to_check:
+            if alias in self._permanent_blacklist:
+                return True, "permanently_blacklisted_wrong_number"
+
+        now = datetime.now(IST)
+        for alias in aliases_to_check:
+            if alias in self._active_holds:
+                hold = self._active_holds[alias]
+                if now < hold["expires_at"]:
+                    return True, f"active_hold_{hold['hold_type']}"
+                else:
+                    del self._active_holds[alias]
 
         return False, None
 
@@ -183,11 +203,6 @@ class WhatsAppInboundHandler:
             return InboundIntent.UNKNOWN, 0.30, [], None
 
         # Priority order when multiple patterns trigger
-        # 1. WRONG_NUMBER (Safety / Compliance first)
-        # 2. DISPUTE
-        # 3. HARDSHIP
-        # 4. ALREADY_PAID
-        # 5. PROMISE
         priority_order = [
             InboundIntent.WRONG_NUMBER,
             InboundIntent.DISPUTE,
@@ -220,19 +235,25 @@ class WhatsAppInboundHandler:
         customer_vpa: str,
         message: str,
         amount: float = 999.0,
+        customer_id: str = "",
     ) -> InboundClassificationResult:
         """
         Processes the inbound WhatsApp message, executes system state transitions,
         and returns an empathetic Hinglish/English auto-response.
         """
+        if from_phone or customer_vpa or customer_id:
+            customer_identity_registry.resolve_canonical_id(customer_vpa, from_phone, customer_id)
+
         intent, conf, keywords, deadline_hours = self.classify_message(message)
-        identifier = customer_vpa or from_phone
+        identifier = customer_vpa or from_phone or customer_id
 
         if intent == InboundIntent.PROMISE:
             # 1) Register / update Promise-to-Pay
             hours = deadline_hours or 48
             p = promise_tracker.create(
-                vpa=customer_vpa or f"user_{from_phone[-4:]}@upi",
+                vpa=customer_vpa or f"user_{from_phone[-4:] if from_phone else 'anon'}@upi",
+                customer_id=customer_id,
+                phone=from_phone,
                 amount=amount,
                 bank="UPI",
                 failure_code="U30",
@@ -243,7 +264,7 @@ class WhatsAppInboundHandler:
             # Log to audit ledger
             recovery_ledger.log(
                 event_type="p2p",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound: Customer committed payment within {hours}h ('{message}'). Auto P2P #{p.promise_id} created; automated nudges suppressed until deadline.",
                 confidence=conf,
@@ -260,7 +281,7 @@ class WhatsAppInboundHandler:
             suppression_registry.set_hold(identifier, hold_type="already_paid_reconciliation", duration_hours=24, reason=message)
             recovery_ledger.log(
                 event_type="aa_check",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound: Customer stated already paid ('{message}'). Outbound retries and nudges paused for 24h reconciliation check.",
                 confidence=conf,
@@ -277,7 +298,7 @@ class WhatsAppInboundHandler:
             suppression_registry.set_hold(identifier, hold_type="dispute_escalation", duration_hours=720, reason=message)
             recovery_ledger.log(
                 event_type="escalate",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound: Customer raised dispute/cancellation ('{message}'). All automated retries halted; ticket routed to priority human support.",
                 confidence=conf,
@@ -295,7 +316,7 @@ class WhatsAppInboundHandler:
             suppression_registry.set_hold(identifier, hold_type="financial_hardship_pause", duration_hours=720, reason=message)
             recovery_ledger.log(
                 event_type="guardrail",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound: Financial hardship reported ('{message}'). Granted 30-day compassionate payment pause per RBI Fair Practices Code.",
                 confidence=conf,
@@ -312,7 +333,7 @@ class WhatsAppInboundHandler:
             suppression_registry.suppress_permanently(identifier, reason=f"Customer reported wrong number/opt-out: '{message}'")
             recovery_ledger.log(
                 event_type="guardrail",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound [COMPLIANCE]: Customer flagged wrong number/opt-out ('{message}'). Permanently blacklisted identifier to prevent harassment.",
                 confidence=conf,
@@ -328,7 +349,7 @@ class WhatsAppInboundHandler:
             # General / Unknown
             recovery_ledger.log(
                 event_type="decide",
-                vpa=customer_vpa or from_phone,
+                vpa=customer_vpa or from_phone or customer_id,
                 amount=amount,
                 reasoning=f"2-Way Inbound: General response received ('{message}'). Provided payment self-service links.",
                 confidence=conf,

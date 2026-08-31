@@ -182,11 +182,11 @@ class TestUPIAutopayDetector:
         self.detector = UPIAutopayDetector()
 
     @pytest.mark.asyncio
-    async def test_u30_produces_high_severity_risk(self):
-        event = make_event(UPIFailureCode.U30)
+    async def test_u30_produces_proportional_severity_risk(self):
+        event = make_event(UPIFailureCode.U30, amount=999.0)
         risk = await self.detector.detect_from_upi_event(event)
         assert risk is not None
-        assert risk.severity == RiskSeverity.HIGH
+        assert risk.severity == RiskSeverity.LOW
         assert risk.amount == 999.0
         assert risk.customer_id == "CUST-TEST"
 

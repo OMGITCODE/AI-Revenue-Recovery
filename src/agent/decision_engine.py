@@ -12,6 +12,9 @@ Guardrails enforced:
   5. Mandate state     — expired/revoked mandates skip retry; go straight to renewal
   6. Blackout window   — no retries on banking holidays / weekend for salary credits
   7. Promise-to-pay    — if customer has an active P2P promise, suppress nudge
+  8. Daily contact cap — max 3 outbound touches per customer per day (across all aliases)
+  9. Suppression hold  — compliance opt-out, dispute, hardship pause across all customer aliases
+  10. Spend spike      — sudden upward spike vs customer historical baseline blocks silent retries
 """
 
 from __future__ import annotations
@@ -21,9 +24,10 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..utils.logger import get_logger
+from .customer_identity import customer_identity_registry
 
 logger = get_logger(__name__)
 
@@ -60,6 +64,7 @@ class GuardrailDecision:
     reason:             str         = ""
     trust_score:        float       = 0.5   # payer trust score 0.0–1.0
     bandit_decision:    Optional[dict] = None # Thompson sampling MAB selection
+    pattern_analysis:   Optional[dict] = None # Spend pattern baseline & anomaly details
 
     def to_dict(self) -> dict:
         return {
@@ -72,6 +77,7 @@ class GuardrailDecision:
             "reason":            self.reason,
             "trust_score":       self.trust_score,
             "bandit_decision":   self.bandit_decision,
+            "pattern_analysis":  self.pattern_analysis,
         }
 
 
@@ -79,25 +85,27 @@ class GuardrailDecision:
 
 class DecisionEngine:
     """
-    Stateless guardrail evaluator.
+    Stateless guardrail evaluator with unified customer identity resolution.
 
     Usage:
         engine   = DecisionEngine()
         decision = engine.evaluate(event_dict, retry_count, active_promise)
 
     Guardrails:
-        GR1 — Amount < ₹10: suppress all (cost > benefit)
-        GR2 — Retry count ≥ 3: no more smart_retry
-        GR3 — Mandate revoked/expired: force mandate_renewal path
-        GR4 — DND window 21:00–08:00 IST (TRAI): suppress whatsapp_nudge
-        GR5 — Active promise-to-pay: suppress nudge/collect (no harassment)
-        GR6 — Tier/amount: Bronze < ₹500 skip escalation (cost > value)
-        GR7 — RBI/NPCI: UPI Autopay debit > ₹15,000 requires pre-debit notification;
+        GR1  — Amount < ₹10: suppress all (cost > benefit)
+        GR2  — Retry count ≥ 3: no more smart_retry
+        GR3  — Mandate revoked/expired: force mandate_renewal path
+        GR4  — DND window 21:00–08:00 IST (TRAI): suppress whatsapp_nudge
+        GR5  — Active promise-to-pay: suppress nudge/collect (no harassment)
+        GR6  — Tier/amount: Bronze < ₹500 skip escalation (cost > value)
+        GR7  — RBI/NPCI: UPI Autopay debit > ₹15,000 requires pre-debit notification;
                skip silent retry, force explicit customer consent channel
-        GR8 — Daily contact cap: max 3 outbound touches per customer per day
+        GR8  — Daily contact cap: max 3 outbound touches per customer per day
+        GR9  — Inbound compliance hold / blacklist (wrong number, dispute, hardship)
+        GR10 — Spend Pattern Anomaly: Sudden upward spike vs historical baseline
+               blocks silent automatic retry to protect customer from unauthorized depletion.
     """
 
-    # Candidate intervention pool (must be a subset of UPIInterventionType values)
     ALL_ACTIONS = ["smart_retry", "upi_collect", "mandate_renewal", "whatsapp_nudge", "escalation"]
 
     # DND-safe hours: 08:00–21:00 IST
@@ -112,17 +120,33 @@ class DecisionEngine:
 
     def evaluate(
         self,
-        failure_code:  str,
-        mandate_state: str,
-        amount:        float,
-        retry_count:   int   = 0,
-        has_promise:   bool  = False,
-        daily_touches: int   = 0,
-        trust_score:   float = 0.5,   # payer trust score from promise_tracker
-        current_hour:  Optional[int] = None,
-        rng:           Optional[random.Random] = None,
-        customer_vpa:  str   = "",
+        failure_code:     str,
+        mandate_state:    str,
+        amount:           float,
+        retry_count:      int   = 0,
+        has_promise:      bool  = False,
+        daily_touches:    int   = 0,
+        trust_score:      float = 0.5,   # payer trust score from promise_tracker
+        current_hour:     Optional[int] = None,
+        rng:              Optional[random.Random] = None,
+        customer_vpa:     str   = "",
+        pattern_analysis: Optional[Any] = None,
+        customer_id:      str   = "",
     ) -> GuardrailDecision:
+
+        # Link customer identifiers
+        if customer_vpa or customer_id:
+            customer_identity_registry.resolve_canonical_id(customer_vpa, customer_id)
+
+        # Look up cumulative behavioral history counts if not passed explicitly
+        effective_touches = (
+            daily_touches if daily_touches > 0
+            else customer_identity_registry.get_daily_touches(customer_vpa, customer_id)
+        )
+        effective_retries = (
+            retry_count if retry_count > 0
+            else customer_identity_registry.get_retry_count(customer_vpa, customer_id)
+        )
 
         active_rng = rng if rng is not None else random.Random()
         tier       = infer_tier(amount)
@@ -141,11 +165,11 @@ class DecisionEngine:
             )
 
         # ── Guardrail 2: Retry budget exhausted ──────────────────────────────
-        budget = max(0, 3 - retry_count)
-        if retry_count >= 3:
+        budget = max(0, 3 - effective_retries)
+        if effective_retries >= 3:
             self._block(allowed, blocked, "smart_retry")
             fired.append("retry_budget_exhausted")
-            logger.info("GR2: Retry budget exhausted (attempt %d) — blocking smart_retry", retry_count)
+            logger.info("GR2: Retry budget exhausted (attempt %d) — blocking smart_retry", effective_retries)
 
         # ── Guardrail 3: Mandate state — skip retry if revoked/expired ───────
         if mandate_state in ("revoked", "expired"):
@@ -171,16 +195,12 @@ class DecisionEngine:
 
         # ── Guardrail 6: Tier-based channel access ───────────────────────────
         if tier in (CustomerTier.BRONZE, CustomerTier.SILVER):
-            # Bronze/Silver: no escalation (costs too much relative to amount)
             if amount < 500:
                 self._block(allowed, blocked, "escalation")
                 fired.append("tier_escalation_suppressed")
                 logger.info("GR6: Tier=%s amount=₹%.0f — escalation suppressed (cost/benefit)", tier, amount)
 
         # ── Guardrail 7: RBI/NPCI ₹15,000 pre-debit notification rule ────────
-        # RBI Circular: UPI Autopay mandates > ₹15,000 MUST send pre-debit
-        # notification and require explicit customer confirmation.
-        # Silent retry is non-compliant above this ceiling.
         if amount > self.RBI_PREDEBIT_THRESHOLD:
             self._block(allowed, blocked, "smart_retry")
             fired.append("rbi_predebit_threshold")
@@ -192,41 +212,71 @@ class DecisionEngine:
             )
 
         # ── Guardrail 8: Daily contact cap (TRAI DND compliance) ─────────────
-        # Max 3 outbound messages to any customer per day across all channels.
-        if daily_touches >= self.DAILY_CONTACT_CAP:
+        if effective_touches >= self.DAILY_CONTACT_CAP:
             self._block(allowed, blocked, "whatsapp_nudge")
             self._block(allowed, blocked, "upi_collect")
             fired.append("daily_contact_cap")
             logger.warning(
                 "GR8: Daily contact cap reached (%d touches) for this customer — "
                 "suppressing further outbound communications.",
-                daily_touches,
+                effective_touches,
             )
 
         # ── Guardrail 9: Inbound Suppression & Compliance Blacklist ──────────
-        # If customer reported wrong number, active dispute, or financial hardship,
-        # suppress automated retries and nudges per RBI Fair Practices Code.
-        if customer_vpa:
+        check_ident = customer_vpa or customer_id
+        if check_ident:
             try:
                 from .whatsapp_inbound import suppression_registry
-                is_suppressed, supp_reason = suppression_registry.is_suppressed(customer_vpa)
+                is_suppressed, supp_reason = suppression_registry.is_suppressed(check_ident)
                 if is_suppressed:
                     if supp_reason == "permanently_blacklisted_wrong_number":
-                        logger.warning("GR9 [COMPLIANCE]: %s is permanently blacklisted (wrong number/opt-out) — suppressing all actions", customer_vpa)
+                        logger.warning("GR9 [COMPLIANCE]: %s is permanently blacklisted (wrong number/opt-out) — suppressing all actions", check_ident)
                         return GuardrailDecision(
                             approved=False, allowed_actions=[], blocked_actions=self.ALL_ACTIONS,
                             guardrails_fired=["compliance_blacklist_wrong_number"],
                             customer_tier=tier, retry_budget_left=0,
-                            reason=f"Customer {customer_vpa} permanently opt-out/wrong number. All communications blocked.",
+                            reason=f"Customer {check_ident} permanently opt-out/wrong number. All communications blocked.",
                         )
                     else:
                         self._block(allowed, blocked, "smart_retry")
                         self._block(allowed, blocked, "whatsapp_nudge")
                         self._block(allowed, blocked, "upi_collect")
                         fired.append(f"suppression_{supp_reason}")
-                        logger.info("GR9: Active hold (%s) for %s — suppressing automated retries/nudges", supp_reason, customer_vpa)
+                        logger.info("GR9: Active hold (%s) for %s — suppressing automated retries/nudges", supp_reason, check_ident)
             except Exception as e:
                 logger.debug("Suppression registry check skipped: %s", e)
+
+        # ── Guardrail 10: Spend Pattern Anomaly (Sudden Upward Spike) ────────
+        pattern_res_dict = None
+        if pattern_analysis is not None:
+            pattern_res_dict = pattern_analysis.to_dict() if hasattr(pattern_analysis, "to_dict") else dict(pattern_analysis)
+            is_crit = getattr(pattern_analysis, "is_critical", False) or (
+                isinstance(pattern_analysis, dict) and pattern_analysis.get("is_critical", False)
+            )
+            if is_crit:
+                self._block(allowed, blocked, "smart_retry")
+                fired.append("spend_pattern_spike_critical")
+                spike_r = getattr(pattern_analysis, "spike_ratio", 1.0)
+                logger.warning(
+                    "GR10 [SPEND PATTERN SPIKE]: Amount ₹%.2f is a %.1fx sudden upward spike for %s — silent retry BLOCKED to protect payer.",
+                    amount, spike_r, check_ident or "customer",
+                )
+        elif check_ident:
+            try:
+                from .spend_pattern import spend_pattern_tracker
+                pat = spend_pattern_tracker.analyze(vpa=customer_vpa, current_amount=amount, customer_id=customer_id)
+                pattern_res_dict = pat.to_dict()
+                if pat.is_critical:
+                    self._block(allowed, blocked, "smart_retry")
+                    fired.append("spend_pattern_spike_critical")
+                    logger.warning(
+                        "GR10 [SPEND PATTERN SPIKE]: Amount ₹%.2f is a %.1fx sudden upward spike for %s "
+                        "(baseline mean ₹%.2f, range ₹%.2f–₹%.2f) — silent retry BLOCKED to protect payer.",
+                        amount, pat.spike_ratio, check_ident,
+                        pat.baseline_mean, pat.typical_range[0], pat.typical_range[1],
+                    )
+            except Exception as e:
+                logger.debug("Spend pattern analysis check skipped: %s", e)
 
         approved = len(allowed) > 0
         trust_label = (
@@ -269,6 +319,7 @@ class DecisionEngine:
             f"Trust={trust_score:.2f}({trust_label}) | "
             + (f"DND={in_dnd} | " if in_dnd else "")
             + (f"Promise={has_promise} | " if has_promise else "")
+            + (f"PatternSpike={pattern_res_dict['is_critical']} ({pattern_res_dict['spike_ratio']:.1f}x) | " if pattern_res_dict and pattern_res_dict.get("is_spike") else "")
             + (f"MAB=[{bandit_res['selected_arm']}] | " if bandit_res else "")
             + f"Guardrails={fired or 'none'}"
         )
@@ -289,9 +340,8 @@ class DecisionEngine:
             reason=reason,
             trust_score=trust_score,
             bandit_decision=bandit_res,
+            pattern_analysis=pattern_res_dict,
         )
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _block(allowed: list, blocked: list, action: str) -> None:

@@ -90,7 +90,9 @@
           <div class="card-title">Recovery Events</div>
           <div class="card-sub">Real-time UPI failure detection &amp; intervention log</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="cust-filter-input" placeholder="🔍 Filter customer (ID / VPA)..." oninput="filterEventsByCustomer(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text);width:190px;" />
+          <button class="btn-ghost" onclick="clearCustomerFilter()" id="cust-filter-clear" style="display:none;padding:4px 8px;font-size:11px">✕ Clear</button>
           <button class="btn-ghost" onclick="openQuickP2P()" title="Manually create a Promise-to-Pay">+ P2P</button>
           <button class="btn-ghost" onclick="resetAll()">Clear all</button>
         </div>
@@ -106,6 +108,7 @@
               <th>Bank</th>
               <th>Amount</th>
               <th>Severity</th>
+              <th>Spend Pattern</th>
               <th>Trust</th>
               <th>Interventions</th>
               <th>Status</th>
@@ -114,7 +117,7 @@
           </thead>
           <tbody id="events-tbody">
             <tr id="empty-row">
-              <td colspan="10">
+              <td colspan="11">
                 <div class="empty-state">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
@@ -143,6 +146,24 @@
 
         <div class="scenarios">
 
+          <button class="sc-btn sc-spike" id="sc-spike" onclick="runScenario('spike_critical')">
+            <div class="sc-code critical">⚡ SPIKE</div>
+            <div class="sc-info">
+              <div class="sc-name">Sudden Spend Spike</div>
+              <div class="sc-meta">₹100 Base → ₹70k (Critical)</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn sc-normal" id="sc-normal" onclick="runScenario('normal_variation')">
+            <div class="sc-code low">📊 RANGE</div>
+            <div class="sc-info">
+              <div class="sc-name">Normal Spend Range</div>
+              <div class="sc-meta">₹10k–₹50k Base → ₹60k (Normal)</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
           <button class="sc-btn" id="sc-u30" onclick="runScenario('u30')">
             <div class="sc-code critical">U30</div>
             <div class="sc-info">
@@ -152,11 +173,38 @@
             <span class="sc-arrow">›</span>
           </button>
 
+          <button class="sc-btn" id="sc-u29" onclick="runScenario('u29')">
+            <div class="sc-code high">U29</div>
+            <div class="sc-info">
+              <div class="sc-name">Amount Exceeds Mandate Cap</div>
+              <div class="sc-meta">Kotak · ₹3,499 vs ₹2k cap</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
           <button class="sc-btn" id="sc-bt01" onclick="runScenario('bt01')">
             <div class="sc-code critical">BT01</div>
             <div class="sc-info">
               <div class="sc-name">Mandate Revoked</div>
               <div class="sc-meta">HDFC · ₹499 · via PhonePe</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-bt02" onclick="runScenario('bt02')">
+            <div class="sc-code critical">BT02</div>
+            <div class="sc-info">
+              <div class="sc-name">Mandate Expired</div>
+              <div class="sc-meta">Yes Bank · ₹799 · lapsed</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-u13" onclick="runScenario('u13')">
+            <div class="sc-code medium">U13</div>
+            <div class="sc-info">
+              <div class="sc-name">Mandate Paused</div>
+              <div class="sc-meta">Paytm · ₹299 · user paused</div>
             </div>
             <span class="sc-arrow">›</span>
           </button>
@@ -179,20 +227,56 @@
             <span class="sc-arrow">›</span>
           </button>
 
-          <button class="sc-btn" id="sc-bt02" onclick="runScenario('bt02')">
-            <div class="sc-code critical">BT02</div>
+          <button class="sc-btn" id="sc-ba" onclick="runScenario('ba')">
+            <div class="sc-code critical">BA</div>
             <div class="sc-info">
-              <div class="sc-name">Mandate Expired</div>
-              <div class="sc-meta">Yes Bank · ₹799 · lapsed</div>
+              <div class="sc-name">Account Closed / KYC Frozen</div>
+              <div class="sc-meta">PNB · ₹1,299 · terminal freeze</div>
             </div>
             <span class="sc-arrow">›</span>
           </button>
 
-          <button class="sc-btn" id="sc-u13" onclick="runScenario('u13')">
-            <div class="sc-code medium">U13</div>
+          <button class="sc-btn" id="sc-xb" onclick="runScenario('xb')">
+            <div class="sc-code critical">XB</div>
             <div class="sc-info">
-              <div class="sc-name">Mandate Paused</div>
-              <div class="sc-meta">Paytm · ₹299 · user paused</div>
+              <div class="sc-name">Account Blocked / Freeze</div>
+              <div class="sc-meta">Union Bank · ₹899 · debit freeze</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-te" onclick="runScenario('te')">
+            <div class="sc-code low">TE</div>
+            <div class="sc-info">
+              <div class="sc-name">Transaction Expired</div>
+              <div class="sc-meta">IDFC · ₹1,999 · switch timeout</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-rb" onclick="runScenario('rb')">
+            <div class="sc-code medium">RB</div>
+            <div class="sc-info">
+              <div class="sc-name">Bank Decline / Anti-Fraud</div>
+              <div class="sc-meta">Canara · ₹4,999 · 2FA link</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-u66" onclick="runScenario('u66')">
+            <div class="sc-code medium">U66</div>
+            <div class="sc-info">
+              <div class="sc-name">Weekly Velocity Exceeded</div>
+              <div class="sc-meta">SBI · ₹5,000 · velocity hit</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
+          <button class="sc-btn" id="sc-rbi" onclick="runScenario('rbi_threshold')">
+            <div class="sc-code high">🛡️ RBI</div>
+            <div class="sc-info">
+              <div class="sc-name">High-Value Mandate (&gt;₹15k)</div>
+              <div class="sc-meta">HDFC · ₹18,500 · pre-debit rule</div>
             </div>
             <span class="sc-arrow">›</span>
           </button>

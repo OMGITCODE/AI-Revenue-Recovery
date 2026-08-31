@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 import asyncio
 import uuid
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Awaitable
 
@@ -34,6 +35,8 @@ from src.agent.bandit import bandit_engine, RecoveryArm, get_context_key, resolv
 from src.agent.promise_tracker import promise_tracker
 from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.recovery_ledger import ledger as recovery_ledger
+from src.agent.spend_pattern import spend_pattern_tracker
+from src.agent.customer_identity import customer_identity_registry
 from src.integrations.setu_aa import setu_aa
 from api.store import RecoveryEvent, store
 
@@ -64,25 +67,52 @@ _P2P_AUTO_CODES = {
     "BT02": (72,  "Mandate expired — renewal link sent. Customer promised to complete re-registration."),
     "U29":  (48,  "Amount exceeded mandate limit. Customer to adjust limit and retry."),
     "U13":  (36,  "Mandate paused by customer — awaiting re-activation confirmation."),
+    "U66":  (72,  "Weekly velocity limit exceeded. Scheduled for next cycle."),
+    "RB":   (24,  "Bank decline: customer notified to verify 2FA/App approval."),
 }
 _CHECKOUT_AUTO_CODES = {
     "BT01": ("upi_intent_abandoned", "hinglish"),   # revoked mandate → treat like UPI abandoned
     "U69":  ("bank_error_exit",      "hinglish"),   # daily limit hit → redirect to alternate payment
     "TE":   ("otp_timeout",          "hinglish"),   # expired → OTP timeout analogue
     "RB":   ("bank_error_exit",      "english"),    # bank declined → bank error exit
+    "BA":   ("payment_page_exit",    "hinglish"),   # account closed → alternate payment method
+    "XB":   ("bank_error_exit",      "hinglish"),   # account blocked → alternate card/VPA
 }
 
-INTERVENTIONS = [
-    SmartRetryIntervention(),
-    UPICollectIntervention(),
-    MandateRenewalIntervention(),
-    WhatsAppNudgeIntervention(),
-    EscalationIntervention(),
+INTERVENTION_MAP = [
+    ("smart_retry",     SmartRetryIntervention()),
+    ("upi_collect",     UPICollectIntervention()),
+    ("mandate_renewal", MandateRenewalIntervention()),
+    ("whatsapp_nudge",  WhatsAppNudgeIntervention()),
+    ("escalation",      EscalationIntervention()),
 ]
+INTERVENTIONS = [iv for _, iv in INTERVENTION_MAP]
 
 # ── Predefined scenarios ──────────────────────────────────────────────────────
 
 SCENARIOS: dict[str, dict] = {
+    "spike_critical": {
+        "name":          "⚡ Sudden Spike — ₹100 Base vs ₹70,000 (Critical)",
+        "failure_code":  UPIFailureCode.U30,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "rahul@oksbi",
+        "bank":          "SBI",
+        "amount":        70000.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-SPIKE-007",
+    },
+    "normal_variation": {
+        "name":          "📊 Normal Range — ₹10k–₹50k Base vs ₹60,000 (Non-Critical)",
+        "failure_code":  UPIFailureCode.U30,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "arjun@okicici",
+        "bank":          "ICICI",
+        "amount":        60000.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-NORMAL-008",
+    },
     "u30": {
         "name":          "U30 — Insufficient Funds",
         "failure_code":  UPIFailureCode.U30,
@@ -94,6 +124,17 @@ SCENARIOS: dict[str, dict] = {
         "retry_attempt": 0,
         "customer_id":   "CUST-SBI-001",
     },
+    "u29": {
+        "name":          "U29 — Amount Exceeds Mandate Cap",
+        "failure_code":  UPIFailureCode.U29,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "kavita@okkotak",
+        "bank":          "Kotak Mahindra Bank",
+        "amount":        3499.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-KOTAK-010",
+    },
     "bt01": {
         "name":          "BT01 — Mandate Revoked",
         "failure_code":  UPIFailureCode.BT01,
@@ -104,28 +145,6 @@ SCENARIOS: dict[str, dict] = {
         "mandate_state": MandateState.REVOKED,
         "retry_attempt": 0,
         "customer_id":   "CUST-HDFC-002",
-    },
-    "tm": {
-        "name":          "TM — Technical Error (Max Retries)",
-        "failure_code":  UPIFailureCode.TM,
-        "event_type":    "mandate.execution.failed",
-        "vpa":           "arjun@okicici",
-        "bank":          "ICICI",
-        "amount":        1499.0,
-        "mandate_state": MandateState.ACTIVE,
-        "retry_attempt": 3,
-        "customer_id":   "CUST-ICICI-003",
-    },
-    "u69": {
-        "name":          "U69 — Daily Limit Exceeded",
-        "failure_code":  UPIFailureCode.U69,
-        "event_type":    "mandate.execution.failed",
-        "vpa":           "meera@okaxis",
-        "bank":          "Axis",
-        "amount":        2999.0,
-        "mandate_state": MandateState.ACTIVE,
-        "retry_attempt": 0,
-        "customer_id":   "CUST-AXIS-004",
     },
     "bt02": {
         "name":          "BT02 — Mandate Expired",
@@ -149,6 +168,94 @@ SCENARIOS: dict[str, dict] = {
         "retry_attempt": 0,
         "customer_id":   "CUST-PTM-006",
     },
+    "tm": {
+        "name":          "TM — Technical Error (Max Retries)",
+        "failure_code":  UPIFailureCode.TM,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "arjun@okicici",
+        "bank":          "ICICI",
+        "amount":        1499.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 3,
+        "customer_id":   "CUST-ICICI-003",
+    },
+    "u69": {
+        "name":          "U69 — Daily Limit Exceeded",
+        "failure_code":  UPIFailureCode.U69,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "meera@okaxis",
+        "bank":          "Axis",
+        "amount":        2999.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-AXIS-004",
+    },
+    "ba": {
+        "name":          "BA — Account Closed / KYC Frozen",
+        "failure_code":  UPIFailureCode.BA,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "ramesh@okpnb",
+        "bank":          "Punjab National Bank",
+        "amount":        1299.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-PNB-011",
+    },
+    "xb": {
+        "name":          "XB — Account Blocked / Freeze",
+        "failure_code":  UPIFailureCode.XB,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "sneha@okunion",
+        "bank":          "Union Bank of India",
+        "amount":        899.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-UNION-012",
+    },
+    "te": {
+        "name":          "TE — Transaction Expired / Switch Busy",
+        "failure_code":  UPIFailureCode.TE,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "deepak@paytm",
+        "bank":          "IDFC First Bank",
+        "amount":        1999.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 1,
+        "customer_id":   "CUST-IDFC-013",
+    },
+    "rb": {
+        "name":          "RB — Bank Generic Decline / Anti-Fraud",
+        "failure_code":  UPIFailureCode.RB,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "sunil@okcanara",
+        "bank":          "Canara Bank",
+        "amount":        4999.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-CANARA-014",
+    },
+    "u66": {
+        "name":          "U66 — Weekly Velocity Limit Exceeded",
+        "failure_code":  UPIFailureCode.U66,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "pooja@oksbi",
+        "bank":          "SBI",
+        "amount":        5000.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-SBI-015",
+    },
+    "rbi_threshold": {
+        "name":          "🛡️ High-Value Mandate (> ₹15,000 RBI Rule)",
+        "failure_code":  UPIFailureCode.U30,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "rohan@okhdfcbank",
+        "bank":          "HDFC",
+        "amount":        18500.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-HDFC-016",
+    },
 }
 
 
@@ -168,7 +275,7 @@ def _make_upi_event(cfg: dict) -> UPIAutopayEvent:
     )
     event_id = cfg.get("event_id")
     if not event_id:
-        event_id = uuid.uuid4().hex[:12].upper()
+        event_id = f"EVT-{uuid.uuid4().hex[:10].upper()}"
     return UPIAutopayEvent(
         event_id=event_id,
         event_type=cfg["event_type"],
@@ -182,9 +289,7 @@ def _make_upi_event(cfg: dict) -> UPIAutopayEvent:
     )
 
 
-import random
-
-# ── Empirical channel conversion rates (aligned with benchmark.py) ────────────
+# ── Empirical channel conversion rates ─────────────────────────────────────────
 CHANNEL_CONVERSION_RATES = {
     "mandate_renewal": 0.68,   # NPCI WhatsApp magic links
     "smart_retry":     0.88,   # U30 during salary window (1st-7th)
@@ -201,11 +306,9 @@ def evaluate_recovery_outcome(interventions: list[str], amount: float) -> tuple[
     if not interventions:
         return False, "failed", 0.0
 
-    # If escalation is among interventions (e.g. TM max retries exhausted)
     if "escalation" in interventions and len(interventions) <= 2:
         return False, "escalated", 0.0
 
-    # Calculate combined success probability across active interventions
     fail_prob = 1.0
     for iv in interventions:
         rate = CHANNEL_CONVERSION_RATES.get(iv, 0.50)
@@ -218,191 +321,126 @@ def evaluate_recovery_outcome(interventions: list[str], amount: float) -> tuple[
         return False, "failed", 0.0
 
 
-async def process_and_log_event(ev: RecoveryEvent | None, cfg: dict) -> RecoveryEvent | None:
-    """Log every decision step of an executed event to the Recovery Ledger,
-    update Thompson Sampling Bayesian priors, and auto-create cross-panel records."""
-    if not ev:
+async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> RecoveryEvent | None:
+    """
+    Executes the full RecoverIQ Agent pipeline for a UPI event:
+      1. DETECT: Run UPIAutopayDetector to compute severity and spend pattern analysis.
+      2. DECIDE: Run Setu AA check (for U30), evaluate payer trust score, and filter
+                 through DecisionEngine guardrails (GR1-GR10) & Thompson Sampling bandit.
+      3. INTERVENE: Execute ONLY the guardrail-approved allowed interventions.
+      4. OUTCOME & RESOLUTION: Evaluate recovery likelihood, auto-fulfill active P2P on success,
+                 update Thompson sampling Bayesian posteriors, log to Recovery Ledger, and
+                 auto-create cross-panel records (P2P / Checkout).
+    """
+    detector = UPIAutopayDetector()
+    risk = await detector.detect_from_upi_event(upi_event)
+    if not risk:
         return None
 
-    # 1) DETECT entry
-    conf_detect = 0.75 if ev.severity in ("high", "critical") else 0.55
+    # Link customer identity
+    customer_identity_registry.resolve_canonical_id(upi_event.customer_vpa, risk.customer_id)
+
+    # Extract pattern analysis
+    pat = risk.metadata.get("pattern_analysis")
+    spike_ratio = pat.spike_ratio if pat else 1.0
+    is_crit = pat.is_critical if pat else False
+    summary = pat.explanation if pat else ""
+    baseline = (
+        f"Mean: ₹{pat.baseline_mean:,.0f} (Range: ₹{pat.typical_range[0]:,.0f}–₹{pat.typical_range[1]:,.0f})"
+        if pat and pat.typical_range[1] > 0 else "New Customer"
+    )
+
+    # 1) DETECT Ledger log
+    conf_detect = 0.75 if risk.severity.value in ("high", "critical") else 0.55
     recovery_ledger.log(
         event_type = "detect",
-        vpa        = ev.customer_vpa,
-        amount     = ev.amount,
+        vpa        = upi_event.customer_vpa,
+        amount     = risk.amount,
         reasoning  = (
-            f"{ev.failure_code} [{ev.failure_reason}] detected on {ev.bank}. "
-            f"Severity={ev.severity}."
+            f"{upi_event.failure_code.value} [{upi_event.failure_code.human_reason}] detected on {upi_event.bank_name}. "
+            f"Customer: {risk.customer_id or upi_event.customer_vpa}. Severity={risk.severity.value}."
         ),
         confidence = conf_detect,
         channel    = "",
     )
 
-    # 1b) TRUST SCORE — compute from P2P history before deciding
-    trust_score = promise_tracker.payer_trust_score(ev.customer_vpa)
+    # 1b) TRUST SCORE calculation across unified identity
+    trust_score = promise_tracker.payer_trust_score(upi_event.customer_vpa)
 
-    # 1c) AA BALANCE CHECK — for U30 (insufficient funds) only
-    #     Replace salary-cycle guess with a verified balance signal.
+    # 1c) PATTERN CHECK Ledger log
+    conf_pat = 0.98 if is_crit else 0.92
+    recovery_ledger.log(
+        event_type = "pattern_check",
+        vpa        = upi_event.customer_vpa,
+        amount     = risk.amount,
+        reasoning  = (
+            f"[Pattern Analyzer] {summary} "
+            f"| SpikeRatio={spike_ratio:.1f}x | Critical={is_crit}"
+        ),
+        confidence = conf_pat,
+        channel    = "pattern_engine",
+    )
+
+    # 1d) AA BALANCE CHECK for U30
     aa_check = ""
-    if ev.failure_code == "U30":
+    if upi_event.failure_code == UPIFailureCode.U30:
         aa_result = setu_aa.check_balance(
-            vpa          = ev.customer_vpa,
-            amount_due   = ev.amount,
-            bank         = ev.bank,
-            failure_code = ev.failure_code,
+            vpa          = upi_event.customer_vpa,
+            amount_due   = risk.amount,
+            bank         = upi_event.bank_name,
+            failure_code = upi_event.failure_code.value,
         )
         aa_check = aa_result.note
-        # Boost or dampen trust score based on verified funds
         if aa_result.funds_available:
-            trust_score = min(1.0, trust_score + 0.20)  # confirmed salary credit
+            trust_score = min(1.0, trust_score + 0.20)
         else:
-            trust_score = max(0.05, trust_score - 0.10)  # still short
+            trust_score = max(0.05, trust_score - 0.10)
         recovery_ledger.log(
             event_type = "aa_check",
-            vpa        = ev.customer_vpa,
-            amount     = ev.amount,
+            vpa        = upi_event.customer_vpa,
+            amount     = risk.amount,
             reasoning  = (
                 f"[AA] Setu sandbox consent approved. "
                 + aa_result.note
                 + f" (Trust adjusted → {trust_score:.2f})"
             ),
-            confidence = 0.92,   # AA signal is high-confidence vs. heuristic
+            confidence = 0.92,
             channel    = "setu_aa",
         )
 
-    # Patch computed fields back onto the event
-    ev.trust_score = round(trust_score, 2)
-    ev.aa_check    = aa_check
-
-    # 2) DECIDE entry — log guardrail / strategy
+    # 2) DECIDE Stage: DecisionEngine guardrails & bandit
     mandate_state_val = cfg.get("mandate_state", "active")
     if hasattr(mandate_state_val, "value"):
         mandate_state_val = mandate_state_val.value
 
+    has_promise = promise_tracker.has_active(upi_event.customer_vpa, risk.amount)
     decision = _decision_engine.evaluate(
-        failure_code  = ev.failure_code,
-        mandate_state = str(mandate_state_val),
-        amount        = ev.amount,
-        retry_count   = cfg.get("retry_attempt", 0),
-        has_promise   = False,
-        trust_score   = trust_score,
+        failure_code     = upi_event.failure_code.value,
+        mandate_state    = str(mandate_state_val),
+        amount           = risk.amount,
+        retry_count      = cfg.get("retry_attempt", 0),
+        has_promise      = has_promise,
+        trust_score      = trust_score,
+        customer_vpa     = upi_event.customer_vpa,
+        customer_id      = risk.customer_id,
+        pattern_analysis = pat,
     )
     confidence_decide = 0.90 if decision.guardrails_fired else 0.72
     evt_type_decide   = "guardrail" if decision.guardrails_fired else "decide"
     first_channel     = decision.allowed_actions[0] if decision.allowed_actions else ""
     e_decide = recovery_ledger.log(
         event_type = evt_type_decide,
-        vpa        = ev.customer_vpa,
-        amount     = ev.amount,
+        vpa        = upi_event.customer_vpa,
+        amount     = risk.amount,
         reasoning  = decision.reason,
         confidence = confidence_decide,
         channel    = first_channel,
     )
 
-    # 3) INTERVENE entry — log what was actually dispatched
-    if ev.interventions:
-        channel = ev.interventions[0]
-        e_iv = recovery_ledger.log(
-            event_type = "intervene",
-            vpa        = ev.customer_vpa,
-            amount     = ev.amount,
-            reasoning  = ev.intervention_msgs[0] if ev.intervention_msgs else channel,
-            confidence = 0.68,
-            channel    = channel,
-        )
-        outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
-        rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
-        recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
-        # Online Bayesian Posterior Update
-        if decision.bandit_decision:
-            ckey = decision.bandit_decision.get("context_key")
-            selected_arm = decision.bandit_decision.get("selected_arm") or channel
-            if ckey:
-                bandit_engine.update(
-                    context_key=ckey,
-                    arm=selected_arm,
-                    success=(outcome == "success"),
-                    amount_recovered=rec_amt,
-                )
-    elif not decision.approved:
-        recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
-
-    # ── 4) Cross-wiring: auto-create linked panel records ─────────────────────
-    modules_changed = False
-
-    # Auto-create a Promise-to-Pay for applicable failure codes
-    if ev.failure_code in _P2P_AUTO_CODES:
-        if not promise_tracker.has_active(ev.customer_vpa, ev.amount):
-            deadline_h, notes = _P2P_AUTO_CODES[ev.failure_code]
-            promise_tracker.create(
-                vpa           = ev.customer_vpa,
-                amount        = ev.amount,
-                bank          = ev.bank,
-                failure_code  = ev.failure_code,
-                deadline_hours= deadline_h,
-                channel       = "whatsapp",
-                notes         = notes,
-            )
-            recovery_ledger.log(
-                event_type = "p2p",
-                vpa        = ev.customer_vpa,
-                amount     = ev.amount,
-                reasoning  = f"Auto P2P created from {ev.failure_code} scenario. {notes}",
-                confidence = 0.70,
-                channel    = "whatsapp",
-            )
-            modules_changed = True
-
-    # Auto-create a Checkout Drop-off for applicable failure codes
-    if ev.failure_code in _CHECKOUT_AUTO_CODES:
-        if not checkout_agent.has_active(ev.customer_vpa, ev.amount):
-            reason, lang = _CHECKOUT_AUTO_CODES[ev.failure_code]
-            checkout_agent.record_drop_off(
-                customer_vpa    = ev.customer_vpa,
-                customer_phone  = "",
-                cart_amount     = ev.amount,
-                merchant        = ev.bank + " Merchant",
-                drop_off_reason = reason,
-                language        = lang,
-            )
-            recovery_ledger.log(
-                event_type = "checkout",
-                vpa        = ev.customer_vpa,
-                amount     = ev.amount,
-                reasoning  = f"Auto checkout session from {ev.failure_code}: customer redirected to alternate payment. Hinglish nudge dispatched.",
-                confidence = 0.62,
-                channel    = "whatsapp",
-            )
-            modules_changed = True
-
-    # Broadcast SSE so browser panels refresh automatically
-    if modules_changed:
-        await _notify_module_listeners()
-
-    return ev
-
-
-async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
-    """
-    Run a named scenario through the full agent pipeline,
-    log to Recovery Ledger, and publish the result to the event store.
-    """
-    cfg = SCENARIOS.get(scenario_key)
-    if not cfg:
-        return None
-    cfg_copy = cfg.copy()
-    cfg_copy["event_id"] = f"EVT-SIM-{scenario_key.upper()}"
-
-    upi_event = _make_upi_event(cfg_copy)
-    detector  = UPIAutopayDetector()
-    risk      = await detector.detect_from_upi_event(upi_event)
-    if not risk:
-        return None
-
+    # 3) INTERVENE Stage: ONLY execute guardrail-allowed actions!
     iv_types, iv_msgs, scheduled_at, action_url = [], [], None, None
-
-    for iv in INTERVENTIONS:
-        if iv.can_handle(risk):
+    for action_key, iv in INTERVENTION_MAP:
+        if action_key in decision.allowed_actions and iv.can_handle(risk):
             result = await iv.execute(risk)
             iv_types.append(result.intervention_type.value)
             iv_msgs.append(result.message)
@@ -411,7 +449,87 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
             if result.action_url and not action_url:
                 action_url = result.action_url
 
+    # 4) Evaluate Recovery Outcome
     success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+
+    # If successfully recovered, auto-fulfill any active P2P promise for this user
+    if success:
+        promise_tracker.fulfill_active(upi_event.customer_vpa, risk.amount)
+
+    # 5) Log outcome to ledger and update Thompson bandit posteriors
+    if iv_types:
+        channel = iv_types[0]
+        e_iv = recovery_ledger.log(
+            event_type = "intervene",
+            vpa        = upi_event.customer_vpa,
+            amount     = risk.amount,
+            reasoning  = iv_msgs[0] if iv_msgs else channel,
+            confidence = 0.68,
+            channel    = channel,
+        )
+        outcome = "success" if success else ("escalated" if status == "escalated" else "failure")
+        recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, amount_rec)
+        if decision.bandit_decision:
+            ckey = decision.bandit_decision.get("context_key")
+            selected_arm = decision.bandit_decision.get("selected_arm") or channel
+            if ckey:
+                bandit_engine.update(
+                    context_key=ckey,
+                    arm=selected_arm,
+                    success=(outcome == "success"),
+                    amount_recovered=amount_rec,
+                )
+    elif not decision.approved:
+        recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
+
+    # 6) Cross-wiring: auto-create linked panel records
+    modules_changed = False
+    if upi_event.failure_code.value in _P2P_AUTO_CODES:
+        if not promise_tracker.has_active(upi_event.customer_vpa, risk.amount):
+            deadline_h, notes = _P2P_AUTO_CODES[upi_event.failure_code.value]
+            promise_tracker.create(
+                vpa           = upi_event.customer_vpa,
+                customer_id   = risk.customer_id,
+                amount        = risk.amount,
+                bank          = upi_event.bank_name,
+                failure_code  = upi_event.failure_code.value,
+                deadline_hours= deadline_h,
+                channel       = "whatsapp",
+                notes         = notes,
+            )
+            recovery_ledger.log(
+                event_type = "p2p",
+                vpa        = upi_event.customer_vpa,
+                amount     = risk.amount,
+                reasoning  = f"Auto P2P created from {upi_event.failure_code.value} scenario. {notes}",
+                confidence = 0.70,
+                channel    = "whatsapp",
+            )
+            modules_changed = True
+
+    if upi_event.failure_code.value in _CHECKOUT_AUTO_CODES:
+        if not checkout_agent.has_active(upi_event.customer_vpa, risk.amount):
+            reason, lang = _CHECKOUT_AUTO_CODES[upi_event.failure_code.value]
+            checkout_agent.record_drop_off(
+                customer_vpa    = upi_event.customer_vpa,
+                customer_phone  = "",
+                cart_amount     = risk.amount,
+                merchant        = upi_event.bank_name + " Merchant",
+                drop_off_reason = reason,
+                language        = lang,
+            )
+            recovery_ledger.log(
+                event_type = "checkout",
+                vpa        = upi_event.customer_vpa,
+                amount     = risk.amount,
+                reasoning  = f"Auto checkout session from {upi_event.failure_code.value}: customer redirected to alternate payment. Hinglish nudge dispatched.",
+                confidence = 0.62,
+                channel    = "whatsapp",
+            )
+            modules_changed = True
+
+    if modules_changed:
+        await _notify_module_listeners()
 
     ev = RecoveryEvent(
         id=upi_event.event_id,
@@ -431,11 +549,38 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
         success=success,
         status=status,
         amount_recovered=amount_rec,
-        scenario_name=cfg["name"],
+        scenario_name=cfg.get("name", "UPI Recovery Event"),
+        trust_score=round(trust_score, 2),
+        aa_check=aa_check,
+        pattern_spike_ratio=spike_ratio,
+        is_pattern_critical=is_crit,
+        pattern_summary=summary,
+        pattern_baseline=baseline,
     )
+    return ev
 
-    await store.add_event(ev)
-    await process_and_log_event(ev, cfg_copy)
+
+async def process_and_log_event(ev: RecoveryEvent | None, cfg: dict) -> RecoveryEvent | None:
+    """Backward-compatible wrapper for external calls."""
+    return ev
+
+
+async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
+    """
+    Run a named scenario through the full agent pipeline,
+    log to Recovery Ledger, and publish the result to the event store.
+    """
+    cfg = SCENARIOS.get(scenario_key)
+    if not cfg:
+        return None
+    cfg_copy = cfg.copy()
+    # Unique event ID so repeated runs append to event history without clobbering
+    cfg_copy["event_id"] = f"EVT-SIM-{scenario_key.upper()}-{uuid.uuid4().hex[:6].upper()}"
+
+    upi_event = _make_upi_event(cfg_copy)
+    ev = await _execute_event_pipeline(upi_event, cfg_copy)
+    if ev:
+        await store.add_event(ev)
     return ev
 
 
@@ -449,46 +594,10 @@ async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
     if not upi_event:
         return None
 
-    detector = UPIAutopayDetector()
-    risk     = await detector.detect_from_upi_event(upi_event)
-    if not risk:
-        return None
-
-    iv_types, iv_msgs, scheduled_at, action_url = [], [], None, None
-    for iv in INTERVENTIONS:
-        if iv.can_handle(risk):
-            result = await iv.execute(risk)
-            iv_types.append(result.intervention_type.value)
-            iv_msgs.append(result.message)
-            if result.scheduled_at and not scheduled_at:
-                scheduled_at = result.scheduled_at.strftime("%d %b %Y, %I:%M %p IST")
-            if result.action_url and not action_url:
-                action_url = result.action_url
-
-    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
-
-    ev = RecoveryEvent(
-        id=upi_event.event_id,
-        timestamp=datetime.now(IST).strftime("%H:%M:%S"),
-        event_type=upi_event.event_type,
-        failure_code=upi_event.failure_code.value,
-        failure_reason=upi_event.failure_code.human_reason,
-        customer_id=risk.customer_id,
-        customer_vpa=upi_event.customer_vpa,
-        bank=upi_event.bank_name,
-        amount=risk.amount,
-        severity=risk.severity.value,
-        interventions=iv_types,
-        intervention_msgs=iv_msgs,
-        scheduled_at=scheduled_at,
-        action_url=action_url,
-        success=success,
-        status=status,
-        amount_recovered=amount_rec,
-        scenario_name="Custom Webhook",
-    )
-    await store.add_event(ev)
-    await process_and_log_event(ev, {"mandate_state": "active", "retry_attempt": 0})
+    cfg = {"mandate_state": "active", "retry_attempt": 0, "name": "Custom Webhook"}
+    ev = await _execute_event_pipeline(upi_event, cfg)
+    if ev:
+        await store.add_event(ev)
     return ev
 
 
@@ -497,17 +606,14 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
     Build a UPIAutopayEvent from a user-supplied form dict, run the
     full agent pipeline, log to Recovery Ledger, and publish to the event store.
     """
-    # Resolve failure code — default to UNKNOWN if invalid
     try:
         fc = UPIFailureCode(form["failure_code"].upper())
     except (ValueError, KeyError):
         fc = UPIFailureCode.UNKNOWN
 
-    # Resolve mandate state — default ACTIVE
     state_map = {s.value: s for s in MandateState}
     mandate_state = state_map.get(form.get("mandate_state", "active").lower(), MandateState.ACTIVE)
 
-    # Map failure code to a sensible event_type
     if fc in (UPIFailureCode.BT01,):
         event_type = "mandate.revoked"
     elif fc in (UPIFailureCode.BT02,):
@@ -517,58 +623,30 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
     else:
         event_type = "mandate.execution.failed"
 
+    vpa_val = form.get("vpa", "user@oksbi")
+    cust_id = form.get("customer_id")
+    if not cust_id:
+        # Link to known alias if available
+        prof = customer_identity_registry.get_profile(vpa_val)
+        if prof and prof.customer_ids:
+            cust_id = next(iter(prof.customer_ids)).upper()
+        else:
+            cust_id = f"CUST-{uuid.uuid4().hex[:6].upper()}"
+
     cfg = {
         "failure_code":  fc,
         "event_type":    event_type,
-        "vpa":           form.get("vpa", "user@oksbi"),
+        "vpa":           vpa_val,
         "bank":          form.get("bank", "Unknown Bank"),
         "amount":        float(form.get("amount", 100)),
         "mandate_state": mandate_state,
         "retry_attempt": int(form.get("retry_attempt", 0)),
-        "customer_id":   f"CUST-CUSTOM-{uuid.uuid4().hex[:6].upper()}",
+        "customer_id":   cust_id,
         "name":          form.get("scenario_name", "Custom Scenario"),
     }
 
     upi_event = _make_upi_event(cfg)
-    detector  = UPIAutopayDetector()
-    risk      = await detector.detect_from_upi_event(upi_event)
-    if not risk:
-        return None
-
-    iv_types, iv_msgs, scheduled_at, action_url = [], [], None, None
-    for iv in INTERVENTIONS:
-        if iv.can_handle(risk):
-            result = await iv.execute(risk)
-            iv_types.append(result.intervention_type.value)
-            iv_msgs.append(result.message)
-            if result.scheduled_at and not scheduled_at:
-                scheduled_at = result.scheduled_at.strftime("%d %b %Y, %I:%M %p IST")
-            if result.action_url and not action_url:
-                action_url = result.action_url
-
-    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
-
-    ev = RecoveryEvent(
-        id=upi_event.event_id,
-        timestamp=datetime.now(IST).strftime("%H:%M:%S"),
-        event_type=upi_event.event_type,
-        failure_code=upi_event.failure_code.value,
-        failure_reason=upi_event.failure_code.human_reason,
-        customer_id=risk.customer_id,
-        customer_vpa=upi_event.customer_vpa,
-        bank=upi_event.bank_name,
-        amount=risk.amount,
-        severity=risk.severity.value,
-        interventions=iv_types,
-        intervention_msgs=iv_msgs,
-        scheduled_at=scheduled_at,
-        action_url=action_url,
-        success=success,
-        status=status,
-        amount_recovered=amount_rec,
-        scenario_name=cfg["name"],
-    )
-    await store.add_event(ev)
-    await process_and_log_event(ev, cfg)
+    ev = await _execute_event_pipeline(upi_event, cfg)
+    if ev:
+        await store.add_event(ev)
     return ev
-

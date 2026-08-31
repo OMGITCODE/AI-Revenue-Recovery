@@ -17,22 +17,25 @@ logger = get_logger(__name__)
 
 # ── Razorpay event type → (RiskType, base severity) ──────────────────────────
 _EVENT_RISK_MAP: dict[str, tuple[RiskType, RiskSeverity]] = {
-    "mandate.execution.failed": (RiskType.MANDATE_FAILURE,      RiskSeverity.HIGH),
+    "mandate.execution.failed": (RiskType.MANDATE_FAILURE,      RiskSeverity.MEDIUM),
     "mandate.revoked":          (RiskType.MANDATE_FAILURE,      RiskSeverity.CRITICAL),
-    "mandate.expired":          (RiskType.MANDATE_FAILURE,      RiskSeverity.HIGH),
-    "mandate.paused":           (RiskType.MANDATE_FAILURE,      RiskSeverity.MEDIUM),
-    "subscription.charged":     (RiskType.SUBSCRIPTION_FAILURE, RiskSeverity.CRITICAL),
-    "payment.failed":           (RiskType.PAYMENT_FAILURE,      RiskSeverity.HIGH),
+    "mandate.expired":          (RiskType.MANDATE_FAILURE,      RiskSeverity.CRITICAL),
+    "mandate.paused":           (RiskType.MANDATE_FAILURE,      RiskSeverity.LOW),
+    "subscription.charged":     (RiskType.SUBSCRIPTION_FAILURE, RiskSeverity.MEDIUM),
+    "payment.failed":           (RiskType.PAYMENT_FAILURE,      RiskSeverity.MEDIUM),
 }
 
 # ── Failure code severity overrides ──────────────────────────────────────────
 _CODE_SEVERITY_OVERRIDE: dict[UPIFailureCode, RiskSeverity] = {
-    UPIFailureCode.BT01: RiskSeverity.CRITICAL,  # Revoked — highest priority
-    UPIFailureCode.BT02: RiskSeverity.CRITICAL,  # Expired mandate
-    UPIFailureCode.BA:   RiskSeverity.CRITICAL,  # Account closed
-    UPIFailureCode.U30:  RiskSeverity.HIGH,
-    UPIFailureCode.TM:   RiskSeverity.MEDIUM,    # Technical — likely transient
-    UPIFailureCode.U13:  RiskSeverity.MEDIUM,    # Paused — customer action needed
+    UPIFailureCode.BT01: RiskSeverity.CRITICAL,  # Revoked mandate — dead
+    UPIFailureCode.BT02: RiskSeverity.CRITICAL,  # Expired mandate — dead
+    UPIFailureCode.BA:   RiskSeverity.CRITICAL,  # Account closed — dead
+    UPIFailureCode.XB:   RiskSeverity.CRITICAL,  # Account blocked — dead
+    UPIFailureCode.U30:  RiskSeverity.MEDIUM,    # Insufficient funds — recoverable
+    UPIFailureCode.TM:   RiskSeverity.LOW,       # Technical timeout — transient
+    UPIFailureCode.TE:   RiskSeverity.LOW,       # Transaction expired
+    UPIFailureCode.U13:  RiskSeverity.LOW,       # Paused — customer action needed
+    UPIFailureCode.U69:  RiskSeverity.MEDIUM,    # Daily limit hit
 }
 
 
@@ -62,14 +65,47 @@ class UPIAutopayDetector:
             logger.debug("No risk mapping for UPI event: %s", upi_event.event_type)
             return None
 
-        risk_type, base_severity = mapping
+        from .spend_pattern import spend_pattern_tracker
 
-        # Apply failure-code severity override
-        severity = _CODE_SEVERITY_OVERRIDE.get(upi_event.failure_code, base_severity)
+        risk_type, _ = mapping
+        cust_id = upi_event.mandate.customer_id if upi_event.mandate else ""
 
-        # Escalate to CRITICAL if this is the 3rd+ attempt
-        if upi_event.retry_attempt >= 2 and severity != RiskSeverity.CRITICAL:
+        # 1. Terminal unrecoverable failure codes & retry exhaustion are always CRITICAL
+        if upi_event.failure_code in (
+            UPIFailureCode.BT01, UPIFailureCode.BT02,
+            UPIFailureCode.BA, UPIFailureCode.XB
+        ):
             severity = RiskSeverity.CRITICAL
+            pattern_analysis = spend_pattern_tracker.analyze(
+                vpa=upi_event.customer_vpa,
+                current_amount=upi_event.debit_amount,
+                customer_id=cust_id,
+            )
+        elif upi_event.retry_attempt >= 2:
+            # 3rd+ retry attempt exhausted
+            severity = RiskSeverity.CRITICAL
+            pattern_analysis = spend_pattern_tracker.analyze(
+                vpa=upi_event.customer_vpa,
+                current_amount=upi_event.debit_amount,
+                customer_id=cust_id,
+            )
+        else:
+            # 2. Spend Pattern & Anomaly Analysis for this customer profile
+            # Evaluates transaction against customer's personalized unified spending profile
+            pattern_analysis = spend_pattern_tracker.analyze(
+                vpa=upi_event.customer_vpa,
+                current_amount=upi_event.debit_amount,
+                customer_id=cust_id,
+            )
+            severity = pattern_analysis.severity
+
+        # Automatically record this transaction into customer history so subsequent
+        # transactions for this user evaluate against their rolling spending profile
+        spend_pattern_tracker.record_transaction(
+            vpa=upi_event.customer_vpa,
+            amount=upi_event.debit_amount,
+            customer_id=cust_id,
+        )
 
         risk = RevenueRisk(
             id=f"UPI-RISK-{upi_event.event_id}",
@@ -77,26 +113,28 @@ class UPIAutopayDetector:
             severity=severity,
             amount=upi_event.debit_amount,
             currency=upi_event.currency,
-            customer_id=upi_event.mandate.customer_id,
+            customer_id=cust_id,
             detected_at=upi_event.occurred_at,
             metadata={
                 # UPI-specific context carried forward to diagnoser & interventions
-                "upi_event":       upi_event,
-                "failure_code":    upi_event.failure_code,
-                "customer_vpa":    upi_event.customer_vpa,
-                "bank_name":       upi_event.bank_name,
-                "mandate_id":      upi_event.mandate.mandate_id,
-                "mandate_state":   upi_event.mandate.state,
-                "retry_attempt":   upi_event.retry_attempt,
-                "is_recoverable":  upi_event.failure_code.is_recoverable,
-                "requires_renewal": upi_event.failure_code.requires_mandate_renewal,
+                "upi_event":        upi_event,
+                "failure_code":     upi_event.failure_code,
+                "customer_vpa":     upi_event.customer_vpa,
+                "bank_name":        upi_event.bank_name,
+                "mandate_id":       upi_event.mandate.mandate_id if upi_event.mandate else "",
+                "mandate_state":    upi_event.mandate.state if upi_event.mandate else MandateState.ACTIVE,
+                "retry_attempt":    upi_event.retry_attempt,
+                "is_recoverable":   upi_event.failure_code.is_recoverable,
+                "requires_renewal":  upi_event.failure_code.requires_mandate_renewal,
+                "pattern_analysis": pattern_analysis,
             },
         )
 
         logger.info(
-            "UPI risk detected: %s | code=%s | severity=%s | amount=₹%.2f | vpa=%s",
+            "UPI risk detected: %s | code=%s | severity=%s | amount=₹%.2f | vpa=%s | cust=%s | spike_ratio=%.2fx | is_spike_critical=%s",
             risk.id, upi_event.failure_code.value,
-            severity.value, upi_event.debit_amount, upi_event.customer_vpa,
+            severity.value, upi_event.debit_amount, upi_event.customer_vpa, cust_id,
+            pattern_analysis.spike_ratio, pattern_analysis.is_critical,
         )
         return risk
 

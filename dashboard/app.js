@@ -151,18 +151,58 @@ function bar(key, val, tot) {
   if (c) c.textContent = val;
 }
 
+// ── Customer Filtering ────────────────────────────────────────────────────────
+let currentCustomerFilter = '';
+
+function filterEventsByCustomer(query) {
+  currentCustomerFilter = (query || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('cust-filter-clear');
+  if (clearBtn) clearBtn.style.display = currentCustomerFilter ? 'inline-block' : 'none';
+  const filterInput = document.getElementById('cust-filter-input');
+  if (filterInput && filterInput.value !== query) filterInput.value = query;
+  rebuildTable();
+}
+
+function clearCustomerFilter() {
+  const filterInput = document.getElementById('cust-filter-input');
+  if (filterInput) filterInput.value = '';
+  filterEventsByCustomer('');
+}
+
 // ── Table ─────────────────────────────────────────────────────────────────────
 function rebuildTable() {
   const tbody = document.getElementById('events-tbody');
   tbody.innerHTML = '';
   const seen = new Set();
-  events = events.filter(ev => {
+  let filtered = events.filter(ev => {
     if (!ev.id) return true;
     if (seen.has(ev.id)) return false;
     seen.add(ev.id);
     return true;
   });
-  events.forEach(ev => tbody.appendChild(makeRow(ev)));
+
+  if (currentCustomerFilter) {
+    filtered = filtered.filter(ev => {
+      const vpa = (ev.customer_vpa || '').toLowerCase();
+      const cid = (ev.customer_id || '').toLowerCase();
+      return vpa.includes(currentCustomerFilter) || cid.includes(currentCustomerFilter);
+    });
+  }
+
+  if (filtered.length === 0) {
+    const emptyTr = document.createElement('tr');
+    emptyTr.id = 'empty-row';
+    emptyTr.innerHTML = `
+      <td colspan="11">
+        <div class="empty-state">
+          <p>${currentCustomerFilter ? `No events matching customer "${esc(currentCustomerFilter)}".` : 'No recovery events yet. Trigger a scenario →'}</p>
+        </div>
+      </td>`;
+    tbody.appendChild(emptyTr);
+    return;
+  }
+
+  filtered.forEach(ev => tbody.appendChild(makeRow(ev)));
 }
 
 function prependRow(ev) {
@@ -204,7 +244,19 @@ function makeRow(ev) {
   const tsCls = ts >= 0.75 ? 'trust-high' : ts >= 0.40 ? 'trust-med' : 'trust-low';
   const tsTxt = (ts * 100).toFixed(0) + '%';
 
-  // Quick-create P2P action (DOM button without raw string interpolation)
+  // Spend Pattern badge (Critical Spike vs Normal)
+  let patternBadgeHtml = '';
+  if (ev.is_pattern_critical) {
+    const r = (ev.pattern_spike_ratio || 1.0).toFixed(1);
+    patternBadgeHtml = `<span class="pattern-badge critical" title="${esc(ev.pattern_summary || 'Sudden upward critical spike')}">⚡ ${r}x Spike</span>`;
+  } else if (ev.pattern_spike_ratio && ev.pattern_spike_ratio >= 2.0) {
+    const r = (ev.pattern_spike_ratio).toFixed(1);
+    patternBadgeHtml = `<span class="pattern-badge elevated" title="${esc(ev.pattern_summary || 'Elevated spend')}">⚠️ ${r}x Elev</span>`;
+  } else {
+    patternBadgeHtml = `<span class="pattern-badge normal" title="${esc(ev.pattern_summary || 'Within normal historical baseline')}">✓ Normal</span>`;
+  }
+
+  // Quick-create P2P action
   const actTd = document.createElement('td');
   const actBtn = document.createElement('button');
   actBtn.className = 'btn-act btn-blue';
@@ -216,13 +268,16 @@ function makeRow(ev) {
   };
   actTd.appendChild(actBtn);
 
+  const displayIdent = ev.customer_vpa || ev.customer_id || '';
+
   tr.innerHTML = `
     <td class="muted" style="font-variant-numeric:tabular-nums;font-size:12px">${esc(ev.timestamp || '')}</td>
     <td><span class="code-tag">${code}</span></td>
-    <td class="mono">${esc(ev.customer_vpa || '')}</td>
+    <td class="mono" title="Click to filter customer history" style="cursor:pointer;color:var(--blue);" onclick="event.stopPropagation(); filterEventsByCustomer('${esc(displayIdent)}')">${esc(ev.customer_vpa || '')}</td>
     <td class="muted">${esc(ev.bank || '')}</td>
     <td class="fw6">${fmtInr(ev.amount)}</td>
     <td><span class="sev-badge sev-${sev}">${cap(sev)}</span></td>
+    <td>${patternBadgeHtml}</td>
     <td><span class="trust-badge ${tsCls}" title="Payer trust score from P2P history">${tsTxt}</span></td>
     <td>${ivHtml}</td>
     <td>${ev.status === 'escalated' || (ev.interventions && ev.interventions.includes('escalation') && !ev.success)
@@ -237,6 +292,7 @@ function makeRow(ev) {
 // ── Drawer ───────────────────────────────────────────────────────────────────
 function openDrawer(ev) {
   const sev = esc((ev.severity || 'medium').toLowerCase());
+  const ident = ev.customer_vpa || ev.customer_id || '';
 
   document.getElementById('drawer-title').textContent =
     ev.scenario_name || `${ev.failure_code || ''} Event`;
@@ -265,6 +321,17 @@ function openDrawer(ev) {
       ${row('Bank',          esc(ev.bank))}
       ${row('Amount',        `<strong>${fmtInr(ev.amount)}</strong>`)}
       ${row('Severity',      `<span class="sev-badge sev-${sev}">${cap(sev)}</span>`)}
+    </div>
+    <div class="dl-section" id="drawer-customer-360">
+      <div class="dl-section-title">👤 Customer 360 &amp; Unified Behavioral History</div>
+      <div style="font-size:12px;color:var(--text-sub);padding:6px 0;">Loading customer history &amp; linked identities…</div>
+    </div>
+    <div class="dl-section">
+      <div class="dl-section-title">📊 Spend Pattern &amp; Anomaly Analysis</div>
+      ${row('Baseline History', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.pattern_baseline || 'Historical baseline computed from past transactions')}</span>`)}
+      ${row('Spike Multiplier', `<strong>${(ev.pattern_spike_ratio || 1.0).toFixed(1)}x</strong> ${ev.is_pattern_critical ? '<span class="sev-badge sev-critical">CRITICAL SPIKE</span>' : '<span class="sev-badge sev-low">NORMAL VARIATION</span>'}`)}
+      ${row('AI Assessment', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.pattern_summary || (ev.is_pattern_critical ? 'Extreme upward transaction anomaly detected against historical pattern.' : 'Transaction amount is consistent with customer spend history.'))}</span>`)}
+      ${row('Safety Guardrail', ev.is_pattern_critical ? '<span class="status-esc">GR10: Blind retries blocked. Payer anomaly protection active.</span>' : '<span class="status-ok">GR10: Approved for standard retry pipeline.</span>')}
     </div>
     <div class="dl-section">
       <div class="dl-section-title">Interventions</div>
@@ -302,6 +369,47 @@ function openDrawer(ev) {
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
+
+  // Load customer 360 async
+  loadCustomer360InDrawer(ident);
+}
+
+async function loadCustomer360InDrawer(identifier) {
+  const container = document.getElementById('drawer-customer-360');
+  if (!container || !identifier) return;
+
+  try {
+    const res = await fetch(`/api/customer/${encodeURIComponent(identifier)}/history`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const prof = data.profile || {};
+    const aliases = prof.aliases || [];
+    const aliasBadges = aliases.map(a => `<span class="code-tag" style="font-size:10.5px;padding:2px 6px;">${esc(a)}</span>`).join(' ');
+
+    const hist = data.spend_history || [];
+    const histChips = hist.length > 0
+      ? hist.slice(-8).map(amt => `<span class="iv-tag" style="font-size:10.5px;">₹${Number(amt).toLocaleString('en-IN')}</span>`).join(' ')
+      : '<span class="muted">No prior transactions</span>';
+
+    const prevEventsCount = data.total_events_count || 0;
+    const prevDecisionsCount = data.total_ledger_decisions || 0;
+
+    container.innerHTML = `
+      <div class="dl-section-title">👤 Customer 360 &amp; Unified Behavioral History</div>
+      ${row('Canonical Profile', `<strong>${esc(prof.primary_name || data.canonical_id)}</strong>`)}
+      ${row('Linked Identifiers', `<div style="display:flex;gap:4px;flex-wrap:wrap;">${aliasBadges || esc(identifier)}</div>`)}
+      ${row('Spend History (Last 8)', `<div style="display:flex;gap:4px;flex-wrap:wrap;">${histChips}</div>`)}
+      ${row('Historical Mean', `<strong>₹${(data.spend_profile?.mean_amount || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</strong> (${hist.length} transactions)`)}
+      ${row('Cumulative Activity', `${prevEventsCount} recovery events · ${prevDecisionsCount} ledger decisions`)}
+      ${data.is_suppressed ? row('Compliance Status', `<span class="sev-badge sev-critical">HOLD: ${esc(data.suppression_reason)}</span>`) : ''}
+      <div style="margin-top:8px;">
+        <button class="btn-ghost" style="font-size:11px;padding:4px 8px;width:100%;" onclick="closeDrawer(); filterEventsByCustomer('${esc(identifier)}')">🔍 Filter All Events for this Customer</button>
+      </div>
+    `;
+  } catch (e) {
+    console.debug('Failed to load customer 360:', e);
+  }
 }
 
 function closeDrawer() {
@@ -588,7 +696,10 @@ async function submitJsonUpload() {
 
 // ——— Auto Demo ———————————————————————————————————————————————————————————————————
 // Cycles through all scenarios automatically — great for live hackathon demos
-const AUTO_DEMO_KEYS     = ['u30', 'bt01', 'tm', 'u69', 'bt02', 'u13'];
+const AUTO_DEMO_KEYS     = [
+  'spike_critical', 'normal_variation', 'u30', 'u29', 'bt01', 'bt02', 'u13',
+  'tm', 'u69', 'ba', 'xb', 'te', 'rb', 'u66', 'rbi_threshold'
+];
 const AUTO_DEMO_INTERVAL = 3500; // ms between events
 
 let _autoDemoTimer  = null;
