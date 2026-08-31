@@ -11,7 +11,7 @@ import sys
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -33,6 +33,7 @@ from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.idempotency import idempotency_manager, customer_locks
 from src.agent.whatsapp_inbound import whatsapp_inbound_handler, suppression_registry, InboundIntent
 from src.integrations.setu_aa import setu_aa
+from src.integrations.messaging import messenger
 
 _decision_engine = DecisionEngine()
 
@@ -941,6 +942,26 @@ async def webhook_whatsapp_inbound(req: InboundWhatsAppRequest):
     )
     await _broadcast_modules_updated()
     return res.to_dict()
+
+
+@app.post("/api/webhook/whatsapp/twilio")
+async def webhook_whatsapp_twilio(From: str = Form(...), Body: str = Form(...)):
+    """
+    Twilio WhatsApp Webhook:
+    Set as Twilio's 'WHEN A MESSAGE COMES IN' callback URL in Twilio WhatsApp Sandbox settings.
+    Twilio POSTs application/x-www-form-urlencoded data (From, Body).
+    """
+    phone = From.replace("whatsapp:", "").strip()
+    res = whatsapp_inbound_handler.handle_inbound(
+        from_phone=phone,
+        customer_vpa="",
+        message=Body,
+        amount=999.0,
+    )
+    # Send Hinglish AI reply back via WhatsApp
+    messenger.send_whatsapp(to=phone, body=res.reply_text)
+    await _broadcast_modules_updated()
+    return {"status": "ok", "intent": res.intent.value, "reply": res.reply_text}
 
 
 @app.get("/api/whatsapp/inbound/samples")

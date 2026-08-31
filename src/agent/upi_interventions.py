@@ -23,6 +23,7 @@ from .detector import RevenueRisk
 from .retry_scheduler import UPIRetryScheduler, RetryDecision
 from ..models.upi_models import UPIAutopayEvent, UPIFailureCode
 from ..utils.logger import get_logger
+from ..integrations.messaging import messenger
 
 logger = get_logger(__name__)
 
@@ -277,16 +278,23 @@ class WhatsAppNudgeIntervention(BaseUPIIntervention):
             )
             action = "payment_reminder_whatsapp"
 
-        # Demo: log instead of calling WhatsApp API
-        logger.info("[WhatsApp → %s] %s", vpa, msg_body)
+        # Outbound WhatsApp delivery (Twilio-backed in live mode, logged in mock mode)
+        send_result = messenger.send_whatsapp(to=vpa, body=msg_body)
+        logger.info("[WhatsApp → %s] (%s) %s", vpa, send_result.mode, msg_body)
 
         return UPIInterventionResult(
             intervention_type=UPIInterventionType.WHATSAPP_NUDGE,
             success=True,
             amount_at_stake=risk.amount,
             amount_recovered=0.0,
-            message=f"WhatsApp message sent to {vpa}: {msg_body[:80]}…",
-            metadata={"whatsapp_body": msg_body, "action": action},
+            message=f"WhatsApp message sent to {vpa} ({send_result.mode}): {msg_body[:80]}…",
+            metadata={
+                "whatsapp_body": msg_body,
+                "action": action,
+                "delivery_mode": send_result.mode,
+                "sent_live": send_result.sent,
+                "provider_sid": send_result.provider_sid,
+            },
         )
 
 

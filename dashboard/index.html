@@ -7,7 +7,7 @@
   <meta name="description" content="AI agent that detects, diagnoses and recovers failed UPI Autopay transactions in real time." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=20260831-3" />
 </head>
 <body>
 
@@ -406,6 +406,92 @@
     </div>
 
   </div><!-- /content-2col -->
+
+  <!-- ── 2-Way Conversational WhatsApp & Inbound Recovery (full width) ─────── -->
+  <div class="content content-full" style="margin-top:12px;">
+    <div class="card" id="whatsapp-simulator-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">💬 2-Way WhatsApp Recovery &amp; Hinglish Inbound AI</div>
+          <div class="card-sub">Autonomous conversational recovery · Multi-intent NLP classifier · P2P lock sync · Anti-harassment suppression</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="stat-chip chip-green" id="wa-channel-chip">WhatsApp: Twilio-ready</span>
+          <span class="stat-chip chip-blue" id="wa-guardrail-chip">RBI / TRAI Protected</span>
+        </div>
+      </div>
+
+      <div class="wa-sim-container">
+        <!-- Left Column: Quick scenario triggers & Form -->
+        <div class="wa-sim-left">
+          <div class="wa-section-title">⚡ Quick Intent Scenarios (Click to test AI)</div>
+          <div class="wa-chips-grid">
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('promise_24h')">
+              <span class="wa-chip-tag tag-promise">PROMISE 24H</span>
+              <span class="wa-chip-txt">"Bhai kal pakka pay kar dunga, abhi travel kar raha hu"</span>
+            </button>
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('promise_salary')">
+              <span class="wa-chip-tag tag-promise">SALARY CYCLE</span>
+              <span class="wa-chip-txt">"Salary 5th ko aayegi tab transfer kar dungi"</span>
+            </button>
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('already_paid')">
+              <span class="wa-chip-tag tag-paid">ALREADY PAID</span>
+              <span class="wa-chip-txt">"Mera account se ₹999 debit ho gaya hai check your statement"</span>
+            </button>
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('dispute')">
+              <span class="wa-chip-tag tag-dispute">DISPUTE</span>
+              <span class="wa-chip-txt">"Maine ye service cancel kar di thi, refund karo fraud mat karo"</span>
+            </button>
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('hardship')">
+              <span class="wa-chip-tag tag-hardship">HARDSHIP</span>
+              <span class="wa-chip-txt">"Meri job chali gayi hai aur hospital emergency hai, paise nahi hain"</span>
+            </button>
+            <button type="button" class="wa-chip" onclick="simulateInboundPreset('wrong_number')">
+              <span class="wa-chip-tag tag-wrong">WRONG NUMBER</span>
+              <span class="wa-chip-txt">"Galat number hai bhai, stop messaging me not my account"</span>
+            </button>
+          </div>
+
+          <form id="wa-custom-form" class="wa-input-box" onsubmit="submitCustomInbound(event)">
+            <div class="wa-input-row">
+              <div class="form-field" style="flex:1">
+                <label class="form-label" for="wa-input-phone">From Phone / VPA</label>
+                <input class="form-input" id="wa-input-phone" type="text" value="+91-9876543210" placeholder="+91-9876543210" required />
+              </div>
+              <div class="form-field" style="width:130px">
+                <label class="form-label" for="wa-input-amount">Amount (₹)</label>
+                <input class="form-input" id="wa-input-amount" type="number" value="999" min="1" required />
+              </div>
+            </div>
+            <div class="form-field" style="margin-top:8px">
+              <label class="form-label" for="wa-input-msg">Customer Reply (Hinglish or English)</label>
+              <div style="display:flex;gap:8px">
+                <input class="form-input" id="wa-input-msg" type="text" placeholder="e.g. Kal shaam tak pay ho jayega" required />
+                <button type="submit" class="btn-submit" id="wa-send-btn" style="white-space:nowrap">&#9654; Send Reply</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right Column: Live Chat Stream & AI Decision Visualizer -->
+        <div class="wa-sim-right">
+          <div class="wa-section-title">📱 Live WhatsApp Chat &amp; AI Agent Decision Engine</div>
+          <div class="wa-chat-window" id="wa-chat-window">
+            <div class="wa-chat-empty" id="wa-chat-empty">
+              <p>Click any quick scenario or send a custom reply to see the AI Intent Classifier and auto-response in real time.</p>
+            </div>
+          </div>
+          <div class="wa-sim-footer">
+            <div class="wa-webhook-note">
+              <span class="wa-pulse-dot"></span>
+              <strong>Twilio Webhook:</strong> <code>POST /api/webhook/whatsapp/twilio</code>
+            </div>
+            <button class="btn-ghost" style="padding:4px 8px;font-size:11px" onclick="clearWhatsAppChat()">Clear Chat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /content-full (WhatsApp) -->
 
   <!-- ── Third row: B2B Receivables Chaser (full width) ───────────────────── -->
   <div class="content content-full" style="margin-top:12px;">

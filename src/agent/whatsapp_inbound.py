@@ -140,10 +140,11 @@ class WhatsAppInboundHandler:
             r"\bshaam\b", r"\baaj\s+raat\b", r"\btonight\b", r"\bparso\b"
         ],
         InboundIntent.ALREADY_PAID: [
-            r"\balready\s+paid\b", r"\bkat\s+gaye\b", r"\bkat\s+chuke\b", r"\bcut\s+gaya\b",
+            r"\balready\s+paid\b", r"\bkat\s+gaye\b", r"\bkat\s+gaya\b", r"\bkat\s+chuke\b", r"\bcut\s+gaya\b",
             r"\bdebit\s+ho\s+gaya\b", r"\bdebit\s+ho\s+chuka\b", r"\bpayment\s+done\b",
             r"\balready\s+transferred\b", r"\bupi\s+se\s+bhej\s+diya\b", r"\bde\s+diya\b",
-            r"\bcheck\s+your\s+statement\b", r"\bpaise\s+kat\s+gaye\b", r"\bpaid\s+already\b",
+            r"\bcheck\s+your\s+statement\b", r"\bcheck\s+bank\s+statement\b", r"\bpaise\s+kat\s+gaye\b",
+            r"\bpaise\s+kat\s+gaye\b", r"\bpaid\s+already\b",
             r"\bpaise\s+chale\s+gaye\b", r"\bpaise\s+bhej\s+diye\b"
         ],
         InboundIntent.DISPUTE: [

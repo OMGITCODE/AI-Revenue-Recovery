@@ -1213,3 +1213,125 @@ document.addEventListener('keydown', e => {
     closeCreateModal();
   }
 });
+
+// ── 2-Way WhatsApp Interactive Simulator ──────────────────────────────────────
+const WA_PRESETS = {
+  promise_24h: {
+    message: "Bhai kal pakka pay kar dunga, abhi travel kar raha hu",
+    amount: 999.0,
+  },
+  promise_salary: {
+    message: "Salary 5th ko aayegi tab transfer kar dungi",
+    amount: 1499.0,
+  },
+  already_paid: {
+    message: "Mera account se ₹999 debit ho gaya hai check your statement",
+    amount: 999.0,
+  },
+  dispute: {
+    message: "Maine ye service cancel kar di thi, refund karo fraud mat karo",
+    amount: 2499.0,
+  },
+  hardship: {
+    message: "Meri job chali gayi hai aur hospital emergency hai, abhi paise nahi hain",
+    amount: 3200.0,
+  },
+  wrong_number: {
+    message: "Galat number hai bhai, stop messaging me not my account",
+    amount: 999.0,
+  },
+};
+
+async function simulateInboundPreset(key) {
+  const preset = WA_PRESETS[key];
+  if (!preset) return;
+  const phone = document.getElementById('wa-input-phone').value.trim() || '+91-9876543210';
+  document.getElementById('wa-input-msg').value = preset.message;
+  document.getElementById('wa-input-amount').value = preset.amount;
+  await sendInboundMessage(phone, preset.message, preset.amount);
+}
+
+async function submitCustomInbound(event) {
+  event.preventDefault();
+  const phone = document.getElementById('wa-input-phone').value.trim();
+  const amount = parseFloat(document.getElementById('wa-input-amount').value) || 999;
+  const msg = document.getElementById('wa-input-msg').value.trim();
+  if (!msg) { toast('Please enter a reply message', 'err'); return; }
+  await sendInboundMessage(phone, msg, amount);
+  document.getElementById('wa-input-msg').value = '';
+}
+
+async function sendInboundMessage(fromPhone, message, amount) {
+  const btn = document.getElementById('wa-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+  
+  // Append user bubble to chat window
+  appendChatBubble('user', message, {
+    from: fromPhone,
+    time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  });
+
+  try {
+    const res = await fetch('/api/webhook/whatsapp/inbound', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_phone: fromPhone,
+        customer_vpa: '',
+        message: message,
+        amount: amount,
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    
+    // Append AI Agent bubble
+    appendChatBubble('agent', data.reply_text, {
+      intent: data.intent,
+      confidence: data.confidence,
+      action: data.action_taken,
+      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+    });
+
+    toast(`💬 Intent classified: ${data.intent.toUpperCase()} (${Math.round(data.confidence * 100)}%)`, 'ok');
+    await loadModules();
+  } catch (err) {
+    toast(`Inbound error: ${err.message}`, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#9654;&nbsp; Send Reply'; }
+  }
+}
+
+function appendChatBubble(type, text, meta) {
+  const win = document.getElementById('wa-chat-window');
+  const empty = document.getElementById('wa-chat-empty');
+  if (empty) empty.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = `wa-bubble-wrap ${type}`;
+
+  let extraHtml = '';
+  if (type === 'user') {
+    extraHtml = `<div class="wa-bubble-meta"><span>${meta.from || 'Customer'}</span> · <span>${meta.time}</span></div>`;
+  } else {
+    const intentClass = `tag-${meta.intent || 'promise'}`;
+    extraHtml = `
+      <div class="wa-bubble-meta">
+        <span class="wa-chip-tag ${intentClass}">${(meta.intent || 'AI AGENT').toUpperCase()} ${Math.round((meta.confidence || 0.9) * 100)}%</span>
+        <span>${meta.time}</span>
+      </div>
+      <div class="wa-bubble-action">⚡ ${meta.action || 'Recovery workflow updated'}</div>
+    `;
+  }
+
+  wrap.innerHTML = `<div class="wa-bubble ${type}">${text}</div>${extraHtml}`;
+  win.appendChild(wrap);
+  win.scrollTop = win.scrollHeight;
+}
+
+function clearWhatsAppChat() {
+  const win = document.getElementById('wa-chat-window');
+  win.innerHTML = `<div class="wa-chat-empty" id="wa-chat-empty">
+    <p>Click any quick scenario or send a custom reply to see the AI Intent Classifier and auto-response in real time.</p>
+  </div>`;
+}
