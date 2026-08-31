@@ -63,7 +63,11 @@ class TestMessagingClient:
 
 class TestWhatsAppInterventionWithMessenger:
     @pytest.mark.asyncio
-    async def test_nudge_uses_messenger(self):
+    async def test_nudge_uses_messenger(self, monkeypatch):
+        # Guarantee mock mode by construction for the intervention module's messenger
+        mock_messenger = MessagingClient(force_mock=True)
+        monkeypatch.setattr("src.agent.upi_interventions.messenger", mock_messenger)
+
         from datetime import datetime, timezone
         nudge = WhatsAppNudgeIntervention()
         risk = RevenueRisk(
@@ -80,6 +84,7 @@ class TestWhatsAppInterventionWithMessenger:
         result = await nudge.execute(risk)
         assert result.success is True
         assert result.metadata.get("delivery_mode") == "mock"
+        assert result.metadata.get("sent_live") is False
         assert "rahul@oksbi" in result.message
 
 
