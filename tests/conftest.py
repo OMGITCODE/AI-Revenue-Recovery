@@ -10,7 +10,19 @@ Guarantees:
 
 import pytest
 import os
+from src.config import settings
 from src.integrations.messaging import messenger
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_settings():
+    """
+    Autouse fixture: ensures settings are reloaded cleanly before each test
+    and restored to ambient defaults after monkeypatched test execution.
+    """
+    settings.reload()
+    yield
+    settings.reload()
 
 
 @pytest.fixture(autouse=True)

@@ -13,6 +13,7 @@ Validates:
 import pytest
 from fastapi.testclient import TestClient
 from api.main import app
+from src.config import settings
 from src.integrations.messaging import MessagingClient, MessageResult, messenger
 from src.agent.upi_interventions import WhatsAppNudgeIntervention
 from src.models.risk_models import RevenueRisk, RiskType, RiskSeverity
@@ -162,6 +163,7 @@ class TestTwilioInboundWebhook:
 
         secret = "rzp_test_secret_xyz"
         monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", secret)
+        settings.reload()
 
         payload = {
             "event": "payment.failed",
@@ -209,6 +211,7 @@ class TestTwilioInboundWebhook:
 
         auth_token = "twilio_auth_token_secret_123"
         monkeypatch.setenv("TWILIO_AUTH_TOKEN", auth_token)
+        settings.reload()
 
         form_data = {
             "From": "whatsapp:+919876543210",
@@ -254,6 +257,7 @@ class TestAPISecurityAndAuth:
     def test_api_key_auth_environment_control(self, monkeypatch):
         api_key = "prod_api_key_secret_888"
         monkeypatch.setenv("RECOVERIQ_API_KEY", api_key)
+        settings.reload()
 
         # 1. Public route accessible without API key
         res_public = client.get("/api/health")
@@ -281,6 +285,7 @@ class TestAPISecurityAndAuth:
     def test_state_mutating_and_pii_routes_require_api_key(self, monkeypatch):
         api_key = "prod_api_key_secret_888"
         monkeypatch.setenv("RECOVERIQ_API_KEY", api_key)
+        settings.reload()
 
         # Test exact routes reported in issue:
         # A. State Mutating: POST /api/b2b/receivables -> 401 without key, 200 with key

@@ -31,29 +31,16 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    def __getattribute__(self, name: str):
-        # Allow standard/internal attributes to bypass override
-        if name.startswith("_") or name in ("model_config", "model_fields", "model_computed_fields"):
-            return super().__getattribute__(name)
-        
-        # Check environment first to support dynamic test monkeypatching
-        env_key = name.upper()
-        if env_key in os.environ:
-            val = os.environ[env_key]
-            # Perform basic type casting if field is typed in Pydantic schema
-            field = self.__class__.model_fields.get(name)
-            if field and field.annotation:
-                try:
-                    if field.annotation == int:
-                        return int(val)
-                    elif field.annotation == float:
-                        return float(val)
-                    elif field.annotation == bool:
-                        return val.lower() in ("true", "1", "yes")
-                except Exception:
-                    pass
-            return val
+    def reload(self) -> "Settings":
+        """
+        Reloads configuration from ambient environment variables and .env file.
+        Provides a clean, explicit way to refresh settings in test fixtures
+        or when runtime environment variables change.
+        """
+        fresh = Settings()
+        for field in self.__class__.model_fields:
+            setattr(self, field, getattr(fresh, field))
+        return self
 
-        return super().__getattribute__(name)
 
 settings = Settings()

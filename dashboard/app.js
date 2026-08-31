@@ -273,7 +273,7 @@ function makeRow(ev) {
   tr.innerHTML = `
     <td class="muted" style="font-variant-numeric:tabular-nums;font-size:12px">${esc(ev.timestamp || '')}</td>
     <td><span class="code-tag">${code}</span></td>
-    <td class="mono" title="Click to filter customer history" style="cursor:pointer;color:var(--blue);" onclick="event.stopPropagation(); filterEventsByCustomer('${esc(displayIdent)}')">${esc(ev.customer_vpa || '')}</td>
+    <td class="mono vpa-filter-cell" title="Click to filter customer history" style="cursor:pointer;color:var(--blue);">${esc(ev.customer_vpa || '')}</td>
     <td class="muted">${esc(ev.bank || '')}</td>
     <td class="fw6">${fmtInr(ev.amount)}</td>
     <td><span class="sev-badge sev-${sev}">${cap(sev)}</span></td>
@@ -285,6 +285,15 @@ function makeRow(ev) {
       : ev.success
       ? '<span class="status-ok">✓ Recovered</span>'
       : '<span class="status-err">✗ Failed</span>'}</td>`;
+
+  const vpaCell = tr.querySelector('.vpa-filter-cell');
+  if (vpaCell) {
+    vpaCell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      filterEventsByCustomer(displayIdent);
+    });
+  }
+
   tr.appendChild(actTd);
   return tr;
 }
@@ -403,10 +412,21 @@ async function loadCustomer360InDrawer(identifier) {
       ${row('Historical Mean', `<strong>₹${(data.spend_profile?.mean_amount || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</strong> (${hist.length} transactions)`)}
       ${row('Cumulative Activity', `${prevEventsCount} recovery events · ${prevDecisionsCount} ledger decisions`)}
       ${data.is_suppressed ? row('Compliance Status', `<span class="sev-badge sev-critical">HOLD: ${esc(data.suppression_reason)}</span>`) : ''}
-      <div style="margin-top:8px;">
-        <button class="btn-ghost" style="font-size:11px;padding:4px 8px;width:100%;" onclick="closeDrawer(); filterEventsByCustomer('${esc(identifier)}')">🔍 Filter All Events for this Customer</button>
-      </div>
+      <div style="margin-top:8px;" id="cust-360-filter-box"></div>
     `;
+
+    const filterBox = container.querySelector('#cust-360-filter-box');
+    if (filterBox) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-ghost';
+      btn.style.cssText = 'font-size:11px;padding:4px 8px;width:100%;';
+      btn.textContent = '🔍 Filter All Events for this Customer';
+      btn.onclick = () => {
+        closeDrawer();
+        filterEventsByCustomer(identifier);
+      };
+      filterBox.appendChild(btn);
+    }
   } catch (e) {
     console.debug('Failed to load customer 360:', e);
   }
