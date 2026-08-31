@@ -110,24 +110,92 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 
 ---
 
-## 🎯 Full-Spectrum Recovery Capabilities
+## 🎯 Full-Spectrum System Architecture & Component Breakdown
 
-| Module | File | Key Innovation |
+RecoverIQ is built as a modular, high-throughput autonomous revenue recovery architecture. Below is the complete catalog of all components across the codebase:
+
+### 🤖 1. Core AI & Decision Systems (`src/agent/` — 15 Modules)
+
+| Module | File | Responsibility & Key Innovation |
 |---|---|---|
-| **2-Way Conversational Recovery** | `src/agent/whatsapp_inbound.py` | Hinglish inbound intent classification (Promise, Already Paid, Dispute, Hardship, Wrong Number) + compliance holds |
-| **Live Twilio WhatsApp & SMS** | `src/integrations/messaging.py` | Twilio API client with lazy init, DLT-registration awareness, sandbox routing & seamless mock fallback |
-| **Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Beta-Bernoulli MAB — learns optimal channel per failure context, 48 contextual clusters with domain priors |
-| **Guardrails Decision Engine** | `src/agent/decision_engine.py` | 9 RBI/TRAI guardrails (GR1–GR9): ₹15k ceiling, TRAI DND, mandate routing, P2P suppression, compliance blacklist |
-| **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | Event deduplication cache with TTL + per-VPA async mutex locks — prevents duplicate retries & race conditions |
-| **UPI Autopay Recovery** | `src/agent/upi_detector.py` | 14 NPCI error codes mapped to intelligent recovery — differentiates permanent (`BT01`, `BT02`) from transient (`U30`, `TM`) |
-| **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Reschedules `U30` retries to 1st–7th of month (10:00 AM IST) — avoids month-end dry balance trap |
-| **Setu Account Aggregator** | `src/integrations/setu_aa.py` | Balance pre-flight check stub before debit retry — verifies salary credit before bank call |
-| **Promise-to-Pay Tracker** | `src/agent/promise_tracker.py` | Logs commitments with deadlines + Payer Trust Score (0.0–1.0) — suppresses nudges while promise is active |
-| **Checkout Drop-off Recovery** | `src/agent/checkout_recovery.py` | Hinglish conversational WhatsApp nudges at T+10min — recovers abandoned carts with 1-click UPI fallback |
-| **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) — IVR, WhatsApp, interest calc, legal notices |
-| **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Append-only ledger: every decision with confidence score + plain-English reasoning; CSV/JSON export |
-| **Live REST API (28+ routes)** | `api/main.py` | FastAPI orchestrator: webhook parser, SSE stream, `/api/benchmark`, `/api/bandit`, `/api/webhook/whatsapp/inbound` |
-| **Empirical Benchmark** | `benchmark.py` | Baseline vs. AI head-to-head: +₹1,36,204 mean uplift, +59.5 pts rate uplift, 0 compliance violations |
+| **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
+| **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 9 hard deterministic RBI & TRAI compliance guardrails (GR1–GR9): ₹15k Autopay pre-debit circular ceiling, TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, and compliance blacklists. |
+| **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active. |
+| **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Immutable, append-only regulatory audit ledger recording every intervention decision, confidence score, plain-English reasoning, channel costs, and verified recovery. Supports live streaming and CSV/JSON export. |
+| **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | TTL-based SHA-256 event deduplication cache + per-customer VPA async mutex locks (`asyncio.Lock`), preventing duplicate retry dispatches and race conditions from webhook retries. |
+| **2-Way Conversational WhatsApp NLP** | `src/agent/whatsapp_inbound.py` | Real-time Hinglish NLP intent classification (`PROMISE`, `ALREADY_PAID`, `DISPUTE`, `HARDSHIP`, `WRONG_NUMBER`), extracting commitment dates, adjusting trust scores, and triggering compliance holds. |
+| **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Calendar-aware `UPIRetryScheduler` that detects month-end dates and reschedules `U30` (insufficient funds) retries to the 1st–7th of the month at 10:00 AM IST, avoiding the month-end dry balance trap. |
+| **UPI Autopay Webhook Detector** | `src/agent/upi_detector.py` | Specialized webhook detector diagnosing 14 NPCI error codes (`U30`, `BT01`, `BT02`, `TM`, `BA`, `U69`, `U19`, `ZM`, `XY`, `UT`, `U28`, `U01`, `ZG`, `Z9`) and categorizing them into actionable recovery paths. |
+| **UPI Recovery Interventions** | `src/agent/upi_interventions.py` | 5 multi-channel recovery execution dispatchers: Smart Retry, UPI Collect Requests, Mandate Renewal Magic Links, Interactive WhatsApp Nudges, and Assisted Human Escalation. |
+| **Checkout Drop-off Recovery** | `src/agent/checkout_recovery.py` | High-intent abandoned cart recovery agent operating at $T+10\text{min}$ with personalized Hinglish WhatsApp nudges and 1-click UPI intent fallback. |
+| **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) with multi-channel outreach (WhatsApp, automated IVR, MSMED Act 2006 interest calculations, and formal legal notice generation). |
+| **Root-Cause Diagnoser** | `src/agent/diagnoser.py` | Multi-channel root cause diagnoser mapping transaction failures to technical vs. customer causes, evaluating recovery confidence, and selecting optimal recovery playbooks. |
+| **Payment Risk Detector** | `src/agent/detector.py` | Transaction-level risk scoring and failure detection engine classifying payment events into risk tiers. |
+| **Base Intervention Framework** | `src/agent/interventions.py` | Base abstraction layer and dispatcher interfaces for modular recovery intervention channels. |
+| **Pipeline Orchestrator (V1 Reference)** | `src/agent/orchestrator.py` | Reference pipeline coordinating detection, diagnosis, guardrails, and ledger logging (*Note: Live reactive pipeline runs via FastAPI `api/main.py`*). |
+
+---
+
+### 🔌 2. External Integrations (`src/integrations/`)
+
+| Module | File | Responsibility & Key Innovation |
+|---|---|---|
+| **Live Twilio WhatsApp & SMS** | `src/integrations/messaging.py` | Twilio REST client with lazy initialization, DLT template registration compliance, sandbox routing, and transparent mock fallback for testing without credentials. |
+| **Razorpay UPI Gateway** | `src/integrations/razorpay_upi.py` | Razorpay Autopay webhook parsing, mandate verification, and collect request dispatch. |
+| **Setu Account Aggregator (AA)** | `src/integrations/setu_aa.py` | Pre-flight balance check stub verifying salary credit and liquidity via Account Aggregator prior to firing retry debits. |
+
+---
+
+### 🧱 3. Domain Models & Utilities (`src/models/`, `src/utils/`)
+
+| Module | File | Responsibility |
+|---|---|---|
+| **UPI Domain Models** | `src/models/upi_models.py` | Pydantic schema models for NPCI error codes, Mandate Status, Customer Tiers, Webhook Payloads, and Audit Entries. |
+| **Structured Logger** | `src/utils/logger.py` | Thread-safe, IST-timestamped structured logging formatting output across CLI and container environments. |
+
+---
+
+### ⚡ 4. FastAPI Backend & Reactive Event Engine (`api/`)
+
+| Module | File | Responsibility |
+|---|---|---|
+| **FastAPI REST API Orchestrator** | `api/main.py` | High-performance backend hosting 28+ REST endpoints, Server-Sent Events (SSE) stream (`/api/stream`), Twilio webhook parsers, CSV/JSON audit export, and scenario simulator routes. |
+| **Realistic Event Simulator** | `api/simulator.py` | Probabilistic failure event synthesizer executing real-time diagnosis, guardrail checks, MAB selection, and industry-modeled recovery conversions. |
+| **Thread-Safe Event Store** | `api/store.py` | In-memory thread-safe state store managing active events, concurrency mutexes, deduplication keys, and real-time dynamically aggregated recovery statistics. |
+
+---
+
+### 🖥️ 5. Real-Time Dashboard Frontend (`dashboard/`)
+
+| File | Technology | Description |
+|---|---|---|
+| `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Empirical Benchmark Inspector. |
+| `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, dynamic probability charts, audio alerts, and interactive simulation controls. |
+| `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
+
+---
+
+### 📦 6. Datasets & Benchmarking (`data/`, Root)
+
+| File | Type | Description |
+|---|---|---|
+| `data/upi_failures_dataset.json` | Dataset (JSON) | 40 curated real-world failure scenarios spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹499 to ₹1,45,000, varied DND states, and historical commitment records. |
+| `data/batch_run.py` | Script | Headless batch runner iterating over datasets to evaluate recovery pipeline throughput and success metrics. |
+| `benchmark.py` | Benchmark Engine | Empirical Monte Carlo simulator running N=50 iterations comparing RecoverIQ vs. fixed-schedule retries, generating mean ± std statistics and 20% pessimistic sensitivity haircut analysis. |
+| `upi_demo.py` & `demo.py` | Interactive Demos | Terminal-based walkthrough scripts demonstrating 4 key UPI failure recovery scenarios and generic recovery pipelines. |
+
+---
+
+### 🧪 7. Automated Test Suite (`tests/` — 82 Tests across 5 Files)
+
+| Test Suite | File | Tests | Coverage Scope |
+|---|---|---|---|
+| **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **34 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI ₹15k rule, TRAI DND windows, and full pipeline. |
+| **Hinglish Inbound NLP & WhatsApp** | `tests/test_inbound_whatsapp.py` | **15 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, etc.), promise date parsing, trust score adjustments, compliance holds. |
+| **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
+| **Idempotency & Concurrency** | `tests/test_idempotency.py` | **11 tests** | Webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
+| **Messaging & Twilio Integration** | `tests/test_messaging.py` | **9 tests** | Twilio client initialization, live vs mock routing, DLT template validation, and Form-encoded webhook parsing. |
+| **Total Test Suite** | `pytest tests/` | **82 passing** | **100% test pass rate in ~3.0s** |
 
 
 ---
