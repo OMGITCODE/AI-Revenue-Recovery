@@ -35,7 +35,7 @@ from src.agent.upi_interventions import (
     EscalationIntervention,
     UPIInterventionType,
 )
-from src.agent.detector import RiskSeverity
+from src.models.risk_models import RiskSeverity
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -354,3 +354,108 @@ class TestEndToEndPipeline:
         retry = next(r for r in results if r.intervention_type == UPIInterventionType.SMART_RETRY)
         assert retry.scheduled_at is not None
         assert retry.scheduled_at > datetime.now(IST)
+
+
+# ── Simulator & Immutable Recovery Ledger Integration Tests ────────────────────
+
+class TestSimulatorRecoveryLedger:
+    """Verifies that simulator.py directly writes full audit trails to Recovery Ledger."""
+
+    @pytest.fixture(autouse=True)
+    def clean_state(self):
+        from src.agent.recovery_ledger import ledger as recovery_ledger
+        from src.agent.promise_tracker import promise_tracker
+        from src.agent.checkout_recovery import checkout_agent
+        from api.store import store
+
+        recovery_ledger._entries.clear()
+        promise_tracker._promises.clear()
+        checkout_agent._sessions.clear()
+        store.reset()
+        yield
+        recovery_ledger._entries.clear()
+        promise_tracker._promises.clear()
+        checkout_agent._sessions.clear()
+        store.reset()
+
+    @pytest.mark.asyncio
+    async def test_run_custom_scenario_populates_ledger(self):
+        from api.simulator import run_custom_scenario
+        from src.agent.recovery_ledger import ledger as recovery_ledger
+
+        form = {
+            "scenario_name": "Test U30 Salary Crunch",
+            "failure_code": "U30",
+            "vpa": "test.user@oksbi",
+            "bank": "SBI",
+            "amount": 999.0,
+            "mandate_state": "active",
+            "retry_attempt": 0,
+        }
+
+        ev = await run_custom_scenario(form)
+        assert ev is not None
+        assert ev.customer_vpa == "test.user@oksbi"
+
+        # Check ledger entries recorded
+        entries = recovery_ledger.all_entries()
+        assert len(entries) >= 3  # detect, aa_check (for U30), decide/guardrail, intervene, p2p
+
+        event_types = [e.event_type for e in entries]
+        assert "detect" in event_types
+        assert any(t in ("decide", "guardrail") for t in event_types)
+        assert "intervene" in event_types
+        assert "p2p" in event_types  # U30 creates auto P2P
+
+        # Ensure reasoning and confidence are populated
+        for e in entries:
+            assert len(e.reasoning) > 0
+            assert 0.0 <= e.confidence <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_run_named_scenario_populates_ledger(self):
+        from api.simulator import run_scenario
+        from src.agent.recovery_ledger import ledger as recovery_ledger
+
+        ev = await run_scenario("bt01")
+        assert ev is not None
+
+        entries = recovery_ledger.all_entries()
+        assert len(entries) >= 2
+        event_types = [e.event_type for e in entries]
+        assert "detect" in event_types
+        assert "checkout" in event_types  # BT01 auto-creates checkout drop-off record
+
+    @pytest.mark.asyncio
+    async def test_batch_run_populates_ledger_and_exports(self):
+        """Simulate data/batch_run.py firing dataset scenarios and verifying ledger export."""
+        import json
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from api.main import app
+        from src.agent.recovery_ledger import ledger as recovery_ledger
+
+        client = TestClient(app)
+        client.post("/api/reset")
+
+        dataset_path = Path(__file__).parent.parent / "data" / "upi_failures_dataset.json"
+        with open(dataset_path, encoding="utf-8") as f:
+            scenarios = json.load(f)
+
+        # Run first 5 scenarios via /api/custom (same as batch_run.py)
+        for sc in scenarios[:5]:
+            resp = client.post("/api/custom", json=sc)
+            assert resp.status_code == 200
+
+        # Verify JSON audit export endpoint returns non-zero records
+        export_resp = client.get("/api/ledger/export?format=json")
+        assert export_resp.status_code == 200
+        export_data = export_resp.json()
+        assert export_data.get("total_records", 0) >= 10
+        assert len(export_data.get("records", [])) >= 10
+
+        # Verify CSV audit export endpoint
+        csv_resp = client.get("/api/ledger/export?format=csv")
+        assert csv_resp.status_code == 200
+        assert "ledger_id,ts_full,event_type" in csv_resp.text
+

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from src.integrations.messaging import MessagingClient, MessageResult, messenger
 from src.agent.upi_interventions import WhatsAppNudgeIntervention
-from src.agent.detector import RevenueRisk, RiskType, RiskSeverity
+from src.models.risk_models import RevenueRisk, RiskType, RiskSeverity
 from src.models.upi_models import UPIFailureCode
 from src.agent.promise_tracker import promise_tracker
 from src.agent.whatsapp_inbound import suppression_registry, InboundIntent

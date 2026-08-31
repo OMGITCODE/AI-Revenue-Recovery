@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from .detector import RevenueRisk
+from ..models.risk_models import RevenueRisk
 from .retry_scheduler import UPIRetryScheduler, RetryDecision
 from ..models.upi_models import UPIAutopayEvent, UPIFailureCode
 from ..utils.logger import get_logger

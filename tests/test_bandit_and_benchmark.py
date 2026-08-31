@@ -1,5 +1,5 @@
 """
-Unit tests for Contextual Thompson Sampling Bandit & Empirical Benchmark.
+Unit tests for Contextual Thompson Sampling Bandit & Monte Carlo Benchmark.
 """
 
 import pytest

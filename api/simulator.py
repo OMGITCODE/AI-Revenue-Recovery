@@ -14,8 +14,10 @@ ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Callable, Awaitable
 
 from src.models.upi_models import (
     MandateFrequency, MandateState,
@@ -27,9 +29,48 @@ from src.agent.upi_interventions import (
     MandateRenewalIntervention, WhatsAppNudgeIntervention,
     EscalationIntervention,
 )
+from src.agent.decision_engine import DecisionEngine, infer_tier, CustomerTier
+from src.agent.bandit import bandit_engine, RecoveryArm, get_context_key, resolve_arm
+from src.agent.promise_tracker import promise_tracker
+from src.agent.checkout_recovery import checkout_agent, DropOffReason
+from src.agent.recovery_ledger import ledger as recovery_ledger
+from src.integrations.setu_aa import setu_aa
 from api.store import RecoveryEvent, store
 
 IST = timezone(timedelta(hours=5, minutes=30))
+
+_decision_engine = DecisionEngine()
+_module_listeners: list[Callable[[], Awaitable[None]]] = []
+
+def register_module_listener(fn: Callable[[], Awaitable[None]]):
+    """Register an async callback invoked when P2P or Checkout records are modified."""
+    if fn not in _module_listeners:
+        _module_listeners.append(fn)
+
+async def _notify_module_listeners():
+    for fn in list(_module_listeners):
+        try:
+            res = fn()
+            if asyncio.iscoroutine(res):
+                await res
+        except Exception:
+            pass
+
+# ── Cross-wiring helpers — failure code → auto-created P2P / Checkout records ──
+
+_P2P_AUTO_CODES = {
+    "U30":  (48,  "Salary-window retry scheduled. Customer promised payment after credit."),
+    "TM":   (24,  "Tech error recovery: customer advised to retry after bank maintenance window."),
+    "BT02": (72,  "Mandate expired — renewal link sent. Customer promised to complete re-registration."),
+    "U29":  (48,  "Amount exceeded mandate limit. Customer to adjust limit and retry."),
+    "U13":  (36,  "Mandate paused by customer — awaiting re-activation confirmation."),
+}
+_CHECKOUT_AUTO_CODES = {
+    "BT01": ("upi_intent_abandoned", "hinglish"),   # revoked mandate → treat like UPI abandoned
+    "U69":  ("bank_error_exit",      "hinglish"),   # daily limit hit → redirect to alternate payment
+    "TE":   ("otp_timeout",          "hinglish"),   # expired → OTP timeout analogue
+    "RB":   ("bank_error_exit",      "english"),    # bank declined → bank error exit
+}
 
 INTERVENTIONS = [
     SmartRetryIntervention(),
@@ -177,10 +218,174 @@ def evaluate_recovery_outcome(interventions: list[str], amount: float) -> tuple[
         return False, "failed", 0.0
 
 
+async def process_and_log_event(ev: RecoveryEvent | None, cfg: dict) -> RecoveryEvent | None:
+    """Log every decision step of an executed event to the Recovery Ledger,
+    update Thompson Sampling Bayesian priors, and auto-create cross-panel records."""
+    if not ev:
+        return None
+
+    # 1) DETECT entry
+    conf_detect = 0.75 if ev.severity in ("high", "critical") else 0.55
+    recovery_ledger.log(
+        event_type = "detect",
+        vpa        = ev.customer_vpa,
+        amount     = ev.amount,
+        reasoning  = (
+            f"{ev.failure_code} [{ev.failure_reason}] detected on {ev.bank}. "
+            f"Severity={ev.severity}."
+        ),
+        confidence = conf_detect,
+        channel    = "",
+    )
+
+    # 1b) TRUST SCORE — compute from P2P history before deciding
+    trust_score = promise_tracker.payer_trust_score(ev.customer_vpa)
+
+    # 1c) AA BALANCE CHECK — for U30 (insufficient funds) only
+    #     Replace salary-cycle guess with a verified balance signal.
+    aa_check = ""
+    if ev.failure_code == "U30":
+        aa_result = setu_aa.check_balance(
+            vpa          = ev.customer_vpa,
+            amount_due   = ev.amount,
+            bank         = ev.bank,
+            failure_code = ev.failure_code,
+        )
+        aa_check = aa_result.note
+        # Boost or dampen trust score based on verified funds
+        if aa_result.funds_available:
+            trust_score = min(1.0, trust_score + 0.20)  # confirmed salary credit
+        else:
+            trust_score = max(0.05, trust_score - 0.10)  # still short
+        recovery_ledger.log(
+            event_type = "aa_check",
+            vpa        = ev.customer_vpa,
+            amount     = ev.amount,
+            reasoning  = (
+                f"[AA] Setu sandbox consent approved. "
+                + aa_result.note
+                + f" (Trust adjusted → {trust_score:.2f})"
+            ),
+            confidence = 0.92,   # AA signal is high-confidence vs. heuristic
+            channel    = "setu_aa",
+        )
+
+    # Patch computed fields back onto the event
+    ev.trust_score = round(trust_score, 2)
+    ev.aa_check    = aa_check
+
+    # 2) DECIDE entry — log guardrail / strategy
+    mandate_state_val = cfg.get("mandate_state", "active")
+    if hasattr(mandate_state_val, "value"):
+        mandate_state_val = mandate_state_val.value
+
+    decision = _decision_engine.evaluate(
+        failure_code  = ev.failure_code,
+        mandate_state = str(mandate_state_val),
+        amount        = ev.amount,
+        retry_count   = cfg.get("retry_attempt", 0),
+        has_promise   = False,
+        trust_score   = trust_score,
+    )
+    confidence_decide = 0.90 if decision.guardrails_fired else 0.72
+    evt_type_decide   = "guardrail" if decision.guardrails_fired else "decide"
+    first_channel     = decision.allowed_actions[0] if decision.allowed_actions else ""
+    e_decide = recovery_ledger.log(
+        event_type = evt_type_decide,
+        vpa        = ev.customer_vpa,
+        amount     = ev.amount,
+        reasoning  = decision.reason,
+        confidence = confidence_decide,
+        channel    = first_channel,
+    )
+
+    # 3) INTERVENE entry — log what was actually dispatched
+    if ev.interventions:
+        channel = ev.interventions[0]
+        e_iv = recovery_ledger.log(
+            event_type = "intervene",
+            vpa        = ev.customer_vpa,
+            amount     = ev.amount,
+            reasoning  = ev.intervention_msgs[0] if ev.intervention_msgs else channel,
+            confidence = 0.68,
+            channel    = channel,
+        )
+        outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
+        rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
+        recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
+        # Online Bayesian Posterior Update
+        if decision.bandit_decision:
+            ckey = decision.bandit_decision.get("context_key")
+            selected_arm = decision.bandit_decision.get("selected_arm") or channel
+            if ckey:
+                bandit_engine.update(
+                    context_key=ckey,
+                    arm=selected_arm,
+                    success=(outcome == "success"),
+                    amount_recovered=rec_amt,
+                )
+    elif not decision.approved:
+        recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
+
+    # ── 4) Cross-wiring: auto-create linked panel records ─────────────────────
+    modules_changed = False
+
+    # Auto-create a Promise-to-Pay for applicable failure codes
+    if ev.failure_code in _P2P_AUTO_CODES:
+        if not promise_tracker.has_active(ev.customer_vpa, ev.amount):
+            deadline_h, notes = _P2P_AUTO_CODES[ev.failure_code]
+            promise_tracker.create(
+                vpa           = ev.customer_vpa,
+                amount        = ev.amount,
+                bank          = ev.bank,
+                failure_code  = ev.failure_code,
+                deadline_hours= deadline_h,
+                channel       = "whatsapp",
+                notes         = notes,
+            )
+            recovery_ledger.log(
+                event_type = "p2p",
+                vpa        = ev.customer_vpa,
+                amount     = ev.amount,
+                reasoning  = f"Auto P2P created from {ev.failure_code} scenario. {notes}",
+                confidence = 0.70,
+                channel    = "whatsapp",
+            )
+            modules_changed = True
+
+    # Auto-create a Checkout Drop-off for applicable failure codes
+    if ev.failure_code in _CHECKOUT_AUTO_CODES:
+        if not checkout_agent.has_active(ev.customer_vpa, ev.amount):
+            reason, lang = _CHECKOUT_AUTO_CODES[ev.failure_code]
+            checkout_agent.record_drop_off(
+                customer_vpa    = ev.customer_vpa,
+                customer_phone  = "",
+                cart_amount     = ev.amount,
+                merchant        = ev.bank + " Merchant",
+                drop_off_reason = reason,
+                language        = lang,
+            )
+            recovery_ledger.log(
+                event_type = "checkout",
+                vpa        = ev.customer_vpa,
+                amount     = ev.amount,
+                reasoning  = f"Auto checkout session from {ev.failure_code}: customer redirected to alternate payment. Hinglish nudge dispatched.",
+                confidence = 0.62,
+                channel    = "whatsapp",
+            )
+            modules_changed = True
+
+    # Broadcast SSE so browser panels refresh automatically
+    if modules_changed:
+        await _notify_module_listeners()
+
+    return ev
+
+
 async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
     """
-    Run a named scenario through the full agent pipeline
-    and publish the result to the event store.
+    Run a named scenario through the full agent pipeline,
+    log to Recovery Ledger, and publish the result to the event store.
     """
     cfg = SCENARIOS.get(scenario_key)
     if not cfg:
@@ -230,12 +435,14 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
     )
 
     await store.add_event(ev)
+    await process_and_log_event(ev, cfg_copy)
     return ev
 
 
 async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
     """
-    Run a raw custom webhook payload through the agent pipeline.
+    Run a raw custom webhook payload through the agent pipeline,
+    log to Recovery Ledger, and publish to the event store.
     """
     from src.integrations.razorpay_upi import parse_upi_webhook
     upi_event = parse_upi_webhook(payload)
@@ -281,13 +488,14 @@ async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:
         scenario_name="Custom Webhook",
     )
     await store.add_event(ev)
+    await process_and_log_event(ev, {"mandate_state": "active", "retry_attempt": 0})
     return ev
 
 
 async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
     """
-    Build a UPIAutopayEvent from a user-supplied form dict and run the
-    full agent pipeline, identical to predefined scenarios.
+    Build a UPIAutopayEvent from a user-supplied form dict, run the
+    full agent pipeline, log to Recovery Ledger, and publish to the event store.
     """
     # Resolve failure code — default to UNKNOWN if invalid
     try:
@@ -361,4 +569,6 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
         scenario_name=cfg["name"],
     )
     await store.add_event(ev)
+    await process_and_log_event(ev, cfg)
     return ev
+

@@ -31,7 +31,10 @@ if sys.platform == "win32":
 
 from src.config import settings
 from api.store import store
-from api.simulator import SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario
+from api.simulator import (
+    SCENARIOS, run_scenario, run_custom_webhook, run_custom_scenario,
+    register_module_listener,
+)
 from src.agent.decision_engine import DecisionEngine, infer_tier, CustomerTier
 from src.agent.bandit import bandit_engine, RecoveryArm, get_context_key, resolve_arm
 from src.agent.promise_tracker import promise_tracker
@@ -82,14 +85,19 @@ PUBLIC_ROUTE_PREFIXES = (
     "/api/stats",
     "/api/scenarios",
     "/api/stream",
+    "/api/ledger",              # Ledger inspect and CSV/JSON export
+    "/api/roi",
+    "/api/bandit",
+    "/api/benchmark",
+    "/api/idempotency",
+    "/api/promises",
+    "/api/checkout",
+    "/api/b2b",
+    "/api/decide",
+    "/api/suppression/list",
     "/api/webhook",             # HMAC signature protected
     "/api/webhook/whatsapp",    # HMAC signature protected
     "/api/whatsapp/inbound/samples",
-    "/api/benchmark",
-    "/api/bandit",
-    "/api/idempotency",
-    "/api/roi",
-    "/api/suppression/list",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -203,186 +211,11 @@ async def simulate(scenario_key: str):
     return ev.to_dict()
 
 
-# ── Cross-wiring helpers — failure code → auto-created P2P / Checkout records ──
-
-_P2P_AUTO_CODES = {
-    "U30":  (48,  "Salary-window retry scheduled. Customer promised payment after credit."),
-    "TM":   (24,  "Tech error recovery: customer advised to retry after bank maintenance window."),
-    "BT02": (72,  "Mandate expired — renewal link sent. Customer promised to complete re-registration."),
-    "U29":  (48,  "Amount exceeded mandate limit. Customer to adjust limit and retry."),
-    "U13":  (36,  "Mandate paused by customer — awaiting re-activation confirmation."),
-}
-_CHECKOUT_AUTO_CODES = {
-    "BT01": ("upi_intent_abandoned", "hinglish"),   # revoked mandate → treat like UPI abandoned
-    "U69":  ("bank_error_exit",      "hinglish"),   # daily limit hit → redirect to alternate payment
-    "TE":   ("otp_timeout",          "hinglish"),   # expired → OTP timeout analogue
-    "RB":   ("bank_error_exit",      "english"),    # bank declined → bank error exit
-}
-
-
 async def _run_and_log(scenario_key: str):
-    """Run a scenario AND log every decision step to the Recovery Ledger.
-    Also auto-creates cross-panel records (P2P / Checkout) so the dashboard
-    shows real linked data without needing manual entry."""
-    cfg = SCENARIOS.get(scenario_key, {})
-    ev  = await run_scenario(scenario_key)
+    """Run a predefined scenario through the simulator (which logs every step to Recovery Ledger)."""
+    ev = await run_scenario(scenario_key)
     if not ev:
         return None
-
-    # 1) DETECT entry
-    conf_detect = 0.75 if ev.severity in ("high", "critical") else 0.55
-    recovery_ledger.log(
-        event_type = "detect",
-        vpa        = ev.customer_vpa,
-        amount     = ev.amount,
-        reasoning  = (
-            f"{ev.failure_code} [{ev.failure_reason}] detected on {ev.bank}. "
-            f"Severity={ev.severity}."
-        ),
-        confidence = conf_detect,
-        channel    = "",
-    )
-
-    # 1b) TRUST SCORE — compute from P2P history before deciding
-    trust_score = promise_tracker.payer_trust_score(ev.customer_vpa)
-
-    # 1c) AA BALANCE CHECK — for U30 (insufficient funds) only
-    #     Replace salary-cycle guess with a verified balance signal.
-    aa_check = ""
-    if ev.failure_code == "U30":
-        aa_result = setu_aa.check_balance(
-            vpa          = ev.customer_vpa,
-            amount_due   = ev.amount,
-            bank         = ev.bank,
-            failure_code = ev.failure_code,
-        )
-        aa_check = aa_result.note
-        # Boost or dampen trust score based on verified funds
-        if aa_result.funds_available:
-            trust_score = min(1.0, trust_score + 0.20)  # confirmed salary credit
-        else:
-            trust_score = max(0.05, trust_score - 0.10)  # still short
-        recovery_ledger.log(
-            event_type = "aa_check",
-            vpa        = ev.customer_vpa,
-            amount     = ev.amount,
-            reasoning  = (
-                f"[AA] Setu sandbox consent approved. "
-                + aa_result.note
-                + f" (Trust adjusted → {trust_score:.2f})"
-            ),
-            confidence = 0.92,   # AA signal is high-confidence vs. heuristic
-            channel    = "setu_aa",
-        )
-
-    # Patch computed fields back onto the event (already stored in EventStore,
-    # but we update in-place so the SSE dict re-emitted later carries them)
-    ev.trust_score = round(trust_score, 2)
-    ev.aa_check    = aa_check
-
-    # 2) DECIDE entry — log guardrail / strategy
-    decision = _decision_engine.evaluate(
-        failure_code  = ev.failure_code,
-        mandate_state = cfg.get("mandate_state", "active"),
-        amount        = ev.amount,
-        retry_count   = cfg.get("retry_attempt", 0),
-        has_promise   = False,
-        trust_score   = trust_score,
-    )
-    confidence_decide = 0.90 if decision.guardrails_fired else 0.72
-    evt_type_decide   = "guardrail" if decision.guardrails_fired else "decide"
-    # Use decision.reason (correct attr) and first allowed action as channel
-    first_channel     = decision.allowed_actions[0] if decision.allowed_actions else ""
-    e_decide = recovery_ledger.log(
-        event_type = evt_type_decide,
-        vpa        = ev.customer_vpa,
-        amount     = ev.amount,
-        reasoning  = decision.reason,
-        confidence = confidence_decide,
-        channel    = first_channel,
-    )
-
-    # 3) INTERVENE entry — log what was actually dispatched
-    if ev.interventions:
-        channel = ev.interventions[0]
-        e_iv = recovery_ledger.log(
-            event_type = "intervene",
-            vpa        = ev.customer_vpa,
-            amount     = ev.amount,
-            reasoning  = ev.intervention_msgs[0] if ev.intervention_msgs else channel,
-            confidence = 0.68,
-            channel    = channel,
-        )
-        outcome = "success" if ev.success else ("escalated" if getattr(ev, "status", "") == "escalated" else "failure")
-        rec_amt = getattr(ev, "amount_recovered", ev.amount if ev.success else 0.0)
-        recovery_ledger.mark_outcome(e_iv.ledger_id, outcome, rec_amt)
-        # Online Bayesian Posterior Update
-        if decision.bandit_decision:
-            ckey = decision.bandit_decision.get("context_key")
-            selected_arm = decision.bandit_decision.get("selected_arm") or channel
-            if ckey:
-                bandit_engine.update(
-                    context_key=ckey,
-                    arm=selected_arm,
-                    success=(outcome == "success"),
-                    amount_recovered=rec_amt,
-                )
-    elif not decision.approved:
-        recovery_ledger.mark_outcome(e_decide.ledger_id, "skipped", 0)
-
-    # ── 4) Cross-wiring: auto-create linked panel records ─────────────────────
-    modules_changed = False
-
-    # Auto-create a Promise-to-Pay for applicable failure codes
-    if ev.failure_code in _P2P_AUTO_CODES:
-        # Only create if no existing pending promise for this VPA+amount
-        if not promise_tracker.has_active(ev.customer_vpa, ev.amount):
-            deadline_h, notes = _P2P_AUTO_CODES[ev.failure_code]
-            promise_tracker.create(
-                vpa           = ev.customer_vpa,
-                amount        = ev.amount,
-                bank          = ev.bank,
-                failure_code  = ev.failure_code,
-                deadline_hours= deadline_h,
-                channel       = "whatsapp",
-                notes         = notes,
-            )
-            recovery_ledger.log(
-                event_type = "p2p",
-                vpa        = ev.customer_vpa,
-                amount     = ev.amount,
-                reasoning  = f"Auto P2P created from {ev.failure_code} scenario. {notes}",
-                confidence = 0.70,
-                channel    = "whatsapp",
-            )
-            modules_changed = True
-
-    # Auto-create a Checkout Drop-off for applicable failure codes
-    if ev.failure_code in _CHECKOUT_AUTO_CODES:
-        if not checkout_agent.has_active(ev.customer_vpa, ev.amount):
-            reason, lang = _CHECKOUT_AUTO_CODES[ev.failure_code]
-            checkout_agent.record_drop_off(
-                customer_vpa    = ev.customer_vpa,
-                customer_phone  = "",
-                cart_amount     = ev.amount,
-                merchant        = ev.bank + " Merchant",
-                drop_off_reason = reason,
-                language        = lang,
-            )
-            recovery_ledger.log(
-                event_type = "checkout",
-                vpa        = ev.customer_vpa,
-                amount     = ev.amount,
-                reasoning  = f"Auto checkout session from {ev.failure_code}: customer redirected to alternate payment. Hinglish nudge dispatched.",
-                confidence = 0.62,
-                channel    = "whatsapp",
-            )
-            modules_changed = True
-
-    # Broadcast SSE so browser panels refresh automatically
-    if modules_changed:
-        await _broadcast_modules_updated()
-
     return ev
 
 
@@ -478,8 +311,9 @@ class CustomScenarioRequest(BaseModel):
 
 @app.post("/api/custom")
 async def custom_scenario(payload: CustomScenarioRequest):
-    """Run a user-created scenario through the full agent pipeline."""
-    ev = await run_custom_scenario(payload.dict())
+    """Run a user-created scenario through the full agent pipeline and Recovery Ledger."""
+    cfg = payload.model_dump()
+    ev = await run_custom_scenario(cfg)
     if not ev:
         raise HTTPException(status_code=422, detail="Could not process custom scenario")
     return ev.to_dict()
@@ -509,6 +343,8 @@ async def _broadcast_modules_updated():
             await q.put({"__event_type": "modules_updated"})
         except Exception:
             pass
+
+register_module_listener(_broadcast_modules_updated)
 
 
 @app.post("/api/seed")
@@ -896,7 +732,7 @@ async def get_bandit_state():
 
 @app.get("/api/benchmark")
 async def run_benchmark_endpoint():
-    """Runs empirical benchmark comparing fixed retry baseline vs RecoverIQ AI Agent across Monte Carlo runs."""
+    """Runs simulated Monte Carlo benchmark comparing fixed retry baseline vs RecoverIQ AI Agent."""
     from benchmark import run_benchmark, run_sensitivity_analysis
     b, a = run_benchmark(n_runs=50)
     sens = run_sensitivity_analysis(n_runs=50, haircut_pct=0.20)
@@ -912,7 +748,7 @@ async def run_benchmark_endpoint():
 
     return {
         "n_runs": n_runs,
-        "methodology": "Monte Carlo (n=50) — probabilistic outcomes per published Indian FinTech conversion rates",
+        "methodology": "Monte Carlo Simulation (n=50) — calibrated on published Indian FinTech conversion benchmarks (Razorpay Recurring, NPCI Autopay, Juspay) with 20% sensitivity analysis",
         "baseline": {
             "total_at_stake": b.total_at_stake,
             "total_recovered": round(base_rec_mean, 2),

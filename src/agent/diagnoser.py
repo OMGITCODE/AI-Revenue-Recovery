@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .detector import RevenueRisk, RiskType
+from ..models.risk_models import RevenueRisk, RiskType
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .detector import RevenueRisk, RiskSeverity, RiskType
+from ..models.risk_models import RevenueRisk, RiskSeverity, RiskType
 from ..models.upi_models import UPIAutopayEvent, UPIFailureCode, MandateState
 from ..utils.logger import get_logger
 

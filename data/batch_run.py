@@ -18,6 +18,13 @@ import time
 import sys
 from pathlib import Path
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import httpx
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -70,6 +77,23 @@ def run_all(scenarios, delay: float = 0.3):
 
     print(f"\n{'='*60}")
     print(f"  Done — {passed} passed  {failed} failed  out of {total}")
+    
+    # Query and display Immutable Audit Ledger Summary
+    try:
+        r_ledger = httpx.get(f"{BASE_URL}/api/ledger/export?format=json", timeout=5)
+        if r_ledger.status_code == 200:
+            ledger_data = r_ledger.json()
+            total_records = ledger_data.get("total_records", 0)
+            roi_data = ledger_data.get("overall_roi", {})
+            net_recovered = roi_data.get("net_recovered", 0)
+            overall_roi = roi_data.get("overall_roi_pct", 0)
+            print(f"  📜  Immutable Audit Ledger : {total_records} decisions recorded")
+            print(f"  💰  Total Net Recovered    : {fmt_inr(net_recovered)}")
+            print(f"  📈  Recovery Net ROI       : {overall_roi:,.1f}%")
+            print(f"  📥  Audit Trail Export     : {BASE_URL}/api/ledger/export?format=json")
+    except Exception:
+        pass
+
     print(f"  Dashboard: {BASE_URL}/")
     print(f"{'='*60}\n")
 
