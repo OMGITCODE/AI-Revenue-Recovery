@@ -220,10 +220,9 @@ class MandateExpiryScanner:
         )
 
         try:
-            await messenger.send_whatsapp(
-                to_phone="+919800000001",
+            messenger.send_whatsapp(
+                to="+919800000001",
                 body=msg,
-                customer_vpa=m.customer_vpa,
             )
         except Exception as e:
             logger.warning("Failed to send proactive WhatsApp nudge: %s", e)
@@ -237,6 +236,7 @@ class MandateExpiryScanner:
             confidence=0.92,
             channel="whatsapp",
             outcome="success",
+            recovery_type="proactive",
         )
 
         logger.info(
@@ -267,6 +267,7 @@ class MandateExpiryScanner:
             confidence=1.0,
             channel="mandate_renewal",
             outcome="success",
+            recovery_type="proactive",
         )
         recovery_ledger.mark_outcome(entry.ledger_id, outcome="success", amount_recovered=m.amount)
 

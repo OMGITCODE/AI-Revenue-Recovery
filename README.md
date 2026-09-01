@@ -137,7 +137,7 @@ Shifts RecoverIQ from purely reactive recovery after payment failure to **proact
 - **Pre-Emptive $T-72\text{h}$ Lookahead Window**: Automatically scans active recurring UPI Autopay mandates within $24\text{--}72\text{h}$ of validity expiration.
 - **1-Click Self-Cure Magic Links**: Generates personalized Razorpay mandate renewal deep links and dispatches friendly conversational reminders via WhatsApp/SMS.
 - **Pre-Empted Revenue Protection**: Eliminates NPCI `BT02` ("Mandate Expired") debit failures before they ever occur, preventing involuntary churn, bank decline fees, and service disruption.
-- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `BT02_PREVENTED`.
+- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries.
 
 ---
 
@@ -149,13 +149,13 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | Module | File | Responsibility & Key Innovation |
 |---|---|---|
-| **Proactive Mandate Expiry Interceptor** | `src/agent/mandate_expiry.py` | Proactive $T-72\text{h}$ pre-failure scanner scanning active recurring UPI Autopay mandates nearing validity lapse, dispatching 1-click WhatsApp/SMS renewal magic links before NPCI `BT02` ("Mandate Expired") debit failures can occur, and logging pre-empted recovery to the audit ledger. |
+| **Proactive Mandate Expiry Interceptor** | `src/agent/mandate_expiry.py` | Proactive $T-72\text{h}$ pre-failure scanner scanning active recurring UPI Autopay mandates nearing validity lapse, dispatching 1-click WhatsApp/SMS renewal magic links before NPCI `BT02` ("Mandate Expired") debit failures can occur, and logging pre-empted recovery to the audit ledger under `recovery_type="proactive"`. |
 | **Customer Identity Registry** | `src/agent/customer_identity.py` | Canonical identity graph resolving and merging fragmented customer identifiers (`customer_id`, multiple VPAs, phone numbers, and emails) into a unified profile. Synchronizes behavioral history, cumulative daily touches, retry counts, and compliance holds. |
 | **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
 | **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): RBI Digital Payments E-Mandate Framework category-aware limits (GR7: ₹1,00,000 for insurance, mutual funds, and credit cards; ₹15,000 baseline ceiling for general/education), TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
 | **Spend Pattern & Anomaly Engine** | `src/agent/spend_pattern.py` | Calculates rolling statistical profiles (mean, median, range, std dev) per canonical customer profile and detects sudden upward spikes (e.g. 9x+ multiplier on micro-ticket payers), blocking blind automatic retries to protect customers from unexpected account depletion. |
 | **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active and auto-fulfilling upon recovery. |
-| **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Immutable, append-only regulatory audit ledger recording every intervention decision, confidence score, plain-English reasoning, channel costs, and verified recovery. Supports live streaming and CSV/JSON export. |
+| **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Immutable, append-only regulatory audit ledger recording every intervention decision, confidence score, plain-English reasoning, channel costs, and verified recovery. Supports live streaming, CSV/JSON export, and explicit two-part separation of **Reactive Recoveries** (post-failure) vs. **Proactive Churn Prevention** (pre-failure). |
 | **Idempotency & Concurrency Locks** | `src/agent/idempotency.py` | TTL-based SHA-256 event deduplication cache + per-customer VPA async mutex locks (`asyncio.Lock`), preventing duplicate retry dispatches and race conditions from webhook retries. |
 | **2-Way Conversational WhatsApp NLP** | `src/agent/whatsapp_inbound.py` | Real-time Hinglish NLP intent classification (`PROMISE`, `ALREADY_PAID`, `DISPUTE`, `HARDSHIP`, `WRONG_NUMBER`), extracting commitment dates, adjusting trust scores, and triggering compliance holds. |
 | **Salary-Cycle Retry Scheduler** | `src/agent/retry_scheduler.py` | Calendar-aware `UPIRetryScheduler` that detects month-end dates and reschedules `U30` (insufficient funds) retries to the 1st–7th of the month at 10:00 AM IST, avoiding the month-end dry balance trap. |
@@ -611,7 +611,7 @@ LLM_PROVIDER=gemini
 | `GET` | `/api/idempotency` | Inspects active idempotency deduplication cache & active mutex locks |
 | `GET` | `/api/ledger/export?format=csv` | Downloads complete regulatory audit trail as CSV |
 | `GET` | `/api/ledger/export?format=json`| Exports complete compliance ledger as structured JSON |
-| `GET` | `/api/roi` | Returns real-time ROI breakdown (net ₹ recovered minus channel costs) |
+| `GET` | `/api/roi` | Returns real-time ROI breakdown with separated reactive recovery (post-failure) vs proactive churn prevention (pre-failure) metrics & channel costs |
 | `GET` | `/api/mandates/expiring` | Retrieves mandates expiring within lookahead window ($T-72\text{h}$) |
 | `GET` | `/api/mandates/all` | Lists all tracked recurring UPI Autopay mandates |
 | `GET` | `/api/mandates/stats` | Summary of pre-empted revenue & proactive nudge conversion metrics |

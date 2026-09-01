@@ -779,8 +779,8 @@
     <div class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">💰 Recovery ROI</div>
-          <div class="card-sub">Net ₹ recovered minus channel cost per intervention type</div>
+          <div class="card-title">💰 Recovery ROI &amp; Revenue Protection</div>
+          <div class="card-sub">Separated breakdown: Reactive recovery (post-failure) + Proactive prevention (pre-empted churn)</div>
         </div>
         <div class="module-stats" id="roi-stats-bar">
           <span class="stat-chip chip-green" id="roi-net">₹0 net</span>
@@ -791,20 +791,29 @@
       <!-- Overall ROI banner -->
       <div class="roi-banner" id="roi-banner">
         <div class="roi-item">
-          <div class="roi-label">Total Recovered</div>
+          <div class="roi-label">Combined Impact</div>
           <div class="roi-value green" id="roi-recovered">₹0</div>
+          <div class="roi-sub-label muted" style="font-size:10px;margin-top:2px;" id="roi-stake">₹0 at stake</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">⚡ Reactive Recovered</div>
+          <div class="roi-value blue" id="roi-reactive" style="color:var(--blue, #3b82f6)">₹0</div>
+          <div class="roi-sub-label muted" style="font-size:10px;margin-top:2px;">Post-failure retries &amp; links</div>
+        </div>
+        <div class="roi-item">
+          <div class="roi-label">🛡️ Proactive Protected</div>
+          <div class="roi-value purple" id="roi-proactive" style="color:var(--primary, #8b5cf6)">₹0</div>
+          <div class="roi-sub-label muted" style="font-size:10px;margin-top:2px;">Pre-empted BT02 churn</div>
         </div>
         <div class="roi-item">
           <div class="roi-label">Channel Costs</div>
           <div class="roi-value red" id="roi-costs">₹0</div>
+          <div class="roi-sub-label muted" style="font-size:10px;margin-top:2px;">WhatsApp, SMS, IVR, API</div>
         </div>
         <div class="roi-item">
-          <div class="roi-label">Net ROI</div>
+          <div class="roi-label">Net Return (ROI)</div>
           <div class="roi-value" id="roi-netval">₹0</div>
-        </div>
-        <div class="roi-item">
-          <div class="roi-label">At Stake</div>
-          <div class="roi-value muted" id="roi-stake">₹0</div>
+          <div class="roi-sub-label muted" style="font-size:10px;margin-top:2px;">Total impact minus costs</div>
         </div>
       </div>
 

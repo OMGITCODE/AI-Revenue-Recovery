@@ -78,6 +78,7 @@ class TestMandateExpiryScannerLogic:
         prevent_entry = [e for e in entries if "BT02" in e.reasoning][0]
         assert prevent_entry.vpa == "rahul@oksbi"
         assert prevent_entry.outcome == "success"
+        assert prevent_entry.recovery_type == "proactive"
 
     @pytest.mark.asyncio
     async def test_simulate_proactive_renewal_protects_revenue(self):
@@ -98,6 +99,48 @@ class TestMandateExpiryScannerLogic:
         ledger_entries = recovery_ledger.all_entries()
         renew_entry = [e for e in ledger_entries if e.event_type == "recover"][0]
         assert renew_entry.amount_recovered == 1499.0
+        assert renew_entry.recovery_type == "proactive"
+
+        # Verify overall_roi cleanly separates proactive from reactive
+        roi = recovery_ledger.overall_roi()
+        assert roi["proactive_protected"] == 1499.0
+        assert roi["reactive_recovered"] == 0.0
+        assert roi["total_recovered"] == 1499.0
+
+    @pytest.mark.asyncio
+    async def test_proactive_vs_reactive_no_double_counting(self):
+        """
+        Validates that proactive renewals (churn prevention) and reactive recoveries (post-failure)
+        are cleanly segregated in RecoveryLedger without double counting.
+        """
+        # 1. Simulate a reactive recovery (e.g. U30 retry)
+        e_rx = recovery_ledger.log(
+            event_type="intervene",
+            vpa="user_rx@oksbi",
+            amount=999.0,
+            reasoning="U30 retry executed",
+            confidence=0.85,
+            channel="smart_retry",
+            recovery_type="reactive",
+        )
+        recovery_ledger.mark_outcome(e_rx.ledger_id, outcome="success", amount_recovered=999.0)
+
+        # 2. Simulate a proactive renewal (churn prevention)
+        await mandate_expiry_scanner.dispatch_proactive_nudge("mand_ybl_exp_003")
+        await mandate_expiry_scanner.simulate_proactive_renewal("mand_ybl_exp_003")
+
+        stats = mandate_expiry_scanner.get_stats()
+        roi = recovery_ledger.overall_roi()
+
+        # Mandate expiry scanner reports ONLY churn prevented
+        assert stats["revenue_protected"] == 2999.0
+
+        # Ledger overall_roi reports clean separation:
+        assert roi["reactive_recovered"] == 999.0
+        assert roi["proactive_protected"] == 2999.0
+        assert roi["total_recovered"] == 999.0 + 2999.0
+        assert roi["reactive_net_roi"] == 999.0  # smart_retry cost is 0.0
+        assert roi["proactive_net_roi"] == 2999.0 - (0.50 + 0.50)  # whatsapp nudge + renewal cost
 
 
 class TestMandateExpiryAPIEndpoints:

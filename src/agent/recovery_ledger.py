@@ -67,6 +67,7 @@ class LedgerEntry:
     channel:          str      = ""
     channel_cost:     float    = 0.0
     amount_recovered: float    = 0.0
+    recovery_type:    str      = "reactive"  # "reactive" (post-failure recovery) | "proactive" (pre-failure churn prevention)
 
     @property
     def roi(self) -> float:
@@ -79,6 +80,7 @@ class LedgerEntry:
             "ts":               self.ts.strftime("%H:%M:%S"),
             "ts_full":          self.ts.isoformat(),
             "event_type":       self.event_type,
+            "recovery_type":    self.recovery_type,
             "vpa":              self.vpa,
             "amount":           self.amount,
             "reasoning":        self.reasoning,
@@ -98,9 +100,10 @@ class RecoveryLedger:
     Append-only audit ledger for every agent decision.
 
     Usage:
-        ledger.log(event_type, vpa, amount, reasoning, confidence, channel)
+        ledger.log(event_type, vpa, amount, reasoning, confidence, channel, recovery_type="reactive")
         ledger.mark_outcome(ledger_id, outcome, amount_recovered)
-        ledger.roi_by_channel()   → dict of channel → {cost, recovered, roi}
+        ledger.roi_by_channel()   → dict of channel → {cost, recovered, roi, recovery_type}
+        ledger.overall_roi()      → dict of separated and combined ROI metrics
     """
 
     def __init__(self, max_entries: int = 500):
@@ -111,14 +114,19 @@ class RecoveryLedger:
 
     def log(
         self,
-        event_type:  str,
-        vpa:         str,
-        amount:      float,
-        reasoning:   str,
-        confidence:  float,
-        channel:     str   = "",
-        outcome:     str   = "pending",
+        event_type:    str,
+        vpa:           str,
+        amount:        float,
+        reasoning:     str,
+        confidence:    float,
+        channel:       str   = "",
+        outcome:       str   = "pending",
+        recovery_type: str   = "reactive",
     ) -> LedgerEntry:
+        # Auto-infer proactive if explicitly mandate_renewal or reasoning indicates pre-emptive expiry action
+        if recovery_type == "reactive" and (channel == "mandate_renewal" or "proactive" in reasoning.lower() or "bt02_prevented" in reasoning.lower()):
+            recovery_type = "proactive"
+
         now = datetime.now(IST)
         for prev in reversed(self._entries[-20:]):
             if (
@@ -126,29 +134,31 @@ class RecoveryLedger:
                 and prev.vpa == vpa
                 and abs(prev.amount - amount) < 0.01
                 and prev.reasoning == reasoning
+                and getattr(prev, "recovery_type", "reactive") == recovery_type
                 and (now - prev.ts).total_seconds() < 5.0
             ):
                 return prev
         cost = CHANNEL_COSTS.get(channel.lower().split("+")[0], 0.0)
         entry = LedgerEntry(
-            ledger_id    = str(uuid.uuid4())[:8].upper(),
-            ts           = now,
-            event_type   = event_type,
-            vpa          = vpa,
-            amount       = amount,
-            reasoning    = reasoning,
-            confidence   = max(0.0, min(1.0, confidence)),
-            outcome      = outcome,
-            channel      = channel,
-            channel_cost = cost,
+            ledger_id     = str(uuid.uuid4())[:8].upper(),
+            ts            = now,
+            event_type    = event_type,
+            recovery_type = recovery_type,
+            vpa           = vpa,
+            amount        = amount,
+            reasoning     = reasoning,
+            confidence    = max(0.0, min(1.0, confidence)),
+            outcome       = outcome,
+            channel       = channel,
+            channel_cost  = cost,
         )
         self._entries.append(entry)
         if len(self._entries) > self._max:
             self._entries = self._entries[-self._max:]   # trim oldest
 
         logger.info(
-            "[LEDGER %s] %s | %s | conf=%.2f | %s",
-            entry.ledger_id, event_type.upper(), vpa, confidence, reasoning
+            "[LEDGER %s][%s] %s | %s | conf=%.2f | %s",
+            entry.ledger_id, recovery_type.upper(), event_type.upper(), vpa, confidence, reasoning
         )
         return entry
 
@@ -178,11 +188,12 @@ class RecoveryLedger:
     def roi_by_channel(self) -> dict:
         """
         Returns per-channel ROI breakdown:
-          { channel: { count, total_cost, total_recovered, net_roi, avg_confidence } }
+          { channel: { count, total_cost, total_recovered, net_roi, avg_confidence, recovery_type } }
         """
         summary: dict = {}
         for e in self._entries:
             ch = e.channel or "unknown"
+            rec_type = getattr(e, "recovery_type", "reactive")
             if ch not in summary:
                 summary[ch] = {
                     "count":           0,
@@ -190,6 +201,7 @@ class RecoveryLedger:
                     "total_recovered": 0.0,
                     "net_roi":         0.0,
                     "avg_confidence":  0.0,
+                    "recovery_type":   rec_type,
                     "_conf_sum":       0.0,
                 }
             s = summary[ch]
@@ -206,24 +218,60 @@ class RecoveryLedger:
         return summary
 
     def overall_roi(self) -> dict:
+        """
+        Returns comprehensive ROI breakdown separating:
+          1. Reactive recovery: ₹ recovered after actual transaction failure occurred (e.g. smart retries, collect)
+          2. Proactive protection: ₹ protected before failure ever happened (e.g. T-72h mandate expiry renewal)
+          3. Combined headline impact: total net value delivered to merchant
+        """
+        reactive_entries  = [e for e in self._entries if getattr(e, "recovery_type", "reactive") == "reactive"]
+        proactive_entries = [e for e in self._entries if getattr(e, "recovery_type", "reactive") == "proactive"]
+
         total_cost      = sum(e.channel_cost     for e in self._entries)
         total_recovered = sum(e.amount_recovered for e in self._entries)
-        total_at_stake  = sum(e.amount           for e in self._entries
-                              if e.outcome != "skipped")
+        total_at_stake  = sum(e.amount           for e in self._entries if e.outcome != "skipped")
         success_count   = sum(1 for e in self._entries if e.outcome == "success")
-        total_actioned  = sum(1 for e in self._entries if e.outcome in ("success","failure"))
+        total_actioned  = sum(1 for e in self._entries if e.outcome in ("success", "failure"))
         avg_conf        = (
             sum(e.confidence for e in self._entries) / len(self._entries)
-            if self._entries else 0
+            if self._entries else 0.0
         )
+
+        # ── Reactive metrics (post-failure recovery) ──────────────────────────
+        reactive_cost      = sum(e.channel_cost     for e in reactive_entries)
+        reactive_recovered = sum(e.amount_recovered for e in reactive_entries)
+        reactive_at_stake  = sum(e.amount           for e in reactive_entries if e.outcome != "skipped")
+        reactive_success   = sum(1 for e in reactive_entries if e.outcome == "success")
+        reactive_actioned  = sum(1 for e in reactive_entries if e.outcome in ("success", "failure"))
+        reactive_rate      = round(reactive_success / reactive_actioned * 100, 1) if reactive_actioned else 0.0
+
+        # ── Proactive metrics (pre-failure churn prevention) ──────────────────
+        proactive_cost      = sum(e.channel_cost     for e in proactive_entries)
+        proactive_protected = sum(e.amount_recovered for e in proactive_entries)
+        proactive_at_stake  = sum(e.amount           for e in proactive_entries if e.outcome != "skipped")
+        proactive_success   = sum(1 for e in proactive_entries if e.outcome == "success")
+        proactive_actioned  = sum(1 for e in proactive_entries if e.outcome in ("success", "failure"))
+        proactive_rate      = round(proactive_success / proactive_actioned * 100, 1) if proactive_actioned else 0.0
+
         return {
-            "total_entries":      len(self._entries),
-            "total_cost":         round(total_cost, 2),
-            "total_recovered":    round(total_recovered, 2),
-            "net_roi":            round(total_recovered - total_cost, 2),
-            "total_at_stake":     round(total_at_stake, 2),
-            "recovery_rate_pct":  round(success_count / total_actioned * 100, 1) if total_actioned else 0,
-            "avg_confidence":     round(avg_conf, 2),
+            "total_entries":        len(self._entries),
+            "total_cost":           round(total_cost, 2),
+            "total_recovered":      round(total_recovered, 2),
+            "net_roi":              round(total_recovered - total_cost, 2),
+            "total_at_stake":       round(total_at_stake, 2),
+            "recovery_rate_pct":    round(success_count / total_actioned * 100, 1) if total_actioned else 0.0,
+            "avg_confidence":       round(avg_conf, 2),
+            # Explicit two-part separation
+            "reactive_recovered":   round(reactive_recovered, 2),
+            "reactive_cost":        round(reactive_cost, 2),
+            "reactive_net_roi":     round(reactive_recovered - reactive_cost, 2),
+            "reactive_at_stake":    round(reactive_at_stake, 2),
+            "reactive_rate_pct":    reactive_rate,
+            "proactive_protected":  round(proactive_protected, 2),
+            "proactive_cost":       round(proactive_cost, 2),
+            "proactive_net_roi":    round(proactive_protected - proactive_cost, 2),
+            "proactive_at_stake":   round(proactive_at_stake, 2),
+            "proactive_rate_pct":   proactive_rate,
         }
 
 

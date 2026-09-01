@@ -1220,11 +1220,15 @@ function renderLedgerTable(entries) {
     return;
   }
   tbody.innerHTML = entries.map(e => {
+    const isProactive = e.recovery_type === 'proactive' || (e.channel === 'mandate_renewal' && e.event_type === 'recover');
+    const modeBadge  = isProactive 
+      ? `<span class="stat-chip chip-amber" style="font-size:9.5px;padding:2px 5px;font-weight:700;letter-spacing:0.02em;">🛡️ PROACTIVE</span>`
+      : `<span class="stat-chip chip-blue" style="font-size:9.5px;padding:2px 5px;font-weight:700;letter-spacing:0.02em;">⚡ REACTIVE</span>`;
     const typeCls    = `ledger-type type-${esc(e.event_type)}`;
     const outcomeCls = LEDGER_OUTCOME_CLS[e.outcome] || 'muted';
     return `<tr>
       <td class="mono muted">${esc(e.ts)}</td>
-      <td><span class="${typeCls}">${esc(e.event_type)}</span></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span class="${typeCls}">${esc(e.event_type)}</span>${modeBadge}</div></td>
       <td class="muted">${esc(e.vpa)}</td>
       <td class="fw6">${fmtInr(e.amount)}</td>
       <td>${confPips(e.confidence)}</td>
@@ -1242,13 +1246,15 @@ async function loadROI() {
     const data = await res.json();
     const o    = data.overall;
     set('roi-recovered', fmtInr(o.total_recovered));
+    set('roi-reactive',  fmtInr(o.reactive_recovered ?? 0));
+    set('roi-proactive', fmtInr(o.proactive_protected ?? 0));
     set('roi-costs',     fmtInr(o.total_cost));
     const netEl = document.getElementById('roi-netval');
     if (netEl) {
       netEl.textContent = fmtInr(o.net_roi);
       netEl.className   = 'roi-value ' + (o.net_roi >= 0 ? 'green' : 'red');
     }
-    set('roi-stake', fmtInr(o.total_at_stake));
+    set('roi-stake', fmtInr(o.total_at_stake) + ' at stake');
     set('roi-net',   fmtInr(o.net_roi) + ' net');
     set('roi-rate',  o.recovery_rate_pct + '% rate');
     renderROITable(data.by_channel);
@@ -1267,8 +1273,10 @@ function renderROITable(byChannel) {
   tbody.innerHTML = rows.map(([ch, s]) => {
     const unitCost = CHANNEL_UNIT_COSTS[ch] ?? 0;
     const roiCls   = s.net_roi >= 0 ? 'status-ok fw6' : 'status-err fw6';
+    const isProactive = s.recovery_type === 'proactive' || ch === 'mandate_renewal';
+    const modeTag = isProactive ? ' <span class="stat-chip chip-amber" style="font-size:9px;padding:1px 4px;margin-left:4px">PROACTIVE</span>' : '';
     return `<tr>
-      <td class="fw6" style="text-transform:capitalize">${ch.replace(/_/g,' ')}</td>
+      <td class="fw6" style="text-transform:capitalize">${ch.replace(/_/g,' ')}${modeTag}</td>
       <td class="muted">${s.count}</td>
       <td class="muted">&#8377;${unitCost.toFixed(2)}</td>
       <td class="muted">${fmtInr(s.total_cost)}</td>

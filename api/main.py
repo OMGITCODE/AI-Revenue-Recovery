@@ -885,7 +885,7 @@ async def export_ledger(format: str = "json"):
         writer = csv.DictWriter(
             output,
             fieldnames=[
-                "ledger_id", "ts_full", "event_type", "vpa", "amount",
+                "ledger_id", "ts_full", "recovery_type", "event_type", "vpa", "amount",
                 "reasoning", "confidence", "outcome", "channel",
                 "channel_cost", "amount_recovered", "roi"
             ]
@@ -896,6 +896,7 @@ async def export_ledger(format: str = "json"):
             writer.writerow({
                 "ledger_id": row.get("ledger_id"),
                 "ts_full": row.get("ts_full"),
+                "recovery_type": row.get("recovery_type", "reactive"),
                 "event_type": row.get("event_type"),
                 "vpa": row.get("vpa"),
                 "amount": row.get("amount"),
@@ -922,7 +923,7 @@ async def export_ledger(format: str = "json"):
 
 @app.get("/api/roi")
 async def get_roi():
-    """Recovery ROI breakdown: net ₹ recovered minus channel cost per intervention type."""
+    """Recovery ROI breakdown: separated reactive recovery vs proactive churn prevention with per-channel costs."""
     return {
         "overall":    recovery_ledger.overall_roi(),
         "by_channel": recovery_ledger.roi_by_channel(),

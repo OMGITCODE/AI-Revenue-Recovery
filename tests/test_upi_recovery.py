@@ -457,5 +457,5 @@ class TestSimulatorRecoveryLedger:
         # Verify CSV audit export endpoint
         csv_resp = client.get("/api/ledger/export?format=csv")
         assert csv_resp.status_code == 200
-        assert "ledger_id,ts_full,event_type" in csv_resp.text
+        assert "ledger_id,ts_full,recovery_type,event_type" in csv_resp.text
 
