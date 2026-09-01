@@ -405,8 +405,8 @@ ai-revenue-recovery-agent/
 │
 ├── data/                        # Datasets & Batch Tools
 │   ├── batch_run.py             # Dataset runner script
-│   ├── upi_failures_dataset.json# 40 real-world failure scenarios
-│   └── expiring_mandates_dataset.json # 8 proactive expiring mandate scenarios
+│   ├── upi_failures_dataset.json# 60 real-world failure scenarios
+│   └── expiring_mandates_dataset.json # 20 proactive expiring mandate scenarios
 │
 ├── src/                         # Core Agent Engine
 │   ├── config.py                # Pydantic environment configuration (Gemini & OpenAI support)
@@ -444,7 +444,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (173 passing tests across 10 files)
+└── tests/                       # Test Suite (176 passing tests across 10 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
@@ -454,7 +454,7 @@ ai-revenue-recovery-agent/
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
     ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (12 tests)
-    └── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (12 tests)
+    └── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (15 tests)
 ```
 
 ---
@@ -504,7 +504,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 173 passed in ~5s
+# 176 passed in ~40s
 ```
 
 ---
