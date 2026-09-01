@@ -799,6 +799,15 @@ async function fireNextAutoDemo() {
 
 // ── Module Panels: Promise-to-Pay, Checkout, B2B, Expiring Mandates ─────────
 
+async function loadBandit() {
+  try {
+    const res = await fetch('/api/bandit');
+    if (res.ok) return await res.json();
+  } catch (e) {
+    // optional bandit inspector
+  }
+}
+
 async function loadModules() {
   await Promise.allSettled([
     loadStats(),
@@ -2095,9 +2104,20 @@ async function submitProjectChat(e) {
 
   inp.value = '';
 
-  // Explicit scenario trigger if starts with /sim, /scenario, or starts with 'simulate '
+  // Smart scenario trigger: explicit prefix OR natural simulation intent phrasing
   const lower = msg.toLowerCase();
-  if (lower.startsWith('/sim') || lower.startsWith('/scenario') || lower.startsWith('simulate ') || lower.startsWith('sim:')) {
+  const isSimIntent = lower.startsWith('/sim') || 
+                      lower.startsWith('/scenario') || 
+                      lower.startsWith('simulate ') || 
+                      lower.startsWith('sim:') || 
+                      lower.startsWith('show me ') || 
+                      lower.startsWith('what happens if ') ||
+                      lower.includes('mandate expiring') || 
+                      lower.includes('mandate expires') ||
+                      lower.includes('mandate lapse') ||
+                      lower.includes('force lapse');
+
+  if (isSimIntent) {
     const cleanPrompt = msg.replace(/^(\/sim|\/scenario|simulate|sim:)\s*/i, '');
     await executePromptScenario(cleanPrompt || msg);
     return;
