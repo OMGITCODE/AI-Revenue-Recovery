@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-173%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-174%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -103,7 +103,7 @@ RecoverIQ is **not a static if/else rules engine**. It incorporates a **Bayesian
                   ┌─────────────────────────────────────────────────────────┐
                   │              Online Bayesian Posterior Update           │
                   │         Success: α ← α + 1  |  Failure: β ← β + 1       │
-                  └─────────────────────────────────────────────────────────┘
+                  └────────────────────────────┬─────────────────────────┘
 ```
 
 ### 1. Bayesian Priors & Context Clustering
@@ -118,14 +118,10 @@ $$\text{Context Key} = \text{FailureCategory} \times \text{CustomerTier} \times 
 The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the customer's **Promise-to-Pay (P2P)** historical track record:
 - **Recency-Weighted**: Most recent commitment counts $2\times$.
 - **Broken Promise Penalty**: $-0.15$ deduction per broken commitment.
-- **Adaptive Execution**: High-trust payers ($>0.75$) receive gentle, non-intrusive self-cure windows; low-trust payers trigger automated escalation.
+- **Fulfilled Reward**: $+0.10$ reward per fulfilled promise.
 
 ### 3. Unified Customer Identity Graph & Behavioral History
-In production UPI Autopay and recurring commerce, the same customer interacts across multiple identifiers (Customer IDs, multiple VPAs like `@oksbi` or `@okhdfcbank`, phone numbers, and emails). RecoverIQ includes a bi-directional **Customer Identity Graph (`CustomerIdentityRegistry`)**:
-- **Automatic Identity Merging**: Merges disjoint identifiers into a unified canonical profile (`cust:identifier`) as cross-identifying transactions occur.
-- **Shared Spend Baselines**: Transactions recorded under any alias automatically update the customer's centralized rolling spend profile.
-- **Cross-Alias Suppression & Compliance**: Hardship holds, dispute pauses, or permanent opt-outs received on WhatsApp (by phone) immediately suppress automated retry attempts across all of that customer's linked VPAs.
-- **Unified Touch Caps**: Outbound contact frequency (max 3 daily touches) and retry budgets evaluate across all aliases, preventing customer harassment.
+Resolves customer identity across VPAs, phone numbers, customer IDs, and accounts into a single canonical entity with cross-channel touch-frequency caps (max 2 outbound touches/day across all VPAs) and combined historical spend analytics.
 
 ### 4. Spend Pattern Anomaly Engine & Anti-Depletion Guardrails (GR10)
 RecoverIQ models personalized historical spend baselines (mean, median, range, and standard deviation) for every customer profile:
@@ -135,9 +131,10 @@ RecoverIQ models personalized historical spend baselines (mean, median, range, a
 ### 5. Proactive Mandate Expiry Interceptor ($T-72\text{h}$ Pre-Failure Prevention)
 Shifts RecoverIQ from purely reactive recovery after payment failure to **proactive churn prevention**:
 - **Pre-Emptive $T-72\text{h}$ Lookahead Window**: Automatically scans active recurring UPI Autopay mandates within $24\text{--}72\text{h}$ of validity expiration.
-- **1-Click Self-Cure Magic Links**: Generates personalized Razorpay mandate renewal deep links and dispatches friendly conversational reminders via WhatsApp/SMS.
+- **⚡ Batch "Nudge All (<72h)"**: 1-click batch dispatch (`POST /api/mandates/nudge-all`) dispatches personalized renewal magic links across all pending expiring mandates simultaneously.
+- **💬 Authentic WhatsApp Message Live Preview**: Interactive modal displays the exact Hinglish WhatsApp chat bubble with read receipts (`✓✓`), clickable Razorpay 1-click renewal deep link, and "Open in WhatsApp Web" launcher.
 - **Pre-Empted Revenue Protection**: Eliminates NPCI `BT02` ("Mandate Expired") debit failures before they ever occur, preventing involuntary churn, bank decline fees, and service disruption.
-- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries.
+- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries in the ROI breakdown.
 
 ---
 
@@ -200,9 +197,9 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | File | Technology | Description |
 |---|---|---|
-| `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
-| `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, dynamic probability charts, audio alerts, and interactive simulation controls. |
-| `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
+| `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Global ↻ Refresh All synchronizer, Proactive Mandate Expiry Interceptor with authentic WhatsApp Preview Modal, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
+| `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, parallel multi-panel refresh synchronization with toast feedback, audio alerts, and interactive simulation controls. |
+| `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, authentic WhatsApp chat bubbles, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
 
 ---
 
@@ -218,7 +215,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 173 Tests across 10 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 174 Tests across 10 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -231,8 +228,8 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **12 tests** | Natural language scenario generator, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
-| **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **12 tests** | $T-72\text{h}$ validity window filtering, 1-click magic link dispatch, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **173 passing** | **100% test pass rate in ~5s** |
+| **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **13 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, ledger logging, simulator scenario, and live REST endpoints. |
+| **Total Test Suite** | `pytest tests/` | **174 passing** | **100% test pass rate in ~5s** |
 
 ---
 
@@ -616,6 +613,7 @@ LLM_PROVIDER=gemini
 | `GET` | `/api/mandates/all` | Lists all tracked recurring UPI Autopay mandates |
 | `GET` | `/api/mandates/stats` | Summary of pre-empted revenue & proactive nudge conversion metrics |
 | `POST`| `/api/mandates/proactive-nudge/{mandate_id}` | Dispatches 1-click WhatsApp renewal magic link before `BT02` expiry |
+| `POST`| `/api/mandates/nudge-all` | Batch dispatches proactive WhatsApp renewal magic links across all pending expiring mandates (<72h) |
 | `POST`| `/api/mandates/renew/{mandate_id}` | Simulates customer completing proactive mandate renewal |
 | `POST`| `/api/mandates/register` | Registers custom recurring mandate with expiration timestamp |
 | `POST`| `/api/webhook` | Ingests gateway webhooks with duplicate rejection & concurrency locks |
