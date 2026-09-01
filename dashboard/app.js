@@ -1237,18 +1237,53 @@ function renderP2PTable(promises) {
 async function p2pFulfil(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    await fetch(`/api/promises/${encodeURIComponent(id)}/fulfill`, {method:'POST'});
+    const res = await fetch(`/api/promises/${encodeURIComponent(id)}/fulfill`, {method:'POST'});
+    const data = await res.json();
     toast(`✓ Promise ${id} marked FULFILLED — ledger updated`, 'green');
-    await loadP2P(); await loadLedger(); await loadROI();
+
+    // Append verified confirmation to 2-Way WhatsApp Live Chat Window
+    if (typeof appendChatBubble === 'function') {
+      const confMsg = `Thank you! 🟢 Aapka ₹${data.amount || 0} ka payment against Promise #${id} successfully receive ho gaya hai. Aapka account active & in good standing hai.`;
+      appendChatBubble('agent', confMsg, {
+        intent: 'P2P_FULFILLED_CONFIRMATION',
+        confidence: 1.0,
+        action: `P2P Recovery Verified (${data.vpa || ''})`,
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+      });
+      const phoneInput = document.getElementById('wa-input-phone');
+      const amountInput = document.getElementById('wa-input-amount');
+      if (phoneInput && data.vpa) phoneInput.value = data.vpa;
+      if (amountInput && data.amount) amountInput.value = data.amount;
+    }
+
+    await Promise.all([loadP2P(), loadLedger(), loadROI(), loadStats()]);
   } catch(e) { toast('Failed: ' + e.message, 'red'); btn.disabled = false; btn.textContent = '✓ Fulfilled'; }
 }
 
 async function p2pBreak(id, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    await fetch(`/api/promises/${encodeURIComponent(id)}/break`, {method:'POST'});
+    const res = await fetch(`/api/promises/${encodeURIComponent(id)}/break`, {method:'POST'});
+    const data = await res.json();
     toast(`✗ Promise ${id} marked BROKEN — escalation logged`, 'red');
-    await loadP2P(); await loadLedger(); await loadROI();
+
+    // Append urgent escalation follow-up to 2-Way WhatsApp Live Chat Window
+    if (typeof appendChatBubble === 'function') {
+      const urgentMsg = `Namaste! ⚠️ Aapka ₹${data.amount || 0} ka payment commitment deadline miss ho gaya hai. Account escalation aur service interruption se bachne ke liye kripya abhi settle karein: https://rzp.io/l/p2p-urgent-${encodeURIComponent(data.vpa || 'pay')}`;
+      appendChatBubble('agent', urgentMsg, {
+        intent: 'P2P_BROKEN_ESCALATION',
+        confidence: 0.99,
+        action: `Broken Promise Escalation Nudge (${data.vpa || ''})`,
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+      });
+      // Pre-fill the 2-Way Live Chat input box
+      const phoneInput = document.getElementById('wa-input-phone');
+      const amountInput = document.getElementById('wa-input-amount');
+      if (phoneInput && data.vpa) phoneInput.value = data.vpa;
+      if (amountInput && data.amount) amountInput.value = data.amount;
+    }
+
+    await Promise.all([loadP2P(), loadLedger(), loadROI(), loadStats()]);
   } catch(e) { toast('Failed: ' + e.message, 'red'); btn.disabled = false; btn.textContent = '✗ Broken'; }
 }
 
