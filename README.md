@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-114%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-141%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -51,8 +51,8 @@ The recovery channel baseline probabilities in `benchmark.py` are calibrated fro
    - *Source*: **Twilio & Gupshup Indian FinTech Messaging Conversion Benchmarks**.
    - *Rationale*: Conversational Hinglish payment reminders with 1-click UPI deep links convert at 70–75%, compared to <8% for standard email dunning.
 6. **Regulatory Compliance Constraints**:
-   - *Source*: **RBI Master Directions on Recurring Transactions (RBI/2019-20/47)** and **TRAI Telecom Commercial Communications Customer Preference Regulations (TCCCPR)**.
-   - *Rationale*: Enforces hard circuit breaker on silent retries > ₹15,000 and suppresses outreach during 21:00–08:00 IST DND quiet hours.
+   - *Source*: **RBI Digital Payments - E-Mandate Framework** (Master Directions RBI/2019-20/47 & circulars on AFA relaxation) and **TRAI Telecom Commercial Communications Customer Preference Regulations (TCCCPR)**.
+   - *Rationale*: Enforces category-aware circuit breakers on silent retries (₹1,00,000 enhanced threshold for insurance premiums, mutual fund subscriptions, and credit card bill payments; standard ₹15,000 ceiling for general merchant categories and education fees) and suppresses outreach during 21:00–08:00 IST DND quiet hours.
 
 ### 🛡️ Robustness & Sensitivity Analysis (20% Pessimistic Haircut)
 
@@ -80,7 +80,8 @@ RecoverIQ is **not a static if/else rules engine**. It incorporates a **Bayesian
                                                ▼
                   ┌─────────────────────────────────────────────────────────┐
                   │               Deterministic Guardrails                  │
-                  │   • RBI >₹15k pre-debit rule   • TRAI DND (21:00-08:00) │
+                  │   • RBI Category Limits        • TRAI DND (21:00-08:00) │
+                  │     (₹1L Ins/MF/CC, ₹15k gen)                           │
                   │   • Max 3 lifetime retries     • Active P2P suppression │
                   └────────────────────────────┬────────────────────────────┘
                                                │ (Approved Candidate Pool)
@@ -147,7 +148,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 |---|---|---|
 | **Customer Identity Registry** | `src/agent/customer_identity.py` | Canonical identity graph resolving and merging fragmented customer identifiers (`customer_id`, multiple VPAs, phone numbers, and emails) into a unified profile. Synchronizes behavioral history, cumulative daily touches, retry counts, and compliance holds. |
 | **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
-| **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): ₹15k Autopay pre-debit circular ceiling, TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
+| **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): RBI Digital Payments E-Mandate Framework category-aware limits (GR7: ₹1,00,000 for insurance, mutual funds, and credit cards; ₹15,000 baseline ceiling for general/education), TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
 | **Spend Pattern & Anomaly Engine** | `src/agent/spend_pattern.py` | Calculates rolling statistical profiles (mean, median, range, std dev) per canonical customer profile and detects sudden upward spikes (e.g. 9x+ multiplier on micro-ticket payers), blocking blind automatic retries to protect customers from unexpected account depletion. |
 | **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active and auto-fulfilling upon recovery. |
 | **Recovery Audit Ledger** | `src/agent/recovery_ledger.py` | Immutable, append-only regulatory audit ledger recording every intervention decision, confidence score, plain-English reasoning, channel costs, and verified recovery. Supports live streaming and CSV/JSON export. |
@@ -212,18 +213,19 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 114 Tests across 7 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 141 Tests across 8 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
-| **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI ₹15k rule, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
+| **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI rules, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
+| **RBI Category Guardrail (GR7)** | `tests/test_rbi_category_guardrail.py` | **27 tests** | Category limits (₹1L vs ₹15k), education fallback, DecisionEngine static resolver, serialization, API /decide, and simulator scenarios. |
 | **Customer Identity Graph** | `tests/test_customer_identity.py` | **9 tests** | Canonical alias resolution, multi-identifier merging, cross-alias touch caps, shared spend baselines, and REST profile API. |
 | **Spend Pattern & Spike Anomalies** | `tests/test_spend_pattern.py` | **14 tests** | Rolling statistical profiles, micro-ticket 9x+ spike detection, repeat-user guardrail isolation, trust score stability, and REST API. |
 | **Hinglish Inbound NLP & WhatsApp** | `tests/test_inbound_whatsapp.py` | **15 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, etc.), promise date parsing, trust score adjustments, compliance holds. |
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
-| **Total Test Suite** | `pytest tests/` | **114 passing** | **100% test pass rate in ~4.5s** |
+| **Total Test Suite** | `pytest tests/` | **141 passing** | **100% test pass rate in ~3.5s** |
 
 
 ---
@@ -348,7 +350,7 @@ ai-revenue-recovery-agent/
 │   │   ├── customer_identity.py # Canonical Customer Identity Graph & Alias Matcher
 │   │   ├── spend_pattern.py     # Rolling spend profile & anomaly spike detector
 │   │   ├── bandit.py            # Bayesian Contextual Thompson Sampling MAB
-│   │   ├── decision_engine.py   # RBI (GR7/GR8) & TRAI Guardrails Engine
+│   │   ├── decision_engine.py   # Category-Aware RBI (GR7/GR8) & TRAI Guardrails Engine
 │   │   ├── idempotency.py       # Event deduplication cache & concurrency locks
 │   │   ├── promise_tracker.py   # Promise-to-Pay tracker + Payer Trust Score
 │   │   ├── recovery_ledger.py   # Traceable audit ledger & ROI calculator
@@ -375,14 +377,15 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (113 passing tests)
+└── tests/                       # Test Suite (141 passing tests across 8 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
+    ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
     ├── test_spend_pattern.py    # Historical profile & critical spike anomaly tests (14 tests)
     ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
-    └── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (13 tests)
+    └── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
 ```
 
 ---
@@ -432,7 +435,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 90 passed in ~3.2s
+# 141 passed in ~3.5s
 ```
 
 ---
