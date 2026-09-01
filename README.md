@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="RecoverIQ — AI Revenue Recovery Agent" width="760"/>
+  <img src="./assets/logo.png" alt="RecoverIQ — AI Revenue Recovery Agent" width="760"/>
 </p>
 
 # 🔄 RecoverIQ — AI Revenue Recovery Agent
