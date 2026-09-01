@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="RecoverIQ — AI Revenue Recovery Agent" width="760"/>
+</p>
+
 # 🔄 RecoverIQ — AI Revenue Recovery Agent
 
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
