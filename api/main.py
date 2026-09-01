@@ -404,6 +404,7 @@ async def reset():
     """Hard reset — clears ALL in-memory state across every module."""
     store.reset()
     # Clear all module state
+    mandate_expiry_scanner.reset()
     promise_tracker._promises.clear()
     checkout_agent._sessions.clear()
     b2b_chaser._receivables.clear()

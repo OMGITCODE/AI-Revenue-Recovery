@@ -1578,10 +1578,12 @@ body {
 .btn-green { background: var(--green-lt); color: var(--green); }
 .btn-red   { background: var(--red-lt);   color: var(--red); }
 .btn-blue  { background: var(--blue-lt);  color: var(--blue); }
+.btn-amber { background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
 
-[data-theme="dark"] .btn-green { background: #052E16; color: #4ADE80; }
-[data-theme="dark"] .btn-red   { background: #3B0A0A; color: #F87171; }
-[data-theme="dark"] .btn-blue  { background: #0C1A33; color: #60A5FA; }
+[data-theme="dark"] .btn-green { background: #052E16; color: #4ADE80; border: 1px solid #166534; }
+[data-theme="dark"] .btn-red   { background: #3B0A0A; color: #F87171; border: 1px solid #7F1D1D; }
+[data-theme="dark"] .btn-blue  { background: #0C1A33; color: #60A5FA; border: 1px solid #1E40AF; }
+[data-theme="dark"] .btn-amber { background: #3A2303; color: #FBBF24; border: 1px solid #78350F; }
 
 /* -- Toast Notifications ------------------------------------------------------ */
 

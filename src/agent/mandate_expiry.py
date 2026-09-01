@@ -145,15 +145,14 @@ class MandateExpiryScanner:
         for m in archetypes:
             self._mandates[m.mandate_id] = m
 
-    def find_expiring_mandates(self, within_hours: int = 72) -> List[ExpiringMandate]:
+    def find_expiring_mandates(self, within_hours: int = 72, include_renewed: bool = True) -> List[ExpiringMandate]:
         """
         Return active mandates that expire within the given lookahead window (default 72 hours).
-        Filters out already renewed mandates.
         """
         results = []
         for m in self._mandates.values():
             hrs = m.hours_remaining()
-            if 0 < hrs <= within_hours and m.status != "RENEWED":
+            if 0 < hrs <= within_hours and (include_renewed or m.status != "RENEWED"):
                 results.append(m)
         return sorted(results, key=lambda x: x.expiry_date)
 
