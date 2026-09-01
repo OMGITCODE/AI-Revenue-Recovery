@@ -3,8 +3,9 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-149%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
+[![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
 
@@ -502,6 +503,17 @@ RecoverIQ includes an isolated, fail-safe LLM intent classifier ([`src/integrati
 4. **HARDSHIP**: Financial or medical crisis (*"Job chali gayi hospital emergency hai"*).
 5. **WRONG_NUMBER**: Permanent opt-out / wrong alias (*"Wrong number bhai stop messaging"*).
 
+#### Multi-Turn Conversational Memory:
+Customer interactions are tracked across turns in an in-memory `ConversationLog` keyed by canonical customer identity.
+- When a customer sends a follow-up reply (e.g. *"Actually 5th nahi 7th ko dunga"*), the last ~5 turns are injected into the Gemini prompt context before the new turn.
+- Gemini seamlessly reconciles context shifts, updates Promise-to-Pay deadlines, and adjusts empathetic responses without losing prior state.
+
+#### 🤖 Ask RecoverIQ — Grounded Technical Q&A Assistant:
+A dedicated chatbot grounded directly in the project's technical architecture and `README.md`.
+- **Endpoint**: `POST /api/project-chat` (accepts `{ "message": "...", "history": [...] }`).
+- **Grounded Prompting**: Evaluates questions strictly against README architecture, benchmark formulas, and NPCI error codes with explicit instruction to clarify if an inquiry is outside documentation scope.
+- **Frontend Panel**: Expandable drawer on the dashboard navbar (`✨ 🤖 Ask AI (Gemini)`) with quick evaluation chips for benchmark comparisons, U30 salary handling, Thompson Sampling, and RBI limits.
+
 #### Configuring Gemini (Recommended) or OpenAI in `.env`:
 
 ```env
@@ -548,6 +560,8 @@ LLM_PROVIDER=gemini
 |---|---|---|
 | `GET` | `/api/customers` | Lists all active canonical customer profiles and alias mappings |
 | `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, compliance holds, and event ledger |
+| `GET` | `/api/whatsapp/conversation/{identifier}` | Retrieves multi-turn conversational message history for a customer |
+| `POST`| `/api/project-chat` | Grounded Q&A chatbot answering architecture, benchmark, and design questions via Gemini |
 | `GET` | `/api/pattern/history` | Retrieves statistical spend profile (mean, median, range, std dev) for a customer VPA/ID |
 | `POST`| `/api/pattern/analyze` | Evaluates a transaction amount against customer baseline for critical upward spikes (GR10) |
 | `GET` | `/api/scenarios` | Lists all 14 curated real-world failure scenario configurations |

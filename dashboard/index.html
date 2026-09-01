@@ -33,6 +33,9 @@
 
   <div class="nav-actions">
     <span class="nav-badge">Demo Mode</span>
+    <button class="btn-nav btn-ai" id="project-chat-btn" onclick="toggleProjectChat()" title="Ask RecoverIQ AI (Powered by Gemini)" style="background:linear-gradient(135deg, #3b82f6, #8b5cf6);color:#fff;border:none;box-shadow:0 0 12px rgba(139,92,246,0.35);font-weight:600;">
+      ✨ 🤖 Ask AI (Gemini)
+    </button>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
       <span id="theme-icon">☀️</span>
     </button>
@@ -1029,9 +1032,53 @@
   </div>
 </div>
 
+<!-- ── Project AI Assistant Chatbot (Powered by Gemini) ────────────────── -->
+<div class="ai-chat-drawer hidden" id="project-chat-drawer">
+  <div class="ai-chat-header">
+    <div class="ai-chat-title-group">
+      <div class="ai-avatar">🤖</div>
+      <div>
+        <div class="ai-chat-title">RecoverIQ AI Assistant</div>
+        <div class="ai-chat-badge"><span class="ai-dot"></span> Powered by Google Gemini · Grounded in README</div>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="toggleProjectChat()" style="padding:4px 8px;font-size:14px;">✕</button>
+  </div>
+
+  <div class="ai-chat-body" id="project-chat-messages">
+    <div class="ai-msg ai-msg-bot">
+      <div class="ai-msg-bubble">
+        👋 <strong>Hello! I'm your RecoverIQ AI Assistant.</strong><br/><br/>
+        I am directly grounded in the project's documentation, Monte Carlo benchmark results, 14 NPCI error codes, Bayesian Thompson Sampling MAB, and RBI/TRAI compliance guardrails.<br/><br/>
+        Ask me anything or select a prompt below!
+      </div>
+    </div>
+  </div>
+
+  <div class="ai-quick-prompts">
+    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does RecoverIQ compare against the Razorpay fixed-schedule retry baseline?')">
+      📊 Benchmark Results
+    </button>
+    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does RecoverIQ handle U30 insufficient funds failure code?')">
+      💡 U30 Salary Window
+    </button>
+    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('What RBI category limits and guardrails are enforced?')">
+      🛡️ RBI Limits (₹1L vs ₹15k)
+    </button>
+    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does Bayesian Thompson Sampling select recovery channels?')">
+      🧠 Thompson Sampling
+    </button>
+  </div>
+
+  <form class="ai-chat-input-bar" onsubmit="submitProjectChat(event)">
+    <input type="text" id="project-chat-input" placeholder="Ask anything about RecoverIQ..." autocomplete="off" />
+    <button type="submit" class="btn-submit" id="project-chat-send-btn">Send ➔</button>
+  </form>
+</div>
+
 <!-- Toast root -->
 <div id="toast-root"></div>
 
-<script src="/static/app.js?v=utf8-fixed"></script>
+<script src="/static/app.js?v=20260901-gemini-chat"></script>
 </body>
 </html>

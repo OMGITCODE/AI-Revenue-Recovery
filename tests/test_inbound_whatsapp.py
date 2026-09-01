@@ -330,3 +330,45 @@ class TestInboundAPIEndpoints:
         assert len(samples) >= 5
         assert any(s["intent"] == "promise" for s in samples)
         assert any(s["intent"] == "wrong_number" for s in samples)
+
+    @pytest.mark.asyncio
+    async def test_conversation_log_records_turns_and_passes_history(self):
+        from src.agent.whatsapp_inbound import conversation_log
+        conversation_log.clear()
+
+        # Simulate 2 sequential turns for the same customer
+        phone = "+91-9877766655"
+        vpa = "history_user@oksbi"
+
+        res1 = await whatsapp_inbound_handler.handle_inbound(
+            from_phone=phone,
+            customer_vpa=vpa,
+            message="Salary 5th ko aayegi",
+        )
+        assert res1.intent == InboundIntent.PROMISE
+
+        history = conversation_log.get_history(vpa)
+        assert len(history) == 2  # 1 customer + 1 bot
+        assert history[0]["role"] == "customer"
+        assert history[0]["text"] == "Salary 5th ko aayegi"
+        assert history[1]["role"] == "bot"
+
+        res2 = await whatsapp_inbound_handler.handle_inbound(
+            from_phone=phone,
+            customer_vpa=vpa,
+            message="Sorry 7th ko transfer karunga",
+        )
+        assert res2.intent == InboundIntent.PROMISE
+
+        history_after = conversation_log.get_history(vpa)
+        assert len(history_after) == 4
+
+    def test_project_chat_api_endpoint(self):
+        client = TestClient(app)
+        res = client.post("/api/project-chat", json={"message": "What were the benchmark results?"})
+        assert res.status_code == 200
+        data = res.json()
+        assert "reply" in data
+        assert len(data["reply"]) > 20
+        assert "provider" in data
+

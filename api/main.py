@@ -10,6 +10,7 @@ import json
 import sys
 import os
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request, Form
 from pydantic import BaseModel, Field
@@ -48,6 +49,7 @@ from src.agent.customer_identity import customer_identity_registry, normalize_id
 from src.integrations.setu_aa import setu_aa
 from src.integrations.messaging import messenger, verify_twilio_signature
 from src.integrations.razorpay_upi import verify_webhook_signature
+from src.integrations.llm_classifier import llm_classifier
 
 _decision_engine = DecisionEngine()
 
@@ -94,6 +96,7 @@ PUBLIC_EXACT_PATHS = {
     "/api/idempotency",
     "/api/suppression/list",
     "/api/whatsapp/inbound/samples",
+    "/api/project-chat",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -103,6 +106,7 @@ PUBLIC_EXACT_PATHS = {
 PUBLIC_PREFIX_PATHS = (
     "/static",
     "/api/webhook",             # HMAC / signature protected (Razorpay, Twilio)
+    "/api/whatsapp/conversation",
 )
 
 def is_public_route(path: str) -> bool:
@@ -1103,6 +1107,40 @@ async def get_suppressed_list():
             for k, v in suppression_registry._active_holds.items()
         },
     }
+
+
+# ── Task 2: Project-Grounded Q&A Chatbot (Ask RecoverIQ) ──────────────────────
+
+class ProjectChatRequest(BaseModel):
+    message: str = Field(..., description="User question about RecoverIQ architecture, benchmarks, or features")
+    history: Optional[List[Dict[str, Any]]] = Field(default=None, description="Optional previous conversational turns")
+
+ProjectChatRequest.model_rebuild()
+
+
+@app.post("/api/project-chat")
+async def project_chat_endpoint(req: ProjectChatRequest):
+    """
+    Project-Grounded Q&A Chatbot:
+    Answers judge, reviewer, and developer questions about RecoverIQ grounded
+    strictly in the project README.md and technical documentation.
+    """
+    clean_query = req.message.strip()
+    if not clean_query:
+        raise HTTPException(status_code=400, detail="Question message cannot be empty.")
+    result = await llm_classifier.ask_project_assistant(clean_query, history=req.history)
+    return result
+
+
+@app.get("/api/whatsapp/conversation/{identifier}")
+async def get_whatsapp_conversation(identifier: str):
+    """Retrieves multi-turn conversation history for a customer phone/VPA."""
+    from src.agent.whatsapp_inbound import conversation_log
+    return {
+        "identifier": identifier,
+        "history": conversation_log.get_history(identifier),
+    }
+
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────────────

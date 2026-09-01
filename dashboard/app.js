@@ -1530,3 +1530,136 @@ function clearWhatsAppChat() {
     <p>Click any quick scenario or send a custom reply to see the AI Intent Classifier and auto-response in real time.</p>
   </div>`;
 }
+
+// ── Project AI Assistant Chatbot (Powered by Gemini) ─────────────────────────
+let projectChatHistory = [];
+
+function toggleProjectChat() {
+  const drawer = document.getElementById('project-chat-drawer');
+  if (!drawer) return;
+  drawer.classList.toggle('hidden');
+  if (!drawer.classList.contains('hidden')) {
+    setTimeout(() => {
+      const inp = document.getElementById('project-chat-input');
+      if (inp) inp.focus();
+    }, 100);
+  }
+}
+
+function askQuickProjectQuestion(query) {
+  const inp = document.getElementById('project-chat-input');
+  if (inp) inp.value = query;
+  submitProjectChat();
+}
+
+async function submitProjectChat(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('project-chat-input');
+  const btn = document.getElementById('project-chat-send-btn');
+  const msg = inp ? inp.value.trim() : '';
+  if (!msg) return;
+
+  inp.value = '';
+  appendProjectChatMessage('user', msg);
+
+  // Show typing indicator
+  const typingId = showProjectChatTyping();
+  if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
+
+  try {
+    const res = await fetch('/api/project-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: msg,
+        history: projectChatHistory.slice(-6),
+      }),
+    });
+    
+    removeProjectChatTyping(typingId);
+    
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const reply = data.reply || "Sorry, I couldn't process that question.";
+
+    appendProjectChatMessage('bot', reply, data.provider);
+
+    // Save to local session history
+    projectChatHistory.push({ role: 'user', content: msg });
+    projectChatHistory.push({ role: 'assistant', content: reply });
+  } catch (err) {
+    removeProjectChatTyping(typingId);
+    appendProjectChatMessage('bot', `⚠️ Could not reach Gemini Assistant: ${err.message}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send ➔'; }
+    if (inp) inp.focus();
+  }
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^-\s+(.*)$/gm, '• $1')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+}
+
+function appendProjectChatMessage(sender, text, provider) {
+  const container = document.getElementById('project-chat-messages');
+  if (!container) return;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `ai-msg ai-msg-${sender}`;
+
+  const bubbleDiv = document.createElement('div');
+  bubbleDiv.className = 'ai-msg-bubble';
+
+  if (sender === 'user') {
+    bubbleDiv.textContent = text;
+  } else {
+    bubbleDiv.innerHTML = formatMarkdown(text);
+    if (provider) {
+      const badge = document.createElement('div');
+      badge.style.fontSize = '10px';
+      badge.style.color = 'var(--text-3)';
+      badge.style.marginTop = '6px';
+      badge.textContent = `⚡ Grounded response via ${provider.toUpperCase()}`;
+      bubbleDiv.appendChild(badge);
+    }
+  }
+
+  msgDiv.appendChild(bubbleDiv);
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showProjectChatTyping() {
+  const container = document.getElementById('project-chat-messages');
+  if (!container) return null;
+
+  const id = 'typing-' + Date.now();
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'ai-msg ai-msg-bot';
+  typingDiv.id = id;
+  typingDiv.innerHTML = `
+    <div class="ai-msg-bubble" style="background:var(--canvas);">
+      <div class="ai-typing-indicator">
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+      </div>
+    </div>
+  `;
+  container.appendChild(typingDiv);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeProjectChatTyping(id) {
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+

@@ -143,6 +143,47 @@ class InboundClassificationResult:
         }
 
 
+# ── Task 1: Multi-Turn Conversation Memory ─────────────────────────────────────
+
+class ConversationLog:
+    """
+    In-memory per-customer multi-turn conversation tracker keyed by canonical customer ID.
+    Stores turns with role ('customer' | 'bot'), text message, and timestamp.
+    """
+    def __init__(self, max_history_per_user: int = 10):
+        self._history: Dict[str, List[Dict[str, Any]]] = {}
+        self._max_history = max_history_per_user
+
+    def append_turn(self, identifier: str, role: str, text: str):
+        if not identifier or not text:
+            return
+        canonical_id = customer_identity_registry.resolve_canonical_id(identifier)
+        if canonical_id not in self._history:
+            self._history[canonical_id] = []
+
+        self._history[canonical_id].append({
+            "role": role,
+            "text": text,
+            "ts": datetime.now(IST).isoformat(),
+        })
+
+        if len(self._history[canonical_id]) > self._max_history:
+            self._history[canonical_id] = self._history[canonical_id][-self._max_history:]
+
+    def get_history(self, identifier: str, last_n: int = 6) -> List[Dict[str, Any]]:
+        if not identifier:
+            return []
+        canonical_id = customer_identity_registry.resolve_canonical_id(identifier)
+        turns = self._history.get(canonical_id, [])
+        return turns[-last_n:] if last_n else turns
+
+    def clear(self):
+        self._history.clear()
+
+
+conversation_log = ConversationLog()
+
+
 class WhatsAppInboundHandler:
     """
     Classifies conversational Hinglish/English inbound replies and routes
@@ -230,13 +271,18 @@ class WhatsAppInboundHandler:
 
         return top_intent, confidence, keywords, deadline_hours
 
-    async def classify_message(self, message: str) -> Tuple[InboundIntent, float, List[str], Optional[int], str]:
+    async def classify_message(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[InboundIntent, float, List[str], Optional[int], str]:
         """
-        Classifies inbound text using LLM first; gracefully falls back to deterministic regex.
+        Classifies inbound text using LLM first (with multi-turn history if present);
+        gracefully falls back to deterministic regex.
         Returns: (intent, confidence, matched_keywords: List[str], deadline_hours: Optional[int], reasoning: str)
         """
         # 1. Attempt LLM classification
-        llm_result = await llm_classifier.classify(message)
+        llm_result = await llm_classifier.classify(message, history=history)
         if llm_result:
             raw_intent = llm_result.get("intent", "").lower().strip()
             try:
@@ -247,7 +293,8 @@ class WhatsAppInboundHandler:
             conf = float(llm_result.get("confidence", 0.85))
             keywords: List[str] = []
             deadline_hours = llm_result.get("extracted_deadline_hours")
-            reasoning = f"[LLM] {llm_result.get('reasoning', 'Classified via LLM')} (conf: {conf:.0%})"
+            provider_name = llm_result.get("provider", "LLM").upper()
+            reasoning = f"[{provider_name}] {llm_result.get('reasoning', 'Classified via LLM')} (conf: {conf:.0%})"
             return intent, conf, keywords, deadline_hours, reasoning
 
         # 2. Fallback to deterministic regex
@@ -284,8 +331,14 @@ class WhatsAppInboundHandler:
         if from_phone or customer_vpa or customer_id:
             customer_identity_registry.resolve_canonical_id(customer_vpa, from_phone, customer_id)
 
-        intent, conf, keywords, deadline_hours, reasoning = await self.classify_message(message)
+        canonical_id = customer_identity_registry.resolve_canonical_id(customer_vpa, from_phone, customer_id)
+        history = conversation_log.get_history(canonical_id)
+
+        intent, conf, keywords, deadline_hours, reasoning = await self.classify_message(message, history=history)
         identifier = customer_vpa or from_phone or customer_id
+
+        # Record incoming turn into conversation memory
+        conversation_log.append_turn(canonical_id, role="customer", text=message)
 
         if intent == InboundIntent.PROMISE:
             # 1) Register / update Promise-to-Pay
@@ -400,6 +453,9 @@ class WhatsAppInboundHandler:
                 "Namaste! Aapke payment query ke liye: Bill check karein: https://rzp.io/l/help "
                 "ya help ke liye support@recoveriq.ai par likhein."
             )
+
+        # Record outgoing bot reply into conversation memory
+        conversation_log.append_turn(canonical_id, role="bot", text=reply_text)
 
         return InboundClassificationResult(
             intent=intent,
