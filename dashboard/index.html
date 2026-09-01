@@ -374,6 +374,7 @@
             <span class="stat-chip chip-blue"  id="exp-nudged">0 nudges sent</span>
             <span class="stat-chip chip-green" id="exp-protected">₹0 churn prevented</span>
           </div>
+          <button class="btn-act btn-amber" id="exp-nudge-all-btn" onclick="nudgeAllExpiring(this)" title="Dispatch WhatsApp renewal links to all pending expiring mandates">⚡ Nudge All (&lt;72h)</button>
           <button class="btn-ghost" onclick="loadExpiringMandates()" title="Refresh expiring mandates">↻ Refresh</button>
         </div>
       </div>
@@ -1088,6 +1089,44 @@
   <div class="modal-footer">
     <button class="btn-ghost" onclick="closeSettleDialog()">Cancel</button>
     <button class="btn-submit" id="settle-submit" onclick="confirmSettle()">&#8377;&nbsp; Confirm Settlement</button>
+  </div>
+</div>
+
+<!-- ── WhatsApp Nudge Live Preview Modal ─────────────────────────────────── -->
+<div class="modal-backdrop" id="wa-preview-backdrop" onclick="closeWaPreviewModal()"></div>
+<div class="modal modal-sm wa-modal-window" id="wa-preview-modal" role="dialog" aria-modal="true" aria-labelledby="wa-modal-name">
+  <div class="wa-modal-topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="wa-avatar-badge">💬</div>
+      <div>
+        <div class="wa-modal-contact-name" id="wa-modal-name">Priya Mehta</div>
+        <div class="wa-modal-contact-meta" id="wa-modal-vpa">priya@okhdfcbank · HDFC Bank</div>
+      </div>
+    </div>
+    <button class="btn-ghost" style="color:#fff;" onclick="closeWaPreviewModal()">&#x2715;</button>
+  </div>
+  <div class="wa-modal-chat-canvas">
+    <div class="wa-modal-timestamp-pill" id="wa-modal-timestamp">Proactive Lookahead Nudge (T-72h)</div>
+    <div class="wa-modal-speech-bubble">
+      <div class="wa-modal-bubble-text" id="wa-modal-msg">Loading message...</div>
+      <div class="wa-modal-bubble-meta">
+        <span id="wa-modal-bubble-time">16:26</span>
+        <span class="wa-blue-ticks" title="Delivered & Read">✓✓</span>
+      </div>
+    </div>
+    <div class="wa-link-card">
+      <div class="wa-link-card-header">
+        <span class="wa-link-icon">⚡</span>
+        <strong>Razorpay 1-Click Mandate Renewal</strong>
+      </div>
+      <div class="wa-link-card-url" id="wa-modal-link">https://rzp.io/l/demo-mandate-CUST-HDFC-002</div>
+      <div class="wa-link-card-desc">No login required · Instant UPI Autopay reactivation</div>
+    </div>
+  </div>
+  <div class="wa-modal-action-footer">
+    <button class="btn-ghost" onclick="closeWaPreviewModal()">Close</button>
+    <a href="#" id="wa-modal-web-btn" target="_blank" class="btn-act btn-blue" style="text-decoration:none;">↗ Open in WhatsApp Web</a>
+    <button class="btn-act btn-green" id="wa-modal-renew-action" onclick="renewFromPreviewModal()">✓ Simulate Renewal</button>
   </div>
 </div>
 

@@ -1337,6 +1337,24 @@ async def trigger_proactive_nudge(mandate_id: str):
     }
 
 
+@app.post("/api/mandates/nudge-all")
+async def nudge_all_expiring_mandates(within_hours: int = 72):
+    """
+    Dispatches proactive WhatsApp/SMS renewal nudges for all pending mandates expiring within window.
+    """
+    nudged = await mandate_expiry_scanner.dispatch_all_pending_nudges(within_hours=within_hours)
+    from api.simulator import _notify_module_listeners
+    await _notify_module_listeners()
+
+    return {
+        "status": "success",
+        "count": len(nudged),
+        "message": f"Dispatched {len(nudged)} proactive WhatsApp renewal nudges across pending mandates",
+        "mandates": [m.to_dict() for m in nudged],
+        "stats": mandate_expiry_scanner.get_stats(),
+    }
+
+
 @app.post("/api/mandates/renew/{mandate_id}")
 async def simulate_proactive_renewal(mandate_id: str):
     """

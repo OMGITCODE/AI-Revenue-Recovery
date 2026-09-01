@@ -788,13 +788,16 @@ async function loadModules() {
 }
 
 // ── Proactive Mandate Expiry Interceptor ─────────────────────────────────────
+let currentExpiringMandates = [];
+let currentPreviewMandateId = null;
 
 async function loadExpiringMandates() {
   try {
     const res = await fetch('/api/mandates/expiring?within_hours=72');
     const data = await res.json();
+    currentExpiringMandates = data.mandates || [];
     renderExpiringStats(data.stats);
-    renderExpiringTable(data.mandates);
+    renderExpiringTable(currentExpiringMandates);
   } catch (e) { console.warn('Expiring mandates load failed', e); }
 }
 
@@ -819,7 +822,15 @@ function renderExpiringTable(mandates) {
     const hrs = m.hours_remaining;
     const hrsBadge = hrs <= 24 ? `<span class="stat-chip chip-red" style="font-size:11px">${hrs}h left ⚠️</span>`
                               : `<span class="stat-chip chip-amber" style="font-size:11px">${hrs}h left</span>`;
-    const stCls = m.status === 'RENEWED' ? 'status-ok' : m.status === 'NUDGED' ? 'p2p-pending' : 'muted';
+    
+    let stBadge = '';
+    if (m.status === 'RENEWED') {
+      stBadge = `<span class="stat-chip chip-green" style="font-size:10.5px">🛡️ Churn Prevented</span>`;
+    } else if (m.status === 'NUDGED') {
+      stBadge = `<span class="stat-chip chip-blue" style="font-size:10.5px">📱 WhatsApp Dispatched</span>`;
+    } else {
+      stBadge = `<span class="stat-chip chip-amber" style="font-size:10.5px">⏳ Awaiting Nudge</span>`;
+    }
 
     tr.innerHTML = `
       <td class="mono fw6">${esc(m.mandate_id)}</td>
@@ -829,7 +840,7 @@ function renderExpiringTable(mandates) {
       <td>${esc(m.bank_name)}</td>
       <td class="muted" style="font-size:11px">${esc(m.expiry_date)}</td>
       <td>${hrsBadge}</td>
-      <td class="${stCls}">${esc(m.status)}</td>
+      <td>${stBadge}</td>
       <td class="exp-actions-td"></td>
     `;
     const actionTd = tr.querySelector('.exp-actions-td');
@@ -840,17 +851,47 @@ function renderExpiringTable(mandates) {
       btn.onclick = function() { triggerProactiveNudge(m.mandate_id, this); };
       actionTd.appendChild(btn);
     } else if (m.status === 'NUDGED') {
-      const btn = document.createElement('button');
-      btn.className = 'btn-act btn-green';
-      btn.textContent = '✓ Simulate Renewal';
-      btn.onclick = function() { simulateProactiveRenewal(m.mandate_id, this); };
-      actionTd.appendChild(btn);
+      const wrap = document.createElement('div');
+      wrap.style.display = 'inline-flex';
+      wrap.style.gap = '6px';
+      wrap.style.alignItems = 'center';
+
+      const renewBtn = document.createElement('button');
+      renewBtn.className = 'btn-act btn-green';
+      renewBtn.textContent = '✓ Simulate Renewal';
+      renewBtn.onclick = function() { simulateProactiveRenewal(m.mandate_id, this); };
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'btn-act btn-blue';
+      prevBtn.textContent = '💬 Preview';
+      prevBtn.title = 'Preview personalized WhatsApp message';
+      prevBtn.onclick = function() { openWaPreviewModal(m.mandate_id); };
+
+      wrap.appendChild(renewBtn);
+      wrap.appendChild(prevBtn);
+      actionTd.appendChild(wrap);
     } else {
+      const wrap = document.createElement('div');
+      wrap.style.display = 'inline-flex';
+      wrap.style.gap = '6px';
+      wrap.style.alignItems = 'center';
+
       const span = document.createElement('span');
       span.className = 'status-ok';
-      span.style.fontSize = '11px';
+      span.style.fontSize = '11.5px';
+      span.style.fontWeight = '600';
       span.textContent = '✓ Pre-Empted';
-      actionTd.appendChild(span);
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn-act btn-ghost';
+      viewBtn.style.padding = '2px 6px';
+      viewBtn.style.fontSize = '10.5px';
+      viewBtn.textContent = '💬 View';
+      viewBtn.onclick = function() { openWaPreviewModal(m.mandate_id); };
+
+      wrap.appendChild(span);
+      wrap.appendChild(viewBtn);
+      actionTd.appendChild(wrap);
     }
     tbody.appendChild(tr);
   });
@@ -867,7 +908,7 @@ async function triggerProactiveNudge(id, btn) {
     if (typeof appendChatBubble === 'function') {
       const m = data.mandate;
       const hrsLeft = Math.round(m.hours_remaining);
-      const text = `Namaste ${m.customer_name}! 🔔 Aapka ${m.plan_name} ka UPI Autopay mandate (${m.mandate_id}) agle ${hrsLeft} ghante mein expire ho raha hai. Service uninterrupted rakhne ke liye 1-click mein renew karein: ${m.renewal_link}`;
+      const text = m.whatsapp_message || `Namaste ${m.customer_name}! 🔔 Aapka ${m.plan_name} ka UPI Autopay mandate (${m.mandate_id}) agle ${hrsLeft} ghante mein expire ho raha hai. Service uninterrupted rakhne ke liye 1-click mein renew karein: ${m.renewal_link}`;
       appendChatBubble('agent', text, {
         intent: 'PROACTIVE_NUDGE',
         confidence: 0.95,
@@ -886,6 +927,17 @@ async function triggerProactiveNudge(id, btn) {
   finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Send WhatsApp Nudge'; } }
 }
 
+async function nudgeAllExpiring(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⚡ Sending All…'; }
+  try {
+    const res = await fetch('/api/mandates/nudge-all?within_hours=72', { method: 'POST' });
+    const data = await res.json();
+    toast(`🚀 ${data.message}!`, 'green');
+    await loadExpiringMandates(); await loadLedger(); await loadROI();
+  } catch (e) { toast('Failed: ' + e.message, 'red'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Nudge All (<72h)'; } }
+}
+
 async function simulateProactiveRenewal(id, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Renewing…'; }
   try {
@@ -895,6 +947,56 @@ async function simulateProactiveRenewal(id, btn) {
     await loadExpiringMandates(); await loadLedger(); await loadROI();
   } catch (e) { toast('Failed: ' + e.message, 'red'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✓ Simulate Renewal'; } }
+}
+
+function openWaPreviewModal(mandateId) {
+  const m = currentExpiringMandates.find(x => x.mandate_id === mandateId);
+  if (!m) return;
+  currentPreviewMandateId = mandateId;
+
+  set('wa-modal-name', m.customer_name);
+  set('wa-modal-vpa', `${m.customer_vpa} · ${m.bank_name} Bank`);
+  set('wa-modal-msg', m.whatsapp_message || `Namaste ${m.customer_name}! 🔔 Aapka ${m.plan_name} ka UPI Autopay mandate (${m.mandate_id}) agle ${Math.round(m.hours_remaining)} ghante mein expire ho raha hai. Service uninterrupted rakhne ke liye 1-click mein renew karein: ${m.renewal_link}`);
+  set('wa-modal-link', m.renewal_link || `https://rzp.io/l/demo-mandate-${m.customer_id}`);
+  set('wa-modal-bubble-time', new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+  set('wa-modal-timestamp', `Proactive Lookahead Nudge · ${m.hours_remaining}h before expiry`);
+
+  const webBtn = document.getElementById('wa-modal-web-btn');
+  if (webBtn) {
+    const encodedText = encodeURIComponent(m.whatsapp_message || '');
+    webBtn.href = `https://wa.me/919800000001?text=${encodedText}`;
+  }
+
+  const renewBtn = document.getElementById('wa-modal-renew-action');
+  if (renewBtn) {
+    if (m.status === 'RENEWED') {
+      renewBtn.textContent = '✓ Already Renewed';
+      renewBtn.disabled = true;
+    } else {
+      renewBtn.textContent = `✓ Simulate Renewal (${fmtInr(m.amount)})`;
+      renewBtn.disabled = false;
+    }
+  }
+
+  const backdrop = document.getElementById('wa-preview-backdrop');
+  const modal = document.getElementById('wa-preview-modal');
+  if (backdrop) backdrop.classList.add('open');
+  if (modal) modal.classList.add('open');
+}
+
+function closeWaPreviewModal() {
+  const backdrop = document.getElementById('wa-preview-backdrop');
+  const modal = document.getElementById('wa-preview-modal');
+  if (backdrop) backdrop.classList.remove('open');
+  if (modal) modal.classList.remove('open');
+  currentPreviewMandateId = null;
+}
+
+async function renewFromPreviewModal() {
+  if (!currentPreviewMandateId) return;
+  const id = currentPreviewMandateId;
+  closeWaPreviewModal();
+  await simulateProactiveRenewal(id);
 }
 
 // ── Promise-to-Pay ───────────────────────────────────────────────────────────

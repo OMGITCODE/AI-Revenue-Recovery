@@ -54,6 +54,16 @@ class ExpiringMandate:
         """Calculate days remaining until mandate expires."""
         return self.hours_remaining() / 24.0
 
+    def get_whatsapp_message(self) -> str:
+        """Generate formatted personalized Hinglish WhatsApp nudge text."""
+        hours_left = int(round(self.hours_remaining()))
+        link = self.renewal_link or f"https://rzp.io/l/demo-mandate-{self.customer_id}"
+        return (
+            f"Namaste {self.customer_name}! 🔔 Aapka {self.plan_name} ka UPI Autopay mandate ({self.mandate_id}) "
+            f"agle {hours_left} ghante mein expire ho raha hai. "
+            f"Service uninterrupted rakhne ke liye 1-click mein renew karein: {link}"
+        )
+
     def to_dict(self) -> dict:
         return {
             "mandate_id":        self.mandate_id,
@@ -67,7 +77,8 @@ class ExpiringMandate:
             "hours_remaining":   round(self.hours_remaining(), 1),
             "days_remaining":    round(self.days_remaining(), 1),
             "status":            self.status,
-            "renewal_link":      self.renewal_link,
+            "renewal_link":      self.renewal_link or f"https://rzp.io/l/demo-mandate-{self.customer_id}",
+            "whatsapp_message":  self.get_whatsapp_message(),
             "nudged_at":         self.nudged_at.strftime("%Y-%m-%d %H:%M IST") if self.nudged_at else None,
             "renewed_at":        self.renewed_at.strftime("%Y-%m-%d %H:%M IST") if self.renewed_at else None,
             "created_at":        self.created_at.strftime("%Y-%m-%d %H:%M IST"),
@@ -249,6 +260,16 @@ class MandateExpiryScanner:
             m.customer_vpa, m.mandate_id, link, entry.ledger_id,
         )
         return m
+
+    async def dispatch_all_pending_nudges(self, within_hours: int = 72) -> List[ExpiringMandate]:
+        """Dispatch proactive WhatsApp renewal nudges for all pending expiring mandates."""
+        nudged = []
+        for m in self.find_expiring_mandates(within_hours=within_hours, include_renewed=False):
+            if m.status == "PENDING":
+                res = await self.dispatch_proactive_nudge(m.mandate_id)
+                if res:
+                    nudged.append(res)
+        return nudged
 
     async def simulate_proactive_renewal(self, mandate_id: str) -> Optional[ExpiringMandate]:
         """
