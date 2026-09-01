@@ -279,7 +279,7 @@ class TestModuleDeduplication:
 
     def test_b2b_chaser_deduplication(self):
         from src.agent.b2b_chaser import B2BChaser
-        chaser = B2BChaser()
+        chaser = B2BChaser(seed=False)
         r1 = chaser.add_receivable("Debtor Inc", "debtor@okicici", "+91-9800000001", "INV-DUP-01", 50000.0, "2026-07-01")
         r2 = chaser.add_receivable("Debtor Inc", "debtor@okicici", "+91-9800000001", "INV-DUP-01", 50000.0, "2026-07-01")
         assert r1.receivable_id == r2.receivable_id

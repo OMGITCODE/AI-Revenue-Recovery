@@ -233,8 +233,30 @@ class B2BChaser:
         chaser.settle(receivable_id, amount_received)
     """
 
-    def __init__(self):
+    def __init__(self, seed: bool = True):
         self._receivables: Dict[str, Receivable] = {}
+        if seed:
+            self._seed_archetypes()
+
+    def _seed_archetypes(self):
+        now = datetime.now(IST)
+        samples = [
+            ("Infosys BPO",      "infosys@okhdfc",   "+91-9800000001", "INV-2026-001", 185000.0, (now - timedelta(days=22)).strftime("%Y-%m-%d")),
+            ("TechCorp Pvt Ltd", "techcorp@oksbi",   "+91-9800000002", "INV-2026-002",  42000.0, (now - timedelta(days=38)).strftime("%Y-%m-%d")),
+            ("StartupXYZ",       "startup@okaxis",   "+91-9800000003", "INV-2026-003",  12500.0, (now - timedelta(days=63)).strftime("%Y-%m-%d")),
+            ("Mega Retail Ltd",  "megaretail@ybl",   "+91-9800000004", "INV-2026-004", 320000.0, (now - timedelta(days=109)).strftime("%Y-%m-%d")),
+            ("CloudSoft India",  "cloudsoft@okicici","+91-9800000005", "INV-2026-005",   8900.0, (now - timedelta(days=12)).strftime("%Y-%m-%d")),
+        ]
+        for debtor, vpa, phone, inv, amount, due_str in samples:
+            self.add_receivable(debtor, vpa, phone, inv, amount, due_str)
+
+        for r in self.all_receivables():
+            if not r.actions:
+                self.chase(r.receivable_id)
+
+    def reset(self):
+        self._receivables.clear()
+        self._seed_archetypes()
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
