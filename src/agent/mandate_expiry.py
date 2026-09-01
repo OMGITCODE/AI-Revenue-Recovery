@@ -223,6 +223,12 @@ class MandateExpiryScanner:
                 to="+919800000001",
                 body=msg,
             )
+            # Record outgoing proactive nudge in multi-turn conversation memory
+            try:
+                from .whatsapp_inbound import conversation_log
+                conversation_log.append_turn(f"cust:{m.customer_vpa}", role="bot", text=msg)
+            except Exception:
+                pass
         except Exception as e:
             logger.warning("Failed to send proactive WhatsApp nudge: %s", e)
 

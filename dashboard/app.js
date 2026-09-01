@@ -862,6 +862,25 @@ async function triggerProactiveNudge(id, btn) {
     const res = await fetch(`/api/mandates/proactive-nudge/${encodeURIComponent(id)}`, { method: 'POST' });
     const data = await res.json();
     toast(`🔔 Proactive 1-click renewal link sent to ${data.mandate.customer_vpa} — ledger updated`, 'blue');
+
+    // Append outbound WhatsApp notification to 2-Way WhatsApp Live Chat Window
+    if (typeof appendChatBubble === 'function') {
+      const m = data.mandate;
+      const hrsLeft = Math.round(m.hours_remaining);
+      const text = `Namaste ${m.customer_name}! 🔔 Aapka ${m.plan_name} ka UPI Autopay mandate (${m.mandate_id}) agle ${hrsLeft} ghante mein expire ho raha hai. Service uninterrupted rakhne ke liye 1-click mein renew karein: ${m.renewal_link}`;
+      appendChatBubble('agent', text, {
+        intent: 'PROACTIVE_NUDGE',
+        confidence: 0.95,
+        action: `Dispatched 1-click renewal link before BT02 expiry (${m.customer_vpa})`,
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+      });
+      // Pre-fill the custom reply box with this customer's details
+      const phoneInput = document.getElementById('wa-input-phone');
+      const amountInput = document.getElementById('wa-input-amount');
+      if (phoneInput) phoneInput.value = m.customer_vpa;
+      if (amountInput) amountInput.value = m.amount;
+    }
+
     await loadExpiringMandates(); await loadLedger(); await loadROI();
   } catch (e) { toast('Failed: ' + e.message, 'red'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Send WhatsApp Nudge'; } }
