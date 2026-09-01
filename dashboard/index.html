@@ -1059,14 +1059,20 @@
     <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does RecoverIQ compare against the Razorpay fixed-schedule retry baseline?')">
       📊 Benchmark Results
     </button>
-    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does RecoverIQ handle U30 insufficient funds failure code?')">
-      💡 U30 Salary Window
+    <button class="ai-quick-btn" onclick="runClassifierEvalFromChat()" style="border-color:rgba(16,185,129,0.5);color:var(--green);">
+      🎯 Intent Classifier Eval (30 Items)
+    </button>
+    <button class="ai-quick-btn" onclick="runPromptScenarioFromChip('Simulate Rahul Sharma ₹4,500 U30 insufficient funds on SBI salary account')" style="border-color:rgba(139,92,246,0.5);color:#8b5cf6;">
+      ✨ Sim: U30 Salary ₹4,500 (SBI)
+    </button>
+    <button class="ai-quick-btn" onclick="runPromptScenarioFromChip('Simulate Priya Patel ₹1,299 BT01 customer revoked mandate on HDFC Bank')" style="border-color:rgba(139,92,246,0.5);color:#8b5cf6;">
+      ✨ Sim: BT01 Revoked (HDFC)
+    </button>
+    <button class="ai-quick-btn" onclick="runPromptScenarioFromChip('Simulate Infosys B2B invoice ₹1,85,000 overdue with WhatsApp dunning')" style="border-color:rgba(139,92,246,0.5);color:#8b5cf6;">
+      ✨ Sim: ₹1.85L B2B Delay
     </button>
     <button class="ai-quick-btn" onclick="askQuickProjectQuestion('What RBI category limits and guardrails are enforced?')">
       🛡️ RBI Limits (₹1L vs ₹15k)
-    </button>
-    <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does Bayesian Thompson Sampling select recovery channels?')">
-      🧠 Thompson Sampling
     </button>
   </div>
 

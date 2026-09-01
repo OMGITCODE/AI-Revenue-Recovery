@@ -49,9 +49,49 @@ from src.agent.customer_identity import customer_identity_registry, normalize_id
 from src.integrations.setu_aa import setu_aa
 from src.integrations.messaging import messenger, verify_twilio_signature
 from src.integrations.razorpay_upi import verify_webhook_signature
+from src.agent.classifier_eval import classifier_benchmark
 from src.integrations.llm_classifier import llm_classifier
 
 _decision_engine = DecisionEngine()
+
+# ── In-Memory Per-IP Rate Limiter ─────────────────────────────────────────────
+import time
+from collections import defaultdict, deque
+
+class InMemoryRateLimiter:
+    """
+    Sliding-window in-memory rate limiter per IP address for public AI endpoints.
+    Exempts localhost / testclient to prevent demo disruption.
+    """
+    def __init__(self, requests_per_minute: int = 30):
+        self.requests_per_minute = requests_per_minute
+        self.window_seconds = 60.0
+        self.ip_timestamps: Dict[str, deque] = defaultdict(deque)
+
+    def check(self, request: Request):
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        # Exempt localhost / presenter connections
+        if client_ip in ("127.0.0.1", "::1", "testclient", "localhost"):
+            return
+
+        now = time.time()
+        window_start = now - self.window_seconds
+        queue = self.ip_timestamps[client_ip]
+
+        while queue and queue[0] < window_start:
+            queue.popleft()
+
+        limit = getattr(settings, "llm_rate_limit_per_minute", 30)
+        if len(queue) >= limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Maximum {limit} requests per minute allowed.",
+                headers={"Retry-After": "60"},
+            )
+
+        queue.append(now)
+
+rate_limiter = InMemoryRateLimiter()
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -63,17 +103,17 @@ app = FastAPI(
 # ── Configurable CORS & Security ──────────────────────────────────────────────
 CORS_ORIGINS_RAW = settings.cors_origins.strip()
 ALLOWED_ORIGINS = (
-    [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
-    if CORS_ORIGINS_RAW != "*"
-    else ["*"]
+    ["*"] if CORS_ORIGINS_RAW == "*" or not CORS_ORIGINS_RAW
+    else [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True if ALLOWED_ORIGINS != ["*"] else False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ── API Key & Security Headers Middleware ─────────────────────────────────────
@@ -97,6 +137,8 @@ PUBLIC_EXACT_PATHS = {
     "/api/suppression/list",
     "/api/whatsapp/inbound/samples",
     "/api/project-chat",
+    "/api/prompt-to-scenario",
+    "/api/classifier/eval",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -1119,17 +1161,79 @@ ProjectChatRequest.model_rebuild()
 
 
 @app.post("/api/project-chat")
-async def project_chat_endpoint(req: ProjectChatRequest):
+async def project_chat_endpoint(req: ProjectChatRequest, request: Request):
     """
     Project-Grounded Q&A Chatbot:
     Answers judge, reviewer, and developer questions about RecoverIQ grounded
     strictly in the project README.md and technical documentation.
     """
+    rate_limiter.check(request)
     clean_query = req.message.strip()
     if not clean_query:
         raise HTTPException(status_code=400, detail="Question message cannot be empty.")
     result = await llm_classifier.ask_project_assistant(clean_query, history=req.history)
     return result
+
+
+class PromptScenarioRequest(BaseModel):
+    prompt: str = Field(..., description="Freeform scenario description e.g. 'Infosys B2B invoice ₹1.85L'")
+
+PromptScenarioRequest.model_rebuild()
+
+
+@app.post("/api/prompt-to-scenario")
+async def prompt_to_scenario_endpoint(req: PromptScenarioRequest, request: Request):
+    """
+    Natural Language Prompt-to-Scenario Generator:
+    Extracts structured simulation parameters from free-form text using schema-constrained LLM,
+    validates strictly against CustomScenarioRequest Pydantic boundary, and executes sandboxed scenario.
+    """
+    rate_limiter.check(request)
+    clean_prompt = req.prompt.strip()
+    if not clean_prompt:
+        raise HTTPException(status_code=400, detail="Scenario prompt cannot be empty.")
+
+    # 1. Parse via schema-constrained LLM (or deterministic heuristic fallback)
+    parsed = await llm_classifier.parse_natural_language_scenario(clean_prompt)
+
+    # 2. Strict Pydantic boundary validation
+    try:
+        scenario_req = CustomScenarioRequest(
+            failure_code=parsed.get("failure_code", "U30"),
+            vpa=parsed.get("vpa", "user@upi"),
+            bank=parsed.get("bank", "SBI"),
+            amount=float(parsed.get("amount", 999.0)),
+            mandate_state=parsed.get("mandate_state", "active"),
+            retry_attempt=int(parsed.get("retry_attempt", 0)),
+            scenario_name=parsed.get("scenario_name", "Natural Language Scenario"),
+        )
+    except Exception as err:
+        raise HTTPException(status_code=422, detail=f"Scenario schema validation failed: {str(err)}")
+
+    # 3. Sandboxed execution only (strictly cannot call mutating endpoints)
+    ev = await run_custom_scenario(scenario_req.model_dump())
+    if not ev:
+        raise HTTPException(status_code=422, detail="Could not process custom scenario execution")
+
+    await _broadcast_modules_updated()
+
+    return {
+        "echo": parsed.get("echo_summary") or f"Executed scenario: {scenario_req.scenario_name}",
+        "scenario": scenario_req.model_dump(),
+        "event": ev.to_dict(),
+        "provider": parsed.get("provider", "offline_heuristic"),
+    }
+
+
+@app.get("/api/classifier/eval")
+async def get_classifier_eval(request: Request):
+    """
+    Cached Labeled Evaluation Benchmark:
+    Returns precomputed Accuracy, Precision, Recall, and F1 on the 30-item held-out dataset.
+    Guarantees O(1) instant delivery and zero downstream LLM API costs.
+    """
+    rate_limiter.check(request)
+    return classifier_benchmark.get_cached_results()
 
 
 @app.get("/api/whatsapp/conversation/{identifier}")
@@ -1140,6 +1244,7 @@ async def get_whatsapp_conversation(identifier: str):
         "identifier": identifier,
         "history": conversation_log.get_history(identifier),
     }
+
 
 
 

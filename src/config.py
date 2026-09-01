@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
     llm_provider: str = "auto"  # auto | gemini | openai
+    llm_rate_limit_per_minute: int = 30
+    llm_global_daily_cap: int = 500
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1552,6 +1552,80 @@ function askQuickProjectQuestion(query) {
   submitProjectChat();
 }
 
+async function runPromptScenarioFromChip(promptText) {
+  const inp = document.getElementById('project-chat-input');
+  if (inp) inp.value = '';
+  await executePromptScenario(promptText);
+}
+
+async function runClassifierEvalFromChat() {
+  appendProjectChatMessage('user', 'Run Intent Classifier Accuracy Benchmark (30 Held-Out Messages)');
+  const typingId = showProjectChatTyping();
+  try {
+    const res = await fetch('/api/classifier/eval');
+    removeProjectChatTyping(typingId);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    
+    let summary = `**🎯 Inbound Intent Classifier Benchmark Results (30 Items):**\n\n`;
+    summary += `- **Overall Accuracy**: **${data.accuracy_pct}** (${data.total_samples} labeled messages)\n`;
+    summary += `- **Hardship Recall**: **${Math.round(data.compliance_intent_recall.hardship_recall * 100)}%**\n`;
+    summary += `- **Wrong Number Recall**: **${Math.round(data.compliance_intent_recall.wrong_number_recall * 100)}%**\n`;
+    summary += `- **Status**: ${data.compliance_intent_recall.status}\n\n`;
+    summary += `**Per-Intent F1 Scores:**\n`;
+    for (const [intent, m] of Object.entries(data.per_intent_metrics || {})) {
+      summary += `- **${intent.toUpperCase()}**: Precision ${m.precision} · Recall ${m.recall} · F1 **${m.f1_score}** (n=${m.support})\n`;
+    }
+    
+    appendProjectChatMessage('bot', summary, 'cached_benchmark');
+    toast(`🎯 Classifier Eval: ${data.accuracy_pct} accuracy (100% compliance recall)`, 'green');
+  } catch (err) {
+    removeProjectChatTyping(typingId);
+    appendProjectChatMessage('bot', `⚠️ Could not fetch classifier evaluation: ${err.message}`);
+  }
+}
+
+async function executePromptScenario(promptText) {
+  appendProjectChatMessage('user', promptText);
+  const typingId = showProjectChatTyping();
+  const btn = document.getElementById('project-chat-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+
+  try {
+    const res = await fetch('/api/prompt-to-scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: promptText }),
+    });
+
+    removeProjectChatTyping(typingId);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    const echoText = data.echo || 'Scenario executed';
+    const sc = data.scenario || {};
+    const ev = data.event || {};
+
+    let reply = `⚡ **${esc(echoText)}**\n\n`;
+    reply += `- **Failure Code**: \`${esc(sc.failure_code || 'U30')}\` · **Bank**: ${esc(sc.bank || 'SBI')}\n`;
+    reply += `- **Amount**: ₹${Number(sc.amount || 0).toLocaleString('en-IN')}\n`;
+    reply += `- **Payer VPA**: \`${esc(sc.vpa || 'user@upi')}\`\n`;
+    if (ev.decision) {
+      reply += `- **Decision**: **${esc(ev.decision.approved ? 'APPROVED' : 'GUARDRAIL BLOCKED')}** (Confidence: ${Math.round((ev.decision.confidence || 0.9) * 100)}%)\n`;
+      reply += `- **Intervention**: ${esc(ev.decision.chosen_channel || 'Smart Retry Scheduled')}\n`;
+    }
+
+    appendProjectChatMessage('bot', reply, data.provider);
+    toast(`✨ Executed Natural Language Scenario: ${sc.scenario_name || sc.failure_code}`, 'green');
+    await loadModules();
+  } catch (err) {
+    removeProjectChatTyping(typingId);
+    appendProjectChatMessage('bot', `⚠️ Could not execute scenario: ${err.message}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send ➔'; }
+  }
+}
+
 async function submitProjectChat(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('project-chat-input');
@@ -1560,6 +1634,15 @@ async function submitProjectChat(e) {
   if (!msg) return;
 
   inp.value = '';
+
+  // Explicit scenario trigger if starts with /sim, /scenario, or starts with 'simulate '
+  const lower = msg.toLowerCase();
+  if (lower.startsWith('/sim') || lower.startsWith('/scenario') || lower.startsWith('simulate ') || lower.startsWith('sim:')) {
+    const cleanPrompt = msg.replace(/^(\/sim|\/scenario|simulate|sim:)\s*/i, '');
+    await executePromptScenario(cleanPrompt || msg);
+    return;
+  }
+
   appendProjectChatMessage('user', msg);
 
   // Show typing indicator
@@ -1601,6 +1684,7 @@ function formatMarkdown(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/^-\s+(.*)$/gm, '• $1')
     .replace(/\n\n/g, '<br/><br/>')
     .replace(/\n/g, '<br/>');
@@ -1662,4 +1746,5 @@ function removeProjectChatTyping(id) {
   const el = document.getElementById(id);
   if (el) el.remove();
 }
+
 

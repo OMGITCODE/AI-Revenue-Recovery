@@ -4,11 +4,28 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import json
 import httpx
+from datetime import datetime, timezone, timedelta
 
 from ..config import settings
 from ..utils.logger import get_logger
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
 logger = get_logger(__name__)
+
+# Daily global call tracking to enforce circuit breaker
+_DAILY_CALLS: Dict[str, int] = {}
+
+def _check_and_increment_daily_quota() -> bool:
+    """Returns True if within global daily LLM cap, False if circuit breaker should trip."""
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
+    current_count = _DAILY_CALLS.get(today_str, 0)
+    cap = getattr(settings, "llm_global_daily_cap", 500)
+    if current_count >= cap:
+        logger.warning("[LLM_CIRCUIT_BREAKER] Daily global cap of %d calls reached for %s. Tripping to offline fallback.", cap, today_str)
+        return False
+    _DAILY_CALLS[today_str] = current_count + 1
+    return True
 
 SYSTEM_PROMPT = """You are an expert conversational intent classifier for an Indian digital payments revenue recovery platform (RecoverIQ).
 Customers reply in English, Hindi, or code-mixed Hinglish regarding failed UPI autopay or recurring subscription debits.
@@ -383,6 +400,209 @@ Rules:
                 "Ask me about: **Benchmark stats**, **U30 salary retries**, **RBI ₹1L limits**, **Thompson Sampling**, or **WhatsApp NLP intents**!"
             )
 
+    async def parse_natural_language_scenario(self, prompt: str) -> Dict[str, Any]:
+        """
+        Parses a freeform natural language simulation request into a structured scenario dictionary.
+        Enforces strict schema constraints, checks daily call quotas, and falls back to deterministic heuristic parsing.
+        """
+        clean_prompt = prompt.strip()
+        if not clean_prompt:
+            return self._parse_scenario_heuristically("Test Default Scenario ₹999 U30")
+
+        # Check global daily quota circuit breaker
+        if not _check_and_increment_daily_quota():
+            return self._parse_scenario_heuristically(clean_prompt)
+
+        provider, api_key, model = self._resolve_provider_and_config()
+        if not provider or not api_key:
+            return self._parse_scenario_heuristically(clean_prompt)
+
+        system_instruction = (
+            "You are an expert NLP parser for an Indian payments and UPI Autopay recovery simulator (RecoverIQ).\n"
+            "Given a freeform user prompt describing a payment failure scenario, extract and generate a valid simulation scenario.\n"
+            "Valid failure codes: 'U30' (Insufficient Funds), 'BT01' (Mandate Revoked), 'BT02' (Mandate Expired), 'TM' (Bank Timeout), "
+            "'U69' (Limit Exceeded), 'U13' (Invalid Mandate), 'ZA' (Customer Inactive), 'BA' (Bank Account Closed), 'ZM' (Invalid VPA).\n"
+            "Return ONLY a JSON object with this exact schema:\n"
+            "{\n"
+            '  "failure_code": "U30" | "BT01" | "BT02" | "TM" | "U69" | "U13" | "ZA" | "BA" | "ZM",\n'
+            '  "vpa": "<e.g. user@oksbi or derived from bank/name>",\n'
+            '  "bank": "<e.g. SBI, HDFC, ICICI, Axis, Kotak, PNB>",\n'
+            '  "amount": <float amount in INR, default 999.0 if not specified>,\n'
+            '  "mandate_state": "active" | "revoked" | "expired",\n'
+            '  "retry_attempt": <integer 0 to 5, default 0>,\n'
+            '  "scenario_name": "<concise title e.g. Rahul Sharma - U30 Insufficient Funds>",\n'
+            '  "echo_summary": "<natural language summary e.g. Rahul Sharma (₹4,500, U30 Insufficient Funds, SBI)>"\n'
+            "}"
+        )
+
+        try:
+            if provider == "gemini":
+                url = self.custom_api_url or f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                payload = {
+                    "system_instruction": {"parts": [{"text": system_instruction}]},
+                    "contents": [{"role": "user", "parts": [{"text": clean_prompt}]}],
+                    "generationConfig": {
+                        "response_mime_type": "application/json",
+                        "temperature": 0.1,
+                    },
+                }
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                            parsed = json.loads(raw_text)
+                            parsed["provider"] = "gemini"
+                            return self._validate_and_sanitize_scenario(parsed, clean_prompt)
+
+            elif provider == "openai":
+                url = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": clean_prompt},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.1,
+                }
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    res = await client.post(url, headers=headers, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        raw_text = data["choices"][0]["message"]["content"].strip()
+                        parsed = json.loads(raw_text)
+                        parsed["provider"] = "openai"
+                        return self._validate_and_sanitize_scenario(parsed, clean_prompt)
+
+        except Exception as e:
+            logger.warning("[PROMPT_TO_SCENARIO] LLM parsing failed (%s), using heuristic fallback.", str(e))
+
+        return self._parse_scenario_heuristically(clean_prompt)
+
+    def _validate_and_sanitize_scenario(self, data: Dict[str, Any], raw_prompt: str) -> Dict[str, Any]:
+        """Ensures all required keys exist and have safe types."""
+        code = str(data.get("failure_code") or "U30").upper().strip()
+        if code not in {"U30", "BT01", "BT02", "TM", "U69", "U13", "ZA", "BA", "ZM", "XH", "U28", "U07", "XY", "00"}:
+            code = "U30"
+
+        try:
+            amount = float(data.get("amount") or 999.0)
+            if amount <= 0:
+                amount = 999.0
+        except (ValueError, TypeError):
+            amount = 999.0
+
+        bank = str(data.get("bank") or "SBI").strip()
+        vpa = str(data.get("vpa") or f"user@ok{bank.lower()}").strip()
+        mandate_state = str(data.get("mandate_state") or ("revoked" if code == "BT01" else "expired" if code == "BT02" else "active")).lower()
+        retry_attempt = int(data.get("retry_attempt") or 0)
+        scenario_name = str(data.get("scenario_name") or f"Simulated Scenario - {code} ({bank})").strip()
+        echo = str(data.get("echo_summary") or f"{scenario_name} (₹{amount:,.0f}, {code}, {bank})").strip()
+
+        return {
+            "failure_code": code,
+            "vpa": vpa,
+            "bank": bank,
+            "amount": amount,
+            "mandate_state": mandate_state,
+            "retry_attempt": retry_attempt,
+            "scenario_name": scenario_name,
+            "echo_summary": echo,
+            "provider": data.get("provider", "gemini"),
+        }
+
+    def _parse_scenario_heuristically(self, prompt: str) -> Dict[str, Any]:
+        """Deterministic offline rule-based extractor for scenario parameters."""
+        p = prompt.lower()
+
+        # 1. Failure code detection
+        code = "U30"
+        if re.search(r"\b(bt01|revok|cancel)\b", p):
+            code = "BT01"
+        elif re.search(r"\b(bt02|expir)\b", p):
+            code = "BT02"
+        elif re.search(r"\b(tm|timeout|down|gateway)\b", p):
+            code = "TM"
+        elif re.search(r"\b(u69|limit)\b", p):
+            code = "U69"
+        elif re.search(r"\b(u13)\b", p):
+            code = "U13"
+        elif re.search(r"\b(za|inactive)\b", p):
+            code = "ZA"
+        elif re.search(r"\b(ba|closed)\b", p):
+            code = "BA"
+        elif re.search(r"\b(u30|insufficient|balance|salary)\b", p):
+            code = "U30"
+
+        # 2. Amount extraction (e.g. ₹1,85,000, 4500, 1.85L, 299)
+        amount = 999.0
+        # Lakh notation
+        lakh_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:lakh|l\b)", p)
+        if lakh_match:
+            amount = float(lakh_match.group(1)) * 100000.0
+        else:
+            amt_match = re.search(r"(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]+)?|[0-9]+)", p)
+            if amt_match:
+                clean_num = amt_match.group(1).replace(",", "")
+                try:
+                    parsed_amt = float(clean_num)
+                    if parsed_amt > 10:  # avoid picking up attempt numbers
+                        amount = parsed_amt
+                except ValueError:
+                    pass
+
+        # 3. Bank extraction
+        bank = "SBI"
+        if "hdfc" in p:
+            bank = "HDFC"
+        elif "icici" in p:
+            bank = "ICICI"
+        elif "axis" in p:
+            bank = "Axis"
+        elif "kotak" in p:
+            bank = "Kotak"
+        elif "pnb" in p:
+            bank = "PNB"
+        elif "paytm" in p:
+            bank = "Paytm"
+
+        # 4. Mandate state
+        mandate_state = "active"
+        if code == "BT01":
+            mandate_state = "revoked"
+        elif code == "BT02":
+            mandate_state = "expired"
+
+        vpa = f"custom_user@ok{bank.lower()}"
+        if "infosys" in p:
+            vpa = "infosys@okhdfc"
+            bank = "HDFC"
+        elif "rahul" in p:
+            vpa = "rahul@oksbi"
+
+        scenario_name = f"Natural Language Scenario: {code} on {bank} (₹{amount:,.0f})"
+        echo = f"Parsed Scenario: {code} ({bank} Bank, ₹{amount:,.0f}) — Executing live recovery pipeline..."
+
+        return {
+            "failure_code": code,
+            "vpa": vpa,
+            "bank": bank,
+            "amount": amount,
+            "mandate_state": mandate_state,
+            "retry_attempt": 0,
+            "scenario_name": scenario_name,
+            "echo_summary": echo,
+            "provider": "offline_heuristic",
+        }
+
 
 llm_classifier = LLMIntentClassifier()
+
 
