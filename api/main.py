@@ -446,9 +446,9 @@ async def seed_demo_data_endpoint():
             b2b_chaser.chase(r.receivable_id)
 
     # Promise-to-Pay examples
-    promise_tracker.create("rahul@oksbi",  999,  "SBI",      "U30",  deadline_hours=24,  notes="Customer called and promised by 5 PM")
-    promise_tracker.create("priya@hdfc",   499,  "HDFC",     "BT01", deadline_hours=48,  notes="Re-registration link sent; promised to complete")
-    promise_tracker.create("vikram@ybl",  3200,  "Yes Bank", "BT02", deadline_hours=72,  notes="Insurance premium; customer on travel")
+    promise_tracker.create("rahul@oksbi",        999,  "SBI",      "U30",  deadline_hours=24,  notes="Customer called and promised by 5 PM")
+    promise_tracker.create("priya@okhdfcbank",  1499,  "HDFC",     "BT01", deadline_hours=48,  notes="Re-registration link sent; promised to complete")
+    promise_tracker.create("vikram@ybl",        2999,  "Yes Bank", "BT02", deadline_hours=72,  notes="Gym Gold Pass renewal; customer on travel")
 
     # Checkout drop-offs
     checkout_agent.record_drop_off("meera@okaxis",   "+91-9700000001", 2499,  "FashionHub",  "payment_page_exit",    "hinglish")
@@ -462,19 +462,19 @@ async def seed_demo_data_endpoint():
         for e in recovery_ledger.all_entries()
     )
     if not has_seed_entries:
-        e1  = recovery_ledger.log("decide",    "rahul@oksbi",      999,   "U30=insufficient funds. Salary credit expected 1 Sep (SBI). Scheduling retry for 10:00 AM IST.",                    0.82, "smart_retry")
-        e2  = recovery_ledger.log("intervene", "rahul@oksbi",      999,   "Smart retry scheduled: 01 Sep 10:00 AM IST. WhatsApp nudge sent with payment link fallback.",                  0.80, "whatsapp")
+        e1  = recovery_ledger.log("decide",    "rahul@oksbi",       999,  "U30=insufficient funds. Salary credit expected 1 Sep (SBI). Scheduling retry for 10:00 AM IST.",                    0.82, "smart_retry")
+        e2  = recovery_ledger.log("intervene", "rahul@oksbi",       999,  "Smart retry scheduled: 01 Sep 10:00 AM IST. WhatsApp nudge sent with payment link fallback.",                  0.80, "whatsapp")
         recovery_ledger.mark_outcome(e2.ledger_id, "success", 999)
 
-        e3  = recovery_ledger.log("guardrail", "priya@okhdfcbank", 499,   "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
-        e4  = recovery_ledger.log("intervene", "priya@okhdfcbank", 499,   "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
+        e3  = recovery_ledger.log("guardrail", "priya@okhdfcbank", 1499,  "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
+        e4  = recovery_ledger.log("intervene", "priya@okhdfcbank", 1499,  "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
         recovery_ledger.mark_outcome(e4.ledger_id, "pending", 0)
 
-        e5  = recovery_ledger.log("guardrail", "sunita@okicici",  15999,  "U69=daily limit exceeded. GR7 [RBI CIRCUIT BREAKER]: Amount ₹15,999 > ₹15,000 — silent retry BLOCKED per NPCI/RBI circular.", 0.99, "upi_collect")
-        e6  = recovery_ledger.log("intervene", "sunita@okicici",  15999,  "UPI collect request sent with full amount and reason. Customer must approve in UPI app within 30 min.",         0.65, "upi_collect")
+        e5  = recovery_ledger.log("guardrail", "sunita@okicici",   15999, "U69=daily limit exceeded. GR7 [RBI CIRCUIT BREAKER]: Amount ₹15,999 > ₹15,000 — silent retry BLOCKED per NPCI/RBI circular.", 0.99, "upi_collect")
+        e6  = recovery_ledger.log("intervene", "sunita@okicici",   15999, "UPI collect request sent with full amount and reason. Customer must approve in UPI app within 30 min.",         0.65, "upi_collect")
         recovery_ledger.mark_outcome(e6.ledger_id, "pending", 0)
 
-        e7  = recovery_ledger.log("guardrail", "vikram@ybl",       3200,  "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED.",          0.90, "")
+        e7  = recovery_ledger.log("guardrail", "vikram@ybl",        2999, "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED.",          0.90, "")
         recovery_ledger.mark_outcome(e7.ledger_id, "skipped", 0)
 
         e8  = recovery_ledger.log("decide",    "arjun@okicici",   1499,  "TM=tech error. 3 retries exhausted. GR2 fired. Auto-recovery failed. Routing to human support escalation.",     0.88, "escalation")
@@ -1008,9 +1008,9 @@ if False:  # dead code block — kept for reference
         b2b_chaser.chase(r.receivable_id)
 
     # Promise-to-Pay examples
-    promise_tracker.create("rahul@oksbi",  999,   "SBI",  "U30",  deadline_hours=24,  notes="Customer called and promised by 5 PM")
-    promise_tracker.create("priya@hdfc",   499,   "HDFC", "BT01", deadline_hours=48,  notes="Re-registration link sent; promised to complete")
-    promise_tracker.create("vikram@ybl",   3200,  "Yes Bank", "BT02", deadline_hours=72, notes="Insurance premium; customer on travel")
+    promise_tracker.create("rahul@oksbi",        999,   "SBI",  "U30",  deadline_hours=24,  notes="Customer called and promised by 5 PM")
+    promise_tracker.create("priya@okhdfcbank",  1499,   "HDFC", "BT01", deadline_hours=48,  notes="Re-registration link sent; promised to complete")
+    promise_tracker.create("vikram@ybl",        2999,   "Yes Bank", "BT02", deadline_hours=72, notes="Gym Gold Pass renewal; customer on travel")
 
     # Checkout drop-offs
     checkout_agent.record_drop_off("meera@okaxis",   "+91-9700000001", 2499,  "FashionHub",  "payment_page_exit",   "hinglish")
@@ -1027,8 +1027,8 @@ if False:  # dead code block — kept for reference
     recovery_ledger.mark_outcome(e2.ledger_id, "success", 999)
 
     # Mandate revoked — renewal forced, retry blocked
-    e3 = recovery_ledger.log("guardrail", "priya@okhdfcbank",  499,   "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
-    e4 = recovery_ledger.log("intervene", "priya@okhdfcbank",  499,   "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
+    e3 = recovery_ledger.log("guardrail", "priya@okhdfcbank", 1499,   "BT01=mandate revoked by customer. GR3 fired: silent retry BLOCKED. Routing to mandate_renewal only.",          0.95, "mandate_renewal")
+    e4 = recovery_ledger.log("intervene", "priya@okhdfcbank", 1499,   "Magic re-registration link generated and sent via WhatsApp. Customer must complete within 24h.",               0.70, "whatsapp")
     recovery_ledger.mark_outcome(e4.ledger_id, "pending", 0)
 
     # RBI ₹15k circuit breaker fired
@@ -1037,7 +1037,7 @@ if False:  # dead code block — kept for reference
     recovery_ledger.mark_outcome(e6.ledger_id, "pending", 0)
 
     # Promise-to-pay — nudge suppressed
-    e7 = recovery_ledger.log("guardrail", "vikram@ybl",       3200,   "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED to avoid harassment. Monitoring deadline.", 0.90, "")
+    e7 = recovery_ledger.log("guardrail", "vikram@ybl",       2999,   "BT02=mandate expired. GR5: active P2P promise detected (deadline: 31 Aug). WhatsApp nudge SUPPRESSED to avoid harassment. Monitoring deadline.", 0.90, "")
     recovery_ledger.mark_outcome(e7.ledger_id, "skipped", 0)
 
     # Escalation after retry budget exhausted
@@ -1373,6 +1373,27 @@ async def simulate_proactive_renewal(mandate_id: str):
         "status": "success",
         "message": f"Mandate {mandate_id} renewed proactively! ₹{m.amount:.2f} protected from BT02 churn.",
         "mandate": m.to_dict(),
+    }
+
+
+@app.post("/api/mandates/force-lapse/{mandate_id}")
+async def force_lapse_mandate_endpoint(mandate_id: str):
+    """
+    Simulates an unrenewed expiring mandate lapsing past its validity window.
+    Marks mandate status as LAPSED and fires a real BT02 failure event through
+    the canonical reactive recovery pipeline.
+    """
+    from api.simulator import force_lapse_mandate
+    m, ev = await force_lapse_mandate(mandate_id)
+    if not m:
+        raise HTTPException(status_code=404, detail=f"Mandate {mandate_id} not found.")
+
+    return {
+        "status": "lapsed",
+        "message": f"Mandate {mandate_id} lapsed into genuine BT02 failure event. Reactive agent recovery triggered.",
+        "mandate": m.to_dict(),
+        "event": ev.to_dict() if ev else None,
+        "stats": mandate_expiry_scanner.get_stats(),
     }
 
 

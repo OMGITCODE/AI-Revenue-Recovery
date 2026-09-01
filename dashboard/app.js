@@ -875,7 +875,8 @@ async function loadExpiringMandates(btn) {
 
 function renderExpiringStats(s) {
   if (!s) return;
-  set('exp-at-risk', `${s.expiring_within_72h} mandates expiring (<72h)`);
+  const lapsedText = s.mandates_lapsed ? ` · ${s.mandates_lapsed} lapsed (BT02)` : '';
+  set('exp-at-risk', `${s.expiring_within_72h} mandates expiring (<72h)${lapsedText}`);
   set('exp-nudged', `${s.nudges_dispatched} nudges sent`);
   set('exp-protected', `${fmtInr(s.revenue_protected)} churn prevented`);
 }
@@ -898,6 +899,8 @@ function renderExpiringTable(mandates) {
     let stBadge = '';
     if (m.status === 'RENEWED') {
       stBadge = `<span class="stat-chip chip-green" style="font-size:10.5px">🛡️ Churn Prevented</span>`;
+    } else if (m.status === 'LAPSED') {
+      stBadge = `<span class="stat-chip chip-red" style="font-size:10.5px">⚠️ Lapsed (Expired)</span>`;
     } else if (m.status === 'NUDGED') {
       stBadge = `<span class="stat-chip chip-blue" style="font-size:10.5px">📱 WhatsApp Dispatched</span>`;
     } else {
@@ -917,11 +920,32 @@ function renderExpiringTable(mandates) {
     `;
     const actionTd = tr.querySelector('.exp-actions-td');
     if (m.status === 'PENDING') {
-      const btn = document.createElement('button');
-      btn.className = 'btn-act btn-amber';
-      btn.textContent = '⚡ Send WhatsApp Nudge';
-      btn.onclick = function() { triggerProactiveNudge(m.mandate_id, this); };
-      actionTd.appendChild(btn);
+      const wrap = document.createElement('div');
+      wrap.style.display = 'inline-flex';
+      wrap.style.gap = '6px';
+      wrap.style.alignItems = 'center';
+
+      const nudgeBtn = document.createElement('button');
+      nudgeBtn.className = 'btn-act btn-amber';
+      nudgeBtn.textContent = '⚡ Send Nudge';
+      nudgeBtn.title = 'Send proactive WhatsApp 1-click renewal link';
+      nudgeBtn.onclick = function() { triggerProactiveNudge(m.mandate_id, this); };
+
+      const lapseBtn = document.createElement('button');
+      lapseBtn.className = 'btn-act';
+      lapseBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+      lapseBtn.style.color = '#ef4444';
+      lapseBtn.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      lapseBtn.style.padding = '4px 8px';
+      lapseBtn.style.fontSize = '11px';
+      lapseBtn.style.borderRadius = '5px';
+      lapseBtn.textContent = '⏭ Force Lapse';
+      lapseBtn.title = 'Simulate expiry cutoff pass without renewal -> triggers live BT02 failure event';
+      lapseBtn.onclick = function() { forceLapseMandate(m.mandate_id, this); };
+
+      wrap.appendChild(nudgeBtn);
+      wrap.appendChild(lapseBtn);
+      actionTd.appendChild(wrap);
     } else if (m.status === 'NUDGED') {
       const wrap = document.createElement('div');
       wrap.style.display = 'inline-flex';
@@ -930,7 +954,8 @@ function renderExpiringTable(mandates) {
 
       const renewBtn = document.createElement('button');
       renewBtn.className = 'btn-act btn-green';
-      renewBtn.textContent = '✓ Simulate Renewal';
+      renewBtn.textContent = '✓ Renew';
+      renewBtn.title = 'Simulate customer completing 1-click renewal';
       renewBtn.onclick = function() { simulateProactiveRenewal(m.mandate_id, this); };
 
       const prevBtn = document.createElement('button');
@@ -939,8 +964,40 @@ function renderExpiringTable(mandates) {
       prevBtn.title = 'Preview personalized WhatsApp message';
       prevBtn.onclick = function() { openWaPreviewModal(m.mandate_id); };
 
+      const lapseBtn = document.createElement('button');
+      lapseBtn.className = 'btn-act';
+      lapseBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+      lapseBtn.style.color = '#ef4444';
+      lapseBtn.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      lapseBtn.style.padding = '4px 8px';
+      lapseBtn.style.fontSize = '11px';
+      lapseBtn.style.borderRadius = '5px';
+      lapseBtn.textContent = '⏭ Lapse';
+      lapseBtn.title = 'Simulate customer ignoring nudge -> triggers live BT02 failure event';
+      lapseBtn.onclick = function() { forceLapseMandate(m.mandate_id, this); };
+
       wrap.appendChild(renewBtn);
       wrap.appendChild(prevBtn);
+      wrap.appendChild(lapseBtn);
+      actionTd.appendChild(wrap);
+    } else if (m.status === 'LAPSED') {
+      const wrap = document.createElement('div');
+      wrap.style.display = 'inline-flex';
+      wrap.style.gap = '6px';
+      wrap.style.alignItems = 'center';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn-act btn-ghost';
+      viewBtn.style.padding = '3px 8px';
+      viewBtn.style.fontSize = '11px';
+      viewBtn.textContent = '⚡ View BT02 Event';
+      viewBtn.title = 'Scroll to top and filter Recovery Events by this customer';
+      viewBtn.onclick = function() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        filterEventsByCustomer(m.customer_vpa);
+      };
+
+      wrap.appendChild(viewBtn);
       actionTd.appendChild(wrap);
     } else {
       const wrap = document.createElement('div');
@@ -1019,6 +1076,34 @@ async function simulateProactiveRenewal(id, btn) {
     await loadExpiringMandates(); await loadLedger(); await loadROI();
   } catch (e) { toast('Failed: ' + e.message, 'red'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✓ Simulate Renewal'; } }
+}
+
+async function forceLapseMandate(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⏭ Lapsing…'; }
+  try {
+    const res = await fetch(`/api/mandates/force-lapse/${encodeURIComponent(id)}`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`⚠️ Mandate ${id} lapsed into real BT02 failure event! Live stream updated.`, 'err');
+      await Promise.all([loadExpiringMandates(), loadEvents(), loadLedger(), loadROI()]);
+      if (data.event && data.event.id) {
+        setTimeout(() => {
+          const row = document.getElementById('event-row-' + data.event.id);
+          if (row) {
+            row.style.outline = '2px solid #ef4444';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { row.style.outline = ''; }, 3000);
+          }
+        }, 300);
+      }
+    } else {
+      toast('Failed to lapse: ' + (data.detail || 'Unknown error'), 'red');
+    }
+  } catch (e) {
+    toast('Failed: ' + e.message, 'red');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⏭ Force Lapse'; }
+  }
 }
 
 function openWaPreviewModal(mandateId) {

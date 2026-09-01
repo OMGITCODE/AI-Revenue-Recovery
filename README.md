@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-174%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-176%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -13,22 +13,22 @@
 
 ## 📊 The Bar: Simulated Benchmark (Monte Carlo Policy Comparison vs. Razorpay Default)
 
-To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 40-event real-world UPI Autopay failure dataset.
+To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event real-world UPI Autopay failure dataset.
 
 Outcomes are **probabilistic**, modeled from published Indian FinTech and payment gateway conversion benchmarks. The benchmark executes **$N=50$ Monte Carlo simulation runs** and reports mean ± standard deviation, ensuring all metrics are reproducible and verifiable via `benchmark.py`.
 
-### 🏆 Simulated Benchmark Results (40 Scenarios · 50 Monte Carlo Runs)
+### 🏆 Simulated Benchmark Results (60 Scenarios · 50 Monte Carlo Runs)
 
 | Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
-| **Total Revenue at Stake** | ₹2,08,772 | ₹2,08,772 | — |
-| **Revenue Recovered** *(mean, n=50)* | **₹19,547** (deterministic) | **₹1,55,751 ± ₹19,774** | **+₹1,36,204 mean uplift** |
-| **Recovery Rate** *(mean ± std, n=50)* | 15.0% (6/40) | **74.5% ± 5.6%** | **+59.5 pts mean** |
+| **Total Revenue at Stake** | ₹5,90,171 | ₹5,90,171 | — |
+| **Revenue Recovered** *(mean, n=50)* | **₹44,849** (fixed) | **₹4,47,296 ± ₹65,872** | **+₹4,02,447 mean uplift** |
+| **Recovery Rate** *(mean ± std, n=50)* | 11.7% (7/60) | **75.8% ± 4.9%** | **+64.1 pts mean** |
 | **BT01/BT02 Mandate Renewal** | 0% (blind retry) | **~68%** (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
-| **Compliance Violations (RBI/DND)** | 3 (silent retries + DND breaches) | **0 (100% compliant)** | **-3 eliminated** |
-| **Total Retries Fired** | 120 (blind flood) | **8 (salary-targeted)** | **-112 wasted retries** |
-| **Net ROI** *(mean ± std, n=50)* | **₹19,487** (deterministic) | **₹1,55,536 ± ₹19,774** | **+₹1,36,049 mean uplift** |
+| **Compliance Violations (RBI/DND)** | 7 (silent retries + DND breaches) | **0 (100% compliant)** | **-7 eliminated** |
+| **Total Retries Fired** | 180 (blind flood) | **22 (salary-targeted)** | **-158 wasted retries** |
+| **Net ROI** *(mean ± std, n=50)* | **₹44,759** (fixed) | **₹4,46,937 ± ₹65,855** | **+₹4,02,178 mean uplift** |
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 

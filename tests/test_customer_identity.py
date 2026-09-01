@@ -43,11 +43,11 @@ class TestCustomerIdentityRegistry:
         cid1 = customer_identity_registry.resolve_canonical_id("rahul@oksbi")
         cid2 = customer_identity_registry.resolve_canonical_id("CUST-SBI-001")
         cid3 = customer_identity_registry.resolve_canonical_id("+919800000001")
-        cid4 = customer_identity_registry.resolve_canonical_id("CUST-SPIKE-007")
+        cid4 = customer_identity_registry.resolve_canonical_id("rahul.sharma@okaxis")
 
         assert cid1 == cid2 == cid3 == cid4 == "cust:rahul@oksbi"
         assert customer_identity_registry.is_same_person("rahul@oksbi", "CUST-SBI-001")
-        assert customer_identity_registry.is_same_person("+919800000001", "CUST-SPIKE-007")
+        assert customer_identity_registry.is_same_person("+919800000001", "rahul.sharma@okaxis")
 
     def test_dynamic_alias_linking(self):
         # Link a new customer_id and phone to a new VPA
@@ -114,10 +114,10 @@ class TestCrossAliasSpendPatternHistory:
         assert profile.mean_amount == 165.0
 
     def test_archetype_spend_history_accessible_by_customer_id(self):
-        # "CUST-SBI-001" maps to Rahul Sharma archetype (seeded history [99, 149, 110, 100, ...])
+        # "CUST-SBI-001" maps to Rahul Sharma archetype (seeded history [999, 999, 899, ...])
         hist = spend_pattern_tracker.get_history(vpa="", customer_id="CUST-SBI-001")
         assert len(hist) > 0
-        assert hist[0] == 99.0
+        assert hist[0] == 999.0
 
         prof = spend_pattern_tracker.get_profile(vpa="", customer_id="CUST-SBI-001")
         assert prof.transaction_count > 0

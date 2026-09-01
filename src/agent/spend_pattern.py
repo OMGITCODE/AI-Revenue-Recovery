@@ -96,81 +96,81 @@ class PatternAnalysisResult:
 
 # ── Seed / Default Historical Profiles for Archetypes ─────────────────────────
 _DEFAULT_SPEND_HISTORIES: Dict[str, List[float]] = {
-    # Archetype 1: Micro-ticket OTT & Daily User (Normal ~₹100)
-    "cust:rahul@oksbi": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
-    "rahul@oksbi": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
-    "rahul.sharma@oksbi": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
-    "cust-sbi-001": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
+    # Archetype 1: Micro-ticket OTT & Daily User (Rahul Sharma, ~₹999 normal)
+    "cust:rahul@oksbi": [999.0, 999.0, 899.0, 1099.0, 999.0, 949.0],
+    "rahul@oksbi": [999.0, 999.0, 899.0, 1099.0, 999.0, 949.0],
+    "rahul.sharma@oksbi": [999.0, 999.0, 899.0, 1099.0, 999.0, 949.0],
+    "cust-sbi-001": [999.0, 999.0, 899.0, 1099.0, 999.0, 949.0],
+    "cust-a1": [999.0, 999.0, 899.0, 1099.0, 999.0, 949.0],
+
+    # Spike Test Archetype: Low Base Aarav Kapoor (~₹100 normal, tests 700x spike to ₹70k)
+    "cust:aarav@oksbi": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
+    "aarav@oksbi": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
     "cust-spike-007": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
-    "cust-a1": [99.0, 149.0, 110.0, 100.0, 89.0, 129.0, 99.0, 105.0],
 
-    # Archetype 2: High-Value / Business / EMI Payer (Normal ₹10,000–₹50,000)
-    "cust:arjun@okicici": [12000.0, 25000.0, 35000.0, 48000.0, 30000.0, 42000.0, 50000.0],
-    "arjun@okicici": [12000.0, 25000.0, 35000.0, 48000.0, 30000.0, 42000.0, 50000.0],
-    "arjun.nair@okicici": [12000.0, 25000.0, 35000.0, 48000.0, 30000.0, 42000.0, 50000.0],
-    "cust-icici-003": [12000.0, 25000.0, 35000.0, 48000.0, 30000.0, 42000.0, 50000.0],
-    "cust-normal-008": [12000.0, 25000.0, 35000.0, 48000.0, 30000.0, 42000.0, 50000.0],
+    # Archetype 2: Cloud Infrastructure & Server Payer (Arjun Nair, ~₹4,500 normal)
+    "cust:arjun@okicici": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
+    "arjun@okicici": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
+    "arjun.nair@okicici": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
+    "cust-icici-004": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
+    "cust-icici-003": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
+    "cust-normal-008": [4500.0, 4500.0, 4200.0, 4800.0, 4500.0, 4600.0],
 
-    # Archetype 3: Medium-tier Digital Subscriber (Normal ₹300–₹800)
-    "cust:priya@okhdfcbank": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
-    "priya@okhdfcbank": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
-    "priya.mehta@okhdfcbank": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
-    "priya@hdfc": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
-    "cust-hdfc-002": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
-    "cust-c3": [299.0, 499.0, 649.0, 799.0, 499.0, 399.0, 549.0],
+    # Archetype 3: SaaS Pro Subscriber (Priya Mehta, ~₹1,499 normal)
+    "cust:priya@okhdfcbank": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
+    "priya@okhdfcbank": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
+    "priya.mehta@okhdfcbank": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
+    "priya@hdfc": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
+    "cust-hdfc-002": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
+    "cust-c3": [1499.0, 1499.0, 1299.0, 1599.0, 1499.0, 1450.0],
 
-    # Archetype 4: Mid-Value E-Commerce / Grocery (Normal ₹1,500–₹3,500)
-    "cust:meera@okaxis": [1500.0, 2400.0, 3200.0, 2800.0, 1999.0, 2999.0],
-    "meera@okaxis": [1500.0, 2400.0, 3200.0, 2800.0, 1999.0, 2999.0],
-    "meera.iyer@okaxis": [1500.0, 2400.0, 3200.0, 2800.0, 1999.0, 2999.0],
-    "cust-axis-004": [1500.0, 2400.0, 3200.0, 2800.0, 1999.0, 2999.0],
-    "cust-b2": [1500.0, 2400.0, 3200.0, 2800.0, 1999.0, 2999.0],
+    # Archetype 4: EdTech Upskilling Learner (Meera Iyer, ~₹1,250 normal)
+    "cust:meera@okaxis": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
+    "meera@okaxis": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
+    "meera.iyer@okaxis": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
+    "cust-axis-005": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
+    "cust-axis-004": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
+    "cust-b2": [1250.0, 1250.0, 1100.0, 1400.0, 1250.0, 1300.0],
 
-    # Archetype 5: Utility & Insurance Payer (Normal ₹2,000–₹6,000)
-    "cust:vikram@ybl": [2800.0, 3500.0, 4200.0, 3100.0, 5400.0],
-    "vikram@ybl": [2800.0, 3500.0, 4200.0, 3100.0, 5400.0],
-    "vikram.patel@ybl": [2800.0, 3500.0, 4200.0, 3100.0, 5400.0],
-    "cust-ybl-005": [2800.0, 3500.0, 4200.0, 3100.0, 5400.0],
-    "cust-d4": [2800.0, 3500.0, 4200.0, 3100.0, 5400.0],
+    # Archetype 5: Fitness Gold Member (Vikram Patel, ~₹2,999 normal)
+    "cust:vikram@ybl": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
+    "vikram@ybl": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
+    "vikram.patel@ybl": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
+    "cust-ybl-003": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
+    "cust-ybl-005": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
+    "cust-d4": [2999.0, 2999.0, 2800.0, 3100.0, 2999.0, 3050.0],
 
-    # Archetype 6: Fitness & Recurring Memberships (Normal ₹250–₹500)
+    # Archetype 6: Music & Podcast Subscriber (Deepak Joshi, ~₹899 normal)
+    "cust:deepak@okkotak": [899.0, 899.0, 799.0, 999.0, 899.0, 850.0],
+    "deepak@okkotak": [899.0, 899.0, 799.0, 999.0, 899.0, 850.0],
+    "deepak.joshi@kotak": [899.0, 899.0, 799.0, 999.0, 899.0, 850.0],
+    "cust-kotak-006": [899.0, 899.0, 799.0, 999.0, 899.0, 850.0],
+
+    # Archetype 7: Insurance & Health Rider Payer (Ananya Sen, ~₹3,499 normal)
+    "cust:ananya@oksbi": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0, 3500.0],
+    "ananya@oksbi": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0, 3500.0],
+    "ananya.sen@oksbi": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0, 3500.0],
+    "cust-sbi-007": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0, 3500.0],
+
+    # Archetype 8: B2B Developer API Tier (Rohit Verma, ~₹1,999 normal)
+    "cust:rohit@okhdfcbank": [1999.0, 1999.0, 1800.0, 2200.0, 1999.0, 2100.0],
+    "rohit@okhdfcbank": [1999.0, 1999.0, 1800.0, 2200.0, 1999.0, 2100.0],
+    "rohit.verma@okhdfcbank": [1999.0, 1999.0, 1800.0, 2200.0, 1999.0, 2100.0],
+    "cust-hdfc-008": [1999.0, 1999.0, 1800.0, 2200.0, 1999.0, 2100.0],
+
+    # Archetype 9: Micro-ticket Fitness (Anita Roy, ~₹299 normal)
     "cust:anita@paytm": [299.0, 299.0, 349.0, 299.0, 499.0],
     "anita@paytm": [299.0, 299.0, 349.0, 299.0, 499.0],
     "anita.roy@paytm": [299.0, 299.0, 349.0, 299.0, 499.0],
     "cust-ptm-006": [299.0, 299.0, 349.0, 299.0, 499.0],
     "cust-e5": [299.0, 299.0, 349.0, 299.0, 499.0],
 
-    # Archetype 7: Education & Coaching Mandates (Normal ~₹2,000)
-    "cust:kavita@okkotak": [1800.0, 2000.0, 1999.0, 2050.0, 2100.0],
-    "kavita@okkotak": [1800.0, 2000.0, 1999.0, 2050.0, 2100.0],
-    "cust-kotak-010": [1800.0, 2000.0, 1999.0, 2050.0, 2100.0],
+    # Archetype 10: Education & Coaching Mandates (Kavita Kotak, ~₹3,499 normal)
+    "cust:kavita@okkotak": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0],
+    "kavita@okkotak": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0],
+    "cust-kotak-010": [3499.0, 3499.0, 3200.0, 3600.0, 3499.0],
 
-    # Archetype 8: Micro-SME / PNB Account Holder (Normal ~₹1,300)
-    "cust:ramesh@okpnb": [1299.0, 1299.0, 1299.0, 1349.0],
-    "ramesh@okpnb": [1299.0, 1299.0, 1299.0, 1349.0],
-    "cust-pnb-011": [1299.0, 1299.0, 1299.0, 1349.0],
-
-    # Archetype 9: Retail Shopper / Union Bank (Normal ~₹900)
-    "cust:sneha@okunion": [899.0, 899.0, 949.0, 899.0],
-    "sneha@okunion": [899.0, 899.0, 949.0, 899.0],
-    "cust-union-012": [899.0, 899.0, 949.0, 899.0],
-
-    # Archetype 10: Tech Worker / IDFC Mandates (Normal ~₹1,900)
-    "cust:deepak@paytm": [1999.0, 1899.0, 1999.0, 1799.0],
-    "deepak@paytm": [1999.0, 1899.0, 1999.0, 1799.0],
-    "cust-idfc-013": [1999.0, 1899.0, 1999.0, 1799.0],
-
-    # Archetype 11: Professional Services / Canara Bank (Normal ~₹5,000)
-    "cust:sunil@okcanara": [4500.0, 4800.0, 4999.0, 5200.0],
-    "sunil@okcanara": [4500.0, 4800.0, 4999.0, 5200.0],
-    "cust-canara-014": [4500.0, 4800.0, 4999.0, 5200.0],
-
-    # Archetype 12: High-Velocity Trader / SBI (Normal ~₹5,000)
-    "cust:pooja@oksbi": [4800.0, 5000.0, 4999.0, 5200.0],
-    "pooja@oksbi": [4800.0, 5000.0, 4999.0, 5200.0],
-    "cust-sbi-015": [4800.0, 5000.0, 4999.0, 5200.0],
-
-    # Archetype 13: B2B Enterprise / HDFC (>₹15,000 Pre-Debit Tier)
+    # Archetype 11: High-Velocity B2B & Pre-Debit Rules (Rohan Gupta, ~₹18,500)
     "cust:rohan@okhdfcbank": [18500.0, 18500.0, 18500.0, 18500.0],
     "rohan@okhdfcbank": [18500.0, 18500.0, 18500.0, 18500.0],
     "cust-hdfc-016": [18500.0, 18500.0, 18500.0, 18500.0],

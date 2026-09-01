@@ -308,14 +308,16 @@ class MandateExpiryScanner:
         expiring = self.find_expiring_mandates(within_hours=72)
         nudged = sum(1 for m in self._mandates.values() if m.status == "NUDGED")
         renewed = sum(1 for m in self._mandates.values() if m.status == "RENEWED")
+        lapsed = sum(1 for m in self._mandates.values() if m.status == "LAPSED")
         revenue_protected = sum(m.amount for m in self._mandates.values() if m.status == "RENEWED")
-        revenue_at_risk = sum(m.amount for m in expiring if m.status != "RENEWED")
+        revenue_at_risk = sum(m.amount for m in expiring if m.status not in ("RENEWED", "LAPSED"))
 
         return {
             "total_mandates_tracked": len(self._mandates),
             "expiring_within_72h": len(expiring),
             "nudges_dispatched": nudged,
             "renewals_completed": renewed,
+            "mandates_lapsed": lapsed,
             "revenue_at_risk": revenue_at_risk,
             "revenue_protected": revenue_protected,
             "prevention_rate_pct": round((renewed / len(self._mandates) * 100), 1) if self._mandates else 0.0,

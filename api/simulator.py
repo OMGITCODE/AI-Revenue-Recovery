@@ -142,7 +142,7 @@ SCENARIOS: dict[str, dict] = {
         "event_type":    "mandate.revoked",
         "vpa":           "priya@okhdfcbank",
         "bank":          "HDFC",
-        "amount":        499.0,
+        "amount":        1499.0,
         "mandate_state": MandateState.REVOKED,
         "retry_attempt": 0,
         "customer_id":   "CUST-HDFC-002",
@@ -153,10 +153,10 @@ SCENARIOS: dict[str, dict] = {
         "event_type":    "mandate.expired",
         "vpa":           "vikram@ybl",
         "bank":          "Yes Bank",
-        "amount":        799.0,
+        "amount":        2999.0,
         "mandate_state": MandateState.EXPIRED,
         "retry_attempt": 0,
-        "customer_id":   "CUST-YBL-005",
+        "customer_id":   "CUST-YBL-003",
     },
     "u13": {
         "name":          "U13 — Mandate Paused",
@@ -634,6 +634,42 @@ async def run_scenario(scenario_key: str) -> RecoveryEvent | None:
     if ev:
         await store.add_event(ev)
     return ev
+
+
+async def force_lapse_mandate(mandate_id: str) -> tuple[Any, RecoveryEvent | None]:
+    """
+    Simulates an expiring recurring mandate lapsing past its validity cutoff without renewal.
+    Marks the mandate status as LAPSED, generates a genuine BT02 (Mandate Expired) failure event,
+    and runs it through the canonical _execute_event_pipeline sequence.
+    """
+    m = mandate_expiry_scanner.get_mandate(mandate_id)
+    if not m:
+        return None, None
+
+    m.status = "LAPSED"
+
+    cfg = {
+        "name": f"BT02 — Expired Mandate ({m.plan_name})",
+        "failure_code": UPIFailureCode.BT02,
+        "event_type": "mandate.expired",
+        "vpa": m.customer_vpa,
+        "bank": m.bank_name,
+        "amount": m.amount,
+        "mandate_state": MandateState.EXPIRED,
+        "retry_attempt": 0,
+        "customer_id": m.customer_id,
+        "mandate_id": m.mandate_id,
+        "plan_name": m.plan_name,
+        "event_id": f"EVT-LAPSE-{m.mandate_id.upper()}-{uuid.uuid4().hex[:4].upper()}",
+    }
+
+    upi_event = _make_upi_event(cfg)
+    ev = await _execute_event_pipeline(upi_event, cfg)
+    if ev:
+        await store.add_event(ev)
+
+    await _notify_module_listeners()
+    return m, ev
 
 
 async def run_custom_webhook(payload: dict) -> RecoveryEvent | None:

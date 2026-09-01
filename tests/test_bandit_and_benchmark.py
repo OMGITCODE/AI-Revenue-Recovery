@@ -68,8 +68,8 @@ class TestThompsonSamplingBandit:
 class TestBenchmarkSuite:
     def test_run_benchmark_completes(self):
         base, ai = run_benchmark(n_runs=10)
-        assert base.total_events == 40
-        assert ai.total_events == 40
+        assert base.total_events == 60
+        assert ai.total_events == 60
         assert ai.total_recovered > base.total_recovered
         assert ai.compliance_violations == 0
         assert base.compliance_violations > 0

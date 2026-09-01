@@ -430,7 +430,7 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
 
     print("\n" + "=" * 78)
     print(" 📊 SIMULATED BENCHMARK (MONTE CARLO, N=50): BASELINE vs. RECOVERIQ AI AGENT")
-    print(f" Dataset: 40 Real-World UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
+    print(f" Dataset: {base.total_events} Real-World UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
     print(f" Conversion models calibrated on Indian FinTech benchmarks (Razorpay, NPCI, Juspay)")
     print("=" * 78)
 

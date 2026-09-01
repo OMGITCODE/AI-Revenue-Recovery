@@ -127,17 +127,21 @@ class TestSpendPatternLogic:
 
     def test_pre_seeded_archetypes(self):
         """Verify pre-seeded VPAs exhibit correct archetype behavior."""
-        # Rahul: micro-ticket ~₹100 base
-        res_rahul_normal = self.tracker.analyze("rahul@oksbi", 129.0)
+        # Aarav: micro-ticket ~₹100 base
+        res_aarav_normal = self.tracker.analyze("aarav@oksbi", 129.0)
+        assert not res_aarav_normal.is_critical
+
+        res_aarav_spike = self.tracker.analyze("aarav@oksbi", 70000.0)
+        assert res_aarav_spike.is_critical
+        assert res_aarav_spike.severity == RiskSeverity.CRITICAL
+
+        # Rahul: normal ~₹999 OTT base
+        res_rahul_normal = self.tracker.analyze("rahul@oksbi", 999.0)
         assert not res_rahul_normal.is_critical
 
-        res_rahul_spike = self.tracker.analyze("rahul@oksbi", 70000.0)
-        assert res_rahul_spike.is_critical
-        assert res_rahul_spike.severity == RiskSeverity.CRITICAL
-
-        # Arjun: high-value ₹10k–₹50k base
-        res_arjun_60k = self.tracker.analyze("arjun@okicici", 60000.0)
-        assert not res_arjun_60k.is_critical
+        # Arjun: normal ₹4,500 SaaS base
+        res_arjun_normal = self.tracker.analyze("arjun@okicici", 4500.0)
+        assert not res_arjun_normal.is_critical
 
         # Arjun with massive ₹10 Lakh spike
         res_arjun_spike = self.tracker.analyze("arjun@okicici", 1000000.0)
@@ -193,8 +197,8 @@ class TestPipelineIntegration:
         assert normal_risk is not None
         assert normal_risk.severity == RiskSeverity.LOW
 
-        # Sudden spike on rahul@oksbi (baseline ~₹100, transaction ₹70,000) -> CRITICAL
-        spike_event = make_upi_event("rahul@oksbi", 70000.0, UPIFailureCode.U30)
+        # Sudden spike on aarav@oksbi (baseline ~₹100, transaction ₹70,000) -> CRITICAL
+        spike_event = make_upi_event("aarav@oksbi", 70000.0, UPIFailureCode.U30)
         spike_risk = await detector.detect_from_upi_event(spike_event)
         assert spike_risk is not None
         assert spike_risk.severity == RiskSeverity.CRITICAL
@@ -235,24 +239,24 @@ class TestPipelineIntegration:
         assert r4.metadata["pattern_analysis"].spike_ratio > 5.0
 
     def test_decision_engine_blocks_retry_on_spend_spike(self):
-        """DecisionEngine guardrail GR10 blocks silent retry when a critical spend spike is detected."""
+        """DecisionEngine GR10 should block blind silent retries on sudden upward spend spike."""
         engine = DecisionEngine()
 
-        # Rahul with normal ₹129 amount -> smart_retry allowed
+        # Aarav with normal ₹129 amount -> smart_retry allowed
         dec_normal = engine.evaluate(
             failure_code="U30",
             mandate_state="active",
             amount=129.0,
-            customer_vpa="rahul@oksbi",
+            customer_vpa="aarav@oksbi",
         )
         assert "smart_retry" in dec_normal.allowed_actions
 
-        # Rahul with ₹70,000 sudden spike -> smart_retry blocked by GR10
+        # Aarav with ₹70,000 sudden spike -> smart_retry blocked by GR10
         dec_spike = engine.evaluate(
             failure_code="U30",
             mandate_state="active",
             amount=70000.0,
-            customer_vpa="rahul@oksbi",
+            customer_vpa="aarav@oksbi",
         )
         assert "smart_retry" in dec_spike.blocked_actions
         assert "spend_pattern_spike_critical" in dec_spike.guardrails_fired
@@ -266,17 +270,17 @@ class TestPatternAPIEndpoints:
         spend_pattern_tracker.reset_history()
 
     def test_get_pattern_history(self):
-        resp = self.client.get("/api/pattern/history?vpa=rahul@oksbi")
+        resp = self.client.get("/api/pattern/history?vpa=aarav@oksbi")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["vpa"] == "rahul@oksbi"
+        assert data["vpa"] == "aarav@oksbi"
         assert len(data["history"]) > 0
         assert "profile" in data
         assert data["profile"]["mean_amount"] < 200.0
 
     def test_post_pattern_analyze_spike(self):
         payload = {
-            "vpa": "rahul@oksbi",
+            "vpa": "aarav@oksbi",
             "amount": 70000.0,
         }
         resp = self.client.post("/api/pattern/analyze", json=payload)
@@ -319,13 +323,13 @@ class TestRepeatUserPipelineIntegration:
 
     @pytest.mark.asyncio
     async def test_repeat_user_high_spike_keeps_retry_available(self):
-        """When rahul@oksbi (base ~100) attempts ₹999, mark high severity without blocking salary retry."""
+        """When aarav@oksbi (base ~100) attempts ₹999, mark high severity without blocking salary retry."""
         from api.simulator import run_custom_scenario
 
         # 1. High-but-not-critical spike attempt (₹999 on ₹100 base)
         ev_spike = await run_custom_scenario({
             "failure_code": "U30",
-            "vpa": "rahul@oksbi",
+            "vpa": "aarav@oksbi",
             "bank": "SBI",
             "amount": 999.0,
             "mandate_state": "active",
@@ -342,7 +346,7 @@ class TestRepeatUserPipelineIntegration:
         # 2. Normal Transaction (₹99 on ₹100 base)
         ev_normal = await run_custom_scenario({
             "failure_code": "U30",
-            "vpa": "rahul@oksbi",
+            "vpa": "aarav@oksbi",
             "bank": "SBI",
             "amount": 99.0,
             "mandate_state": "active",
