@@ -136,6 +136,26 @@ Shifts RecoverIQ from purely reactive recovery after payment failure to **proact
 - **Pre-Empted Revenue Protection**: Eliminates NPCI `BT02` ("Mandate Expired") debit failures before they ever occur, preventing involuntary churn, bank decline fees, and service disruption.
 - **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries in the ROI breakdown.
 
+### 6. B2B Receivables Chaser & Statutory MSMED Act Dunning Engine
+Enterprise invoices require specialized handling distinct from consumer micro-transactions. The B2B Chaser automates invoice dunning with full Indian regulatory compliance:
+- **4 Dynamic Aging Buckets**: Classifies receivables into `0–30d` (Current), `31–60d` (Early), `61–90d` (Late), and `90d+` (Critical).
+- **Statutory MSMED Act 2006 Interest**: Automatically calculates and compounds **18% p.a. penal interest** on delayed payments from corporate debtors.
+- **Debtor Exposure Tiering**:
+  - **Tier C (< ₹25,000)**: Fully automated low-cost outreach via **Hinglish automated IVR voice bot** + payment link SMS.
+  - **Tier B (₹25,000 – ₹2,00,000)**: Semi-automated outreach (Formal demand email + designated Account Manager).
+  - **Tier A (> ₹2,00,000)**: High-touch legal pipeline (Assigned Senior Recovery Manager + Legal Counsel Notice).
+- **Out-of-the-Box Initialization**: Pre-loads 5 enterprise invoice archetypes (Infosys BPO, TechCorp, StartupXYZ, Mega Retail, CloudSoft) totaling ₹5,88,836 across all 4 aging buckets.
+- **Interactive Live Actions**: Supports 1-click dunning dispatch (`POST /api/b2b/chase/{id}` with 60s duplicate throttle) and cash settlement (`POST /api/b2b/settle/{id}`).
+
+### 7. Two-Part Recovery ROI & Unit Economics Engine
+Provides merchants with honest, audit-grade financial reporting by strictly distinguishing between post-failure recoveries and pre-failure churn prevention:
+- **Two-Part Impact Separation**:
+  - **⚡ Reactive Recovered**: Revenue rescued after a debit failure occurred (Smart Retries, UPI Collect, B2B Settlement, Drop-off cart recovery).
+  - **🛡️ Proactive Protected**: Revenue secured before failure occurred (Pre-emptive Mandate Expiry renewals eliminating `BT02` failures).
+- **Real-Time Unit-Cost Accounting**: Deducts exact channel communication costs (WhatsApp templates @ ₹0.50, SMS @ ₹0.15, Automated IVR @ ₹0.75, UPI Collect @ ₹0.25) to compute true net return:
+  $$\text{Net Return (ROI)} = (\text{Reactive Recovered} + \text{Proactive Protected}) - \text{Total Channel Costs}$$
+- **Granular Per-Channel Breakdown**: Detailed table tracking unit costs, action volume, gross recovered, and net ROI per intervention channel.
+
 ---
 
 ## 🎯 Full-Spectrum System Architecture & Component Breakdown
@@ -633,7 +653,10 @@ LLM_PROVIDER=gemini
 | `POST`| `/api/decide` | Evaluates guardrails and Thompson Sampling for a custom failure event |
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |
-| `POST`| `/api/b2b/receivables` | Adds B2B invoice and triggers automated dunning sequence |
+| `GET` | `/api/b2b` | Retrieves all tracked B2B receivables, aging bucket counts, overdue days, and computed MSMED statutory interest |
+| `POST`| `/api/b2b/receivables` | Registers new B2B invoice and triggers initial automated dunning action |
+| `POST`| `/api/b2b/chase/{receivable_id}` | Dispatches next dunning action (IVR call / SMS / legal notice) with 60s duplicate throttle |
+| `POST`| `/api/b2b/settle/{receivable_id}` | Marks receivable as settled, logs recovery to audit ledger, and updates recovered revenue metrics |
 | `POST`| `/api/reset` | Resets all active events, audit ledgers, promises, and resets spend histories to initial seeds |
 | `GET` | `/api/stream` | Server-Sent Events (SSE) live event stream for frontend dashboard |
 
