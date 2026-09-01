@@ -452,6 +452,7 @@ class DecideRequest(BaseModel):
     amount:        float = 999.0
     retry_count:   int   = 0
     vpa:           str   = ""
+    category:      str   = "general"
 
 @app.post("/api/decide")
 async def decide(req: DecideRequest):
@@ -463,6 +464,7 @@ async def decide(req: DecideRequest):
         amount        = req.amount,
         retry_count   = req.retry_count,
         has_promise   = has_promise,
+        category      = req.category,
     )
     return decision.to_dict()
 

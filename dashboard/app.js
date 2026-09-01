@@ -718,7 +718,8 @@ async function submitJsonUpload() {
 // Cycles through all scenarios automatically — great for live hackathon demos
 const AUTO_DEMO_KEYS     = [
   'spike_critical', 'normal_variation', 'u30', 'u29', 'bt01', 'bt02', 'u13',
-  'tm', 'u69', 'ba', 'xb', 'te', 'rb', 'u66', 'rbi_threshold'
+  'tm', 'u69', 'ba', 'xb', 'te', 'rb', 'u66', 'rbi_threshold',
+  'rbi_enhanced_insurance', 'rbi_enhanced_breach'
 ];
 const AUTO_DEMO_INTERVAL = 3500; // ms between events
 

@@ -65,6 +65,8 @@ class GuardrailDecision:
     trust_score:        float       = 0.5   # payer trust score 0.0–1.0
     bandit_decision:    Optional[dict] = None # Thompson sampling MAB selection
     pattern_analysis:   Optional[dict] = None # Spend pattern baseline & anomaly details
+    category:           str         = "general"
+    rbi_threshold:      float       = 15_000.0
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +80,8 @@ class GuardrailDecision:
             "trust_score":       self.trust_score,
             "bandit_decision":   self.bandit_decision,
             "pattern_analysis":  self.pattern_analysis,
+            "category":          self.category,
+            "rbi_threshold":     self.rbi_threshold,
         }
 
 
@@ -98,8 +102,9 @@ class DecisionEngine:
         GR4  — DND window 21:00–08:00 IST (TRAI): suppress whatsapp_nudge
         GR5  — Active promise-to-pay: suppress nudge/collect (no harassment)
         GR6  — Tier/amount: Bronze < ₹500 skip escalation (cost > value)
-        GR7  — RBI/NPCI: UPI Autopay debit > ₹15,000 requires pre-debit notification;
-               skip silent retry, force explicit customer consent channel
+        GR7  — RBI/NPCI: Category-aware UPI Autopay pre-debit notification rule
+               (₹1,00,000 for insurance/MF/credit cards; ₹15,000 for general/education).
+               Exceeding category threshold blocks silent retry and forces explicit consent.
         GR8  — Daily contact cap: max 3 outbound touches per customer per day
         GR9  — Inbound compliance hold / blacklist (wrong number, dispute, hardship)
         GR10 — Spend Pattern Anomaly: Sudden upward spike vs historical baseline
@@ -112,11 +117,30 @@ class DecisionEngine:
     DND_START_HOUR = 21
     DND_END_HOUR   = 8
 
-    # RBI/NPCI UPI Autopay pre-debit notification ceiling (₹)
+    # RBI Digital Payments - E-Mandate Framework Category Limits (₹)
+    # Enhanced limit (₹1,00,000) applies strictly to insurance premiums, mutual fund
+    # subscriptions, and credit card bill payments per RBI circulars.
+    # Education and all other categories remain under the general ₹15,000 threshold.
+    RBI_MANDATE_CATEGORY_LIMITS: Dict[str, float] = {
+        "insurance": 100_000.0,
+        "mutual_fund": 100_000.0,
+        "credit_card": 100_000.0,
+        "general": 15_000.0,
+    }
+
+    # RBI/NPCI UPI Autopay pre-debit notification baseline ceiling (₹)
     RBI_PREDEBIT_THRESHOLD = 15_000
 
     # Daily outbound contact cap per customer
     DAILY_CONTACT_CAP = 3
+
+    @classmethod
+    def get_rbi_threshold(cls, category: str = "general") -> float:
+        """Return the applicable RBI e-mandate pre-debit notification threshold for a category."""
+        cat_key = (category or "general").strip().lower()
+        return cls.RBI_MANDATE_CATEGORY_LIMITS.get(
+            cat_key, cls.RBI_MANDATE_CATEGORY_LIMITS["general"]
+        )
 
     def evaluate(
         self,
@@ -132,6 +156,7 @@ class DecisionEngine:
         customer_vpa:     str   = "",
         pattern_analysis: Optional[Any] = None,
         customer_id:      str   = "",
+        category:         str   = "general",
     ) -> GuardrailDecision:
 
         # Link customer identifiers
@@ -155,6 +180,7 @@ class DecisionEngine:
         fired      = []
 
         # ── Guardrail 1: Amount too small ────────────────────────────────────
+        rbi_limit = self.get_rbi_threshold(category)
         if amount < 10:
             logger.warning("GR1: Amount ₹%.2f below minimum threshold — suppressing all actions", amount)
             return GuardrailDecision(
@@ -162,6 +188,8 @@ class DecisionEngine:
                 guardrails_fired=["amount_threshold"],
                 customer_tier=tier, retry_budget_left=0,
                 reason=f"Amount ₹{amount:.2f} below ₹10 minimum intervention threshold",
+                category=category,
+                rbi_threshold=rbi_limit,
             )
 
         # ── Guardrail 2: Retry budget exhausted ──────────────────────────────
@@ -200,15 +228,23 @@ class DecisionEngine:
                 fired.append("tier_escalation_suppressed")
                 logger.info("GR6: Tier=%s amount=₹%.0f — escalation suppressed (cost/benefit)", tier, amount)
 
-        # ── Guardrail 7: RBI/NPCI ₹15,000 pre-debit notification rule ────────
-        if amount > self.RBI_PREDEBIT_THRESHOLD:
+        # ── Guardrail 7: RBI/NPCI Category-Aware Pre-Debit Notification Rule ─
+        if amount > rbi_limit:
             self._block(allowed, blocked, "smart_retry")
             fired.append("rbi_predebit_threshold")
+            framework_cite = (
+                "RBI Digital Payments - E-Mandate Framework (₹1,00,000 enhanced limit)"
+                if rbi_limit >= 100_000
+                else "NPCI/RBI UPI Autopay circular (₹15,000 baseline threshold)"
+            )
             logger.warning(
-                "GR7 [RBI CIRCUIT BREAKER]: Amount ₹%.0f > ₹15,000 — "
-                "silent retry BLOCKED per NPCI/RBI UPI Autopay circular. "
+                "GR7 [RBI CIRCUIT BREAKER]: Amount ₹%.0f > ₹%.0f for category '%s' — "
+                "silent retry BLOCKED per %s. "
                 "Forcing explicit customer consent channel.",
                 amount,
+                rbi_limit,
+                category,
+                framework_cite,
             )
 
         # ── Guardrail 8: Daily contact cap (TRAI DND compliance) ─────────────
@@ -341,6 +377,8 @@ class DecisionEngine:
             trust_score=trust_score,
             bandit_decision=bandit_res,
             pattern_analysis=pattern_res_dict,
+            category=category,
+            rbi_threshold=rbi_limit,
         )
 
     @staticmethod

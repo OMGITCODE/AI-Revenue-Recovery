@@ -138,8 +138,10 @@ def simulate_baseline_on_event(event: dict, rng: random.Random) -> dict:
     recovered_amount = 0.0
 
     # Compliance checks
-    if amount > 15000:
-        violations += 1  # RBI circular violation (silent retry > ₹15k)
+    category = event.get("category", "general")
+    rbi_threshold = DecisionEngine.get_rbi_threshold(category)
+    if amount > rbi_threshold:
+        violations += 1  # RBI circular violation (silent retry above category threshold)
     if dnd_time:
         violations += 1  # TRAI DND night violation
 
@@ -191,6 +193,7 @@ def simulate_ai_agent_on_event(
     vpa = event.get("vpa", "user@upi")
     retry_attempt = event.get("retry_attempt", 0)
     is_night = event.get("is_night_event", False)
+    category = event.get("category", "general")
 
     # Use deterministic evaluation hour: 22:00 for night events, 14:00 for daytime events
     eval_hour = 22 if is_night else 14
@@ -204,6 +207,7 @@ def simulate_ai_agent_on_event(
         has_promise=False,
         current_hour=eval_hour,
         rng=rng,
+        category=category,
     )
 
     violations = 0  # Guardrails guarantee 0 regulatory/compliance violations

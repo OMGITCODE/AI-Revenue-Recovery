@@ -255,6 +255,31 @@ SCENARIOS: dict[str, dict] = {
         "mandate_state": MandateState.ACTIVE,
         "retry_attempt": 0,
         "customer_id":   "CUST-HDFC-016",
+        "category":      "general",
+    },
+    "rbi_enhanced_insurance": {
+        "name":          "🛡️ Enhanced Limit — Insurance (₹45,000 <= ₹1 Lakh RBI Rule)",
+        "failure_code":  UPIFailureCode.U30,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "aditya@okhdfcbank",
+        "bank":          "HDFC",
+        "amount":        45000.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-HDFC-017",
+        "category":      "insurance",
+    },
+    "rbi_enhanced_breach": {
+        "name":          "🛡️ Enhanced Limit Breach — Credit Card (> ₹1 Lakh RBI Rule)",
+        "failure_code":  UPIFailureCode.U30,
+        "event_type":    "mandate.execution.failed",
+        "vpa":           "swati@okicici",
+        "bank":          "ICICI",
+        "amount":        115000.0,
+        "mandate_state": MandateState.ACTIVE,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-ICICI-018",
+        "category":      "credit_card",
     },
 }
 
@@ -424,6 +449,7 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
         customer_vpa     = upi_event.customer_vpa,
         customer_id      = risk.customer_id,
         pattern_analysis = pat,
+        category         = cfg.get("category", "general"),
     )
     confidence_decide = 0.90 if decision.guardrails_fired else 0.72
     evt_type_decide   = "guardrail" if decision.guardrails_fired else "decide"
@@ -560,8 +586,13 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
     return ev
 
 
-async def process_and_log_event(ev: RecoveryEvent | None, cfg: dict) -> RecoveryEvent | None:
-    """Backward-compatible wrapper for external calls."""
+async def process_and_log_event(ev: Any, cfg: dict) -> RecoveryEvent | None:
+    """
+    Process an event through the agent pipeline and log to the Recovery Ledger.
+    Accepts a UPIAutopayEvent or returns an existing RecoveryEvent for backward compatibility.
+    """
+    if isinstance(ev, UPIAutopayEvent):
+        return await _execute_event_pipeline(ev, cfg)
     return ev
 
 
@@ -643,6 +674,7 @@ async def run_custom_scenario(form: dict) -> RecoveryEvent | None:
         "retry_attempt": int(form.get("retry_attempt", 0)),
         "customer_id":   cust_id,
         "name":          form.get("scenario_name", "Custom Scenario"),
+        "category":      form.get("category", "general"),
     }
 
     upi_event = _make_upi_event(cfg)
