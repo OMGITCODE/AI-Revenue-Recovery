@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-159%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-161%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -58,11 +58,6 @@ The recovery channel baseline probabilities in `benchmark.py` are calibrated fro
 ### 🛡️ Robustness & Sensitivity Analysis (20% Pessimistic Haircut)
 
 To ensure claims do not rely on fragile or optimistic conversion assumptions, `benchmark.py` includes a built-in sensitivity test that applies an automated **20% pessimistic haircut** across all channel conversion rates:
-
-| Scenario | Baseline Recovery | RecoverIQ Recovery | Net Uplift |
-|---|---|---|---|
-| **Standard Modeled Rates** | ₹19,547 (15.0%) | **₹1,55,751 ± ₹19,774 (74.5%)** | **+₹1,36,204 (+59.5 pts)** |
-| **20% Pessimistic Haircut** | ₹19,547 (15.0%) | **₹1,26,981 ± ₹23,997 (59.6%)** | **+₹1,07,434 (+44.6 pts)** |
 
 **Key Takeaway**: Even under a 20% pessimistic haircut across every single channel, RecoverIQ recovers **₹1.26 Lakh+ (~60% recovery rate)** with a **+44.6 pts net gain**, proving that the agent's architectural advantage (NPCI code awareness, salary-window alignment, and guardrails) is completely robust to conservative rate shifts.
 
@@ -404,7 +399,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (159 passing tests across 9 files)
+└── tests/                       # Test Suite (161 passing tests across 9 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
@@ -413,7 +408,7 @@ ai-revenue-recovery-agent/
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
-    └── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (10 tests)
+    └── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (12 tests)
 ```
 
 ---

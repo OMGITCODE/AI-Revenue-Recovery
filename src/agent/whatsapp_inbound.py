@@ -197,18 +197,20 @@ class WhatsAppInboundHandler:
             r"\bpay\s+kar\s+dunga\b", r"\bkar\s+dungi\b", r"\bkarunga\b", r"\bkarungi\b",
             r"\bpakka\b", r"\bpromise\b", r"\bsham\s+tak\b", r"\bevening\b",
             r"\b5th\b", r"\b1st\b", r"\b7th\b", r"\b10th\b", r"\bweekend\b",
-            r"\bmonday\b", r"\bnext\s+week\b", r"\bdedunga\b", r"\bde\s+dunga\b",
-            r"\bthoda\s+time\b", r"\bgive\s+me\s+time\b", r"\bcommit\b", r"\bwill\s+pay\b",
-            r"\bshaam\b", r"\baaj\s+raat\b", r"\btonight\b", r"\bparso\b",
-            r"\bby\s+tomorrow\b", r"\bbalance\s+daal\s+dunga\b", r"\bho\s+jayega\b"
+            r"\bmonday\b", r"\bfriday\b", r"\bnext\s+week\b", r"\bagle\s+hafte\b",
+            r"\bdedunga\b", r"\bde\s+dunga\b", r"\bthoda\s+time\b", r"\bgive\s+me\s+time\b",
+            r"\bcommit\b", r"\bwill\s+pay\b", r"\bshaam\b", r"\baaj\s+raat\b", r"\btonight\b",
+            r"\bparso\b", r"\bby\s+tomorrow\b", r"\bbalance\s+daal\s+dunga\b", r"\bho\s+jayega\b",
+            r"\bstipend\b", r"\bdues\b", r"\bliquidity\b", r"\barrangement\b", r"\bclear\s+karta\b"
         ],
         InboundIntent.ALREADY_PAID: [
             r"\balready\s+paid\b", r"\bkat\s+gaye\b", r"\bkat\s+gaya\b", r"\bkat\s+chuke\b", r"\bcut\s+gaya\b",
-            r"\bdebit\s+ho\s+gaya\b", r"\bdebit\s+ho\s+chuka\b", r"\bpayment\s+done\b",
+            r"\bcut\s+hone\b", r"\bdebit\s+ho\s+gaya\b", r"\bdebit\s+ho\s+chuka\b", r"\bpayment\s+done\b",
             r"\balready\s+transferred\b", r"\bupi\s+se\s+bhej\s+diya\b", r"\bde\s+diya\b",
             r"\bcheck\s+your\s+statement\b", r"\bcheck\s+bank\s+statement\b", r"\bpaise\s+kat\s+gaye\b",
             r"\bpaid\s+already\b", r"\bpay\s+kar\s+diya\b", r"\balready\s+deducted\b",
-            r"\bpaid\s+yesterday\b", r"\btransaction\s+success\b",
+            r"\bpaid\s+yesterday\b", r"\btransaction\s+success\b", r"\butr\b",
+            r"\bgooglepay\b", r"\bgpay\b", r"\bphonepe\b",
             r"\bpaise\s+chale\s+gaye\b", r"\bpaise\s+bhej\s+diye\b"
         ],
         InboundIntent.DISPUTE: [
@@ -217,7 +219,8 @@ class WhatsAppInboundHandler:
             r"\bdidn'?t\s+buy\b", r"\bdispute\b", r"\bconsumer\s+court\b",
             r"\bband\s+karo\b", r"\bdhokha\b", r"\bfake\b", r"\bunauthorized\b",
             r"\bgalat\s+kata\b", r"\bcheating\b", r"\bcomplaint\b",
-            r"\bfake\s+payment\b", r"\bconsumer\s+forum\b"
+            r"\bfake\s+payment\b", r"\bconsumer\s+forum\b", r"\bcyber\s+crime\b",
+            r"\bwho\s+authorized\b", r"\breverse\b", r"\bnot\s+authorize\b"
         ],
         InboundIntent.HARDSHIP: [
             r"\bjob\s+chali\s+gayi\b", r"\blost\s+my\s+job\b", r"\bmedical\b",
@@ -225,7 +228,8 @@ class WhatsAppInboundHandler:
             r"\bcrisis\b", r"\bhardship\b", r"\bfinancial\s+problem\b",
             r"\bcan'?t\s+afford\b", r"\bmajboori\b", r"\btanki\b", r"\bkharab\s+halat\b",
             r"\bfamily\s+medical\b", r"\blost\s+employment\b", r"\bhospital\s+me\b",
-            r"\bproblem\b", r"\bno\s+income\b", r"\bpause\b", r"\brelief\b"
+            r"\bproblem\b", r"\bno\s+income\b", r"\bpause\b", r"\brelief\b",
+            r"\bicu\b", r"\bshut\s+down\b", r"\bdaane\b"
         ],
         InboundIntent.WRONG_NUMBER: [
             r"\bwrong\s+number\b", r"\bgalat\s+number\b", r"\bye\s+kaun\s+hai\b",
@@ -233,7 +237,9 @@ class WhatsAppInboundHandler:
             r"\bwho\s+are\s+you\b", r"\bdon'?t\s+call\b", r"\bopt\s+out\b",
             r"\bunsubscribe\b", r"\bdnd\b", r"\bnot\s+me\b", r"\bkaun\s+ho\b",
             r"\bspam\b", r"\bdo\s+not\s+contact\b", r"\bstop\s+spamming\b",
-            r"\bnever\s+took\b", r"\bwrong\s+contact\b"
+            r"\bnever\s+took\b", r"\bwrong\s+contact\b", r"\bnew\s+sim\b",
+            r"\bnewly\s+issued\b", r"\bwrong\s+recipient\b", r"\bnot\s+mr\b",
+            r"\bkisi\s+aur\b", r"\bbelongs\s+to\s+someone\b"
         ]
     }
 

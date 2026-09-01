@@ -1606,13 +1606,13 @@ async function executePromptScenario(promptText) {
     const sc = data.scenario || {};
     const ev = data.event || {};
 
-    let reply = `⚡ **${esc(echoText)}**\n\n`;
-    reply += `- **Failure Code**: \`${esc(sc.failure_code || 'U30')}\` · **Bank**: ${esc(sc.bank || 'SBI')}\n`;
+    let reply = `⚡ **${echoText}**\n\n`;
+    reply += `- **Failure Code**: \`${sc.failure_code || 'U30'}\` · **Bank**: ${sc.bank || 'SBI'}\n`;
     reply += `- **Amount**: ₹${Number(sc.amount || 0).toLocaleString('en-IN')}\n`;
-    reply += `- **Payer VPA**: \`${esc(sc.vpa || 'user@upi')}\`\n`;
+    reply += `- **Payer VPA**: \`${sc.vpa || 'user@upi'}\`\n`;
     if (ev.decision) {
-      reply += `- **Decision**: **${esc(ev.decision.approved ? 'APPROVED' : 'GUARDRAIL BLOCKED')}** (Confidence: ${Math.round((ev.decision.confidence || 0.9) * 100)}%)\n`;
-      reply += `- **Intervention**: ${esc(ev.decision.chosen_channel || 'Smart Retry Scheduled')}\n`;
+      reply += `- **Decision**: **${ev.decision.approved ? 'APPROVED' : 'GUARDRAIL BLOCKED'}** (Confidence: ${Math.round((ev.decision.confidence || 0.9) * 100)}%)\n`;
+      reply += `- **Intervention**: ${ev.decision.chosen_channel || 'Smart Retry Scheduled'}\n`;
     }
 
     appendProjectChatMessage('bot', reply, data.provider);
@@ -1681,7 +1681,10 @@ async function submitProjectChat(e) {
 
 function formatMarkdown(text) {
   if (!text) return '';
-  return text
+  // 1. Centralized HTML Entity Escaping (OWASP innerHTML XSS Prevention)
+  const safe = esc(String(text));
+  // 2. Markdown formatting on safely escaped text
+  return safe
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')

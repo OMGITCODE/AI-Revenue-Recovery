@@ -499,12 +499,15 @@ Rules:
         except (ValueError, TypeError):
             amount = 999.0
 
-        bank = str(data.get("bank") or "SBI").strip()
-        vpa = str(data.get("vpa") or f"user@ok{bank.lower()}").strip()
+        # Strip any raw HTML tags from LLM-provided strings to defang prompt injection
+        bank = re.sub(r"<[^>]+>", "", str(data.get("bank") or "SBI")).strip() or "SBI"
+        vpa = re.sub(r"<[^>]+>", "", str(data.get("vpa") or f"user@ok{bank.lower()}")).strip() or "user@upi"
         mandate_state = str(data.get("mandate_state") or ("revoked" if code == "BT01" else "expired" if code == "BT02" else "active")).lower()
         retry_attempt = int(data.get("retry_attempt") or 0)
-        scenario_name = str(data.get("scenario_name") or f"Simulated Scenario - {code} ({bank})").strip()
-        echo = str(data.get("echo_summary") or f"{scenario_name} (₹{amount:,.0f}, {code}, {bank})").strip()
+        raw_name = str(data.get("scenario_name") or f"Simulated Scenario - {code} ({bank})").strip()
+        scenario_name = re.sub(r"<[^>]+>", "", raw_name)
+        raw_echo = str(data.get("echo_summary") or f"{scenario_name} (₹{amount:,.0f}, {code}, {bank})").strip()
+        echo = re.sub(r"<[^>]+>", "", raw_echo)
 
         return {
             "failure_code": code,
@@ -520,7 +523,9 @@ Rules:
 
     def _parse_scenario_heuristically(self, prompt: str) -> Dict[str, Any]:
         """Deterministic offline rule-based extractor for scenario parameters."""
-        p = prompt.lower()
+        # Defang raw HTML in prompt first
+        clean_p = re.sub(r"<[^>]+>", " ", prompt)
+        p = clean_p.lower()
 
         # 1. Failure code detection
         code = "U30"
@@ -548,15 +553,22 @@ Rules:
         if lakh_match:
             amount = float(lakh_match.group(1)) * 100000.0
         else:
-            amt_match = re.search(r"(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]+)?|[0-9]+)", p)
-            if amt_match:
-                clean_num = amt_match.group(1).replace(",", "")
+            # Check explicit currency sign first
+            curr_match = re.search(r"(?:rs\.?|inr|₹)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]+)?|[0-9]+)", p)
+            if curr_match:
                 try:
-                    parsed_amt = float(clean_num)
-                    if parsed_amt > 10:  # avoid picking up attempt numbers
-                        amount = parsed_amt
+                    amount = float(curr_match.group(1).replace(",", ""))
                 except ValueError:
                     pass
+            else:
+                for m in re.finditer(r"\b([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]+)?|[0-9]+)\b", p):
+                    try:
+                        cand = float(m.group(1).replace(",", ""))
+                        if cand >= 50:
+                            amount = cand
+                            break
+                    except ValueError:
+                        pass
 
         # 3. Bank extraction
         bank = "SBI"

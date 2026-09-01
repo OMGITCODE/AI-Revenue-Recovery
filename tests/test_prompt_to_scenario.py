@@ -110,8 +110,9 @@ class TestRateLimiterAndQuota:
 
     def test_rate_limiter_blocks_external_ip_exceeding_limit(self, monkeypatch):
         monkeypatch.setattr(settings, "llm_rate_limit_per_minute", 3)
+        monkeypatch.setattr(settings, "llm_aggregate_rate_limit_per_minute", 100)
         from fastapi import HTTPException
-        limiter = InMemoryRateLimiter(requests_per_minute=3)
+        limiter = InMemoryRateLimiter(requests_per_minute=3, aggregate_requests_per_minute=100)
 
         class MockClient:
             host = "203.0.113.195"
@@ -128,6 +129,34 @@ class TestRateLimiterAndQuota:
         with pytest.raises(HTTPException) as exc:
             limiter.check(MockRequest())
         assert exc.value.status_code == 429
+
+    def test_aggregate_rate_limiter_blocks_combined_ip_surge(self, monkeypatch):
+        monkeypatch.setattr(settings, "llm_rate_limit_per_minute", 10)
+        monkeypatch.setattr(settings, "llm_aggregate_rate_limit_per_minute", 4)
+        from fastapi import HTTPException
+        limiter = InMemoryRateLimiter(requests_per_minute=10, aggregate_requests_per_minute=4)
+
+        # 4 different IPs make 1 call each (under per-IP limit of 10)
+        for i in range(4):
+            class MockClient:
+                host = f"203.0.113.{i+1}"
+
+            class MockRequest:
+                client = MockClient()
+
+            limiter.check(MockRequest())
+
+        # 5th call from another distinct IP must raise 429 because aggregate ceiling is 4
+        class MockClient5:
+            host = "203.0.113.99"
+
+        class MockRequest5:
+            client = MockClient5()
+
+        with pytest.raises(HTTPException) as exc:
+            limiter.check(MockRequest5())
+        assert exc.value.status_code == 429
+        assert "Global rate limit exceeded" in exc.value.detail
 
     @pytest.mark.asyncio
     async def test_global_daily_cap_trips_to_fallback(self, monkeypatch):
@@ -180,3 +209,20 @@ class TestPublicPathSecurityAllowlist:
 
         res_chat = client.post("/api/project-chat", json={"message": "What is RecoverIQ?"})
         assert res_chat.status_code == 200
+
+
+class TestXSSDefensesAndSanitization:
+    """Tests that adversarial prompt injections and raw HTML in chatbot and scenario payloads are sanitized."""
+
+    @pytest.mark.asyncio
+    async def test_scenario_generator_sanitizes_html_tags(self):
+        classifier = LLMIntentClassifier()
+        # Prompt containing adversarial HTML/XSS payloads
+        adversarial_prompt = 'Simulate <script>alert("XSS")</script> <img src=x onerror="alert(1)"> ₹5,000 U30 on SBI'
+        res = await classifier.parse_natural_language_scenario(adversarial_prompt)
+
+        assert res["failure_code"] == "U30"
+        assert res["amount"] == 5000.0
+        # Check that script tags are not executed or parsed into sensitive keys
+        assert "<script>" not in res["bank"]
+

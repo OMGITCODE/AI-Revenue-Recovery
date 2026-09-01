@@ -60,13 +60,18 @@ from collections import defaultdict, deque
 
 class InMemoryRateLimiter:
     """
-    Sliding-window in-memory rate limiter per IP address for public AI endpoints.
-    Exempts localhost / testclient to prevent demo disruption.
+    Dual-layer sliding-window in-memory rate limiter for public AI endpoints:
+    1. Per-IP sliding window (default 30 req/min/IP) to prevent single-client flooding.
+    2. Aggregate global sliding window across all non-localhost IPs (default 120 req/min)
+       to protect LLM API quotas during multi-judge concurrent evaluation sessions.
+    3. Exempts localhost / testclient to guarantee zero presentation disruptions.
     """
-    def __init__(self, requests_per_minute: int = 30):
+    def __init__(self, requests_per_minute: int = 30, aggregate_requests_per_minute: int = 120):
         self.requests_per_minute = requests_per_minute
+        self.aggregate_requests_per_minute = aggregate_requests_per_minute
         self.window_seconds = 60.0
         self.ip_timestamps: Dict[str, deque] = defaultdict(deque)
+        self.global_timestamps: deque = deque()
 
     def check(self, request: Request):
         client_ip = request.client.host if request.client else "127.0.0.1"
@@ -76,20 +81,34 @@ class InMemoryRateLimiter:
 
         now = time.time()
         window_start = now - self.window_seconds
-        queue = self.ip_timestamps[client_ip]
 
+        # 1. Check Aggregate Global Ceiling across all external IPs
+        while self.global_timestamps and self.global_timestamps[0] < window_start:
+            self.global_timestamps.popleft()
+
+        agg_limit = getattr(settings, "llm_aggregate_rate_limit_per_minute", self.aggregate_requests_per_minute)
+        if len(self.global_timestamps) >= agg_limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Global rate limit exceeded across all active sessions ({agg_limit} req/min). Please wait a moment before trying again.",
+                headers={"Retry-After": "60"},
+            )
+
+        # 2. Check Per-IP Sliding Window
+        queue = self.ip_timestamps[client_ip]
         while queue and queue[0] < window_start:
             queue.popleft()
 
-        limit = getattr(settings, "llm_rate_limit_per_minute", 30)
-        if len(queue) >= limit:
+        ip_limit = getattr(settings, "llm_rate_limit_per_minute", self.requests_per_minute)
+        if len(queue) >= ip_limit:
             raise HTTPException(
                 status_code=429,
-                detail=f"Rate limit exceeded. Maximum {limit} requests per minute allowed.",
+                detail=f"Rate limit exceeded. Maximum {ip_limit} requests per minute allowed per client.",
                 headers={"Retry-After": "60"},
             )
 
         queue.append(now)
+        self.global_timestamps.append(now)
 
 rate_limiter = InMemoryRateLimiter()
 
