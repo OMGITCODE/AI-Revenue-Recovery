@@ -1218,6 +1218,34 @@ async def prompt_to_scenario_endpoint(req: PromptScenarioRequest, request: Reque
     if not clean_prompt:
         raise HTTPException(status_code=400, detail="Scenario prompt cannot be empty.")
 
+    # 0. Check if prompt targets a known expiring mandate for Force-Lapse lifecycle
+    lower_prompt = clean_prompt.lower()
+    is_expiry_intent = any(w in lower_prompt for w in ["expir", "lapse", "ignore", "bt02", "unrenewed", "deadline", "lapsed"])
+    if is_expiry_intent:
+        for m in mandate_expiry_scanner.get_all_mandates():
+            name_parts = [p.lower() for p in m.customer_name.split() if len(p) >= 3]
+            vpa_prefix = m.customer_vpa.split("@")[0].lower()
+            if any(p in lower_prompt for p in name_parts) or vpa_prefix in lower_prompt or m.mandate_id.lower() in lower_prompt:
+                from api.simulator import force_lapse_mandate
+                mand, ev = await force_lapse_mandate(m.mandate_id)
+                if mand and ev:
+                    await _broadcast_modules_updated()
+                    return {
+                        "echo": f"🔔 Matched expiring mandate {mand.mandate_id} ({mand.customer_name}, ₹{mand.amount:,.0f} {mand.bank_name}). Simulating validity lapse into NPCI BT02 failure event and running full reactive recovery...",
+                        "scenario": {
+                            "scenario_name": f"Proactive Lapse Bridge — {mand.customer_name} ({mand.bank_name})",
+                            "failure_code": "BT02",
+                            "vpa": mand.customer_vpa,
+                            "bank": mand.bank_name,
+                            "amount": mand.amount,
+                            "mandate_state": "expired",
+                            "retry_attempt": 0,
+                        },
+                        "event": ev.to_dict() if hasattr(ev, "to_dict") else ev,
+                        "provider": "proactive_lapse_bridge",
+                        "lapsed_mandate_id": mand.mandate_id,
+                    }
+
     # 1. Parse via schema-constrained LLM (or deterministic heuristic fallback)
     parsed = await llm_classifier.parse_natural_language_scenario(clean_prompt)
 

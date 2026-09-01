@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-176%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-177%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -251,9 +251,9 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
-| **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **12 tests** | Natural language scenario generator, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
+| **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **176 passing** | **100% test pass rate in ~40s** |
+| **Total Test Suite** | `pytest tests/` | **177 passing** | **100% test pass rate in ~40s** |
 
 ---
 
@@ -444,7 +444,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (176 passing tests across 10 files)
+└── tests/                       # Test Suite (177 passing tests across 10 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
@@ -453,7 +453,7 @@ ai-revenue-recovery-agent/
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
-    ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (12 tests)
+    ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, proactive lapse bridge, rate limiter & eval benchmark tests (13 tests)
     └── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (15 tests)
 ```
 
@@ -504,7 +504,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 176 passed in ~40s
+# 177 passed in ~40s
 ```
 
 ---

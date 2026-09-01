@@ -226,3 +226,16 @@ class TestXSSDefensesAndSanitization:
         # Check that script tags are not executed or parsed into sensitive keys
         assert "<script>" not in res["bank"]
 
+    def test_prompt_to_scenario_triggers_mandate_force_lapse_bridge(self):
+        client = TestClient(app)
+        prompt = "Show me what happens if Priya's SaaS mandate expires and she ignores the WhatsApp reminder"
+        res = client.post("/api/prompt-to-scenario", json={"prompt": prompt})
+
+        assert res.status_code == 200
+        data = res.json()
+        assert data["provider"] == "proactive_lapse_bridge"
+        assert "Priya" in data["echo"]
+        assert data["scenario"]["failure_code"] == "BT02"
+        assert data["event"]["failure_code"] == "BT02"
+        assert data["lapsed_mandate_id"] == "mand_hdfc_exp_002"
+
