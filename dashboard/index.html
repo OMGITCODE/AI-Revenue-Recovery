@@ -302,6 +302,15 @@
             <span class="sc-arrow">›</span>
           </button>
 
+          <button class="sc-btn" id="sc-mandate-expiry" onclick="runScenario('proactive_mandate_expiry')">
+            <div class="sc-code" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">🔔 T-48h</div>
+            <div class="sc-info">
+              <div class="sc-name">Proactive Mandate Expiry</div>
+              <div class="sc-meta">HDFC · ₹1,499 · expires in 18h</div>
+            </div>
+            <span class="sc-arrow">›</span>
+          </button>
+
         </div>
 
         <div class="sim-footer">
@@ -350,6 +359,47 @@
 
     </div><!-- /right-col -->
   </div><!-- /content -->
+
+  <!-- ── Proactive Mandate Expiry Interceptor Panel (Full Width) ────────────── -->
+  <div class="content content-full" style="margin-top:12px;">
+    <div class="card" id="mandate-expiry-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🔔 Proactive Mandate Expiry Interceptor (T-72h Prevention)</div>
+          <div class="card-sub">Pre-empts NPCI BT02 ("Mandate Expired") failures before they occur · 1-Click WhatsApp renewal magic links</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="module-stats" id="exp-stats-bar">
+            <span class="stat-chip chip-amber" id="exp-at-risk">0 mandates expiring</span>
+            <span class="stat-chip chip-blue"  id="exp-nudged">0 nudges sent</span>
+            <span class="stat-chip chip-green" id="exp-protected">₹0 churn prevented</span>
+          </div>
+          <button class="btn-ghost" onclick="loadExpiringMandates()" title="Refresh expiring mandates">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div class="module-table-wrap">
+        <table class="tbl" id="exp-tbl">
+          <thead>
+            <tr>
+              <th>Mandate ID</th>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th>Amount</th>
+              <th>Bank</th>
+              <th>Expiry Date</th>
+              <th>Hours Left</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="exp-tbody">
+            <tr><td colspan="9"><div class="empty-state"><p>Loading expiring mandates...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /content-full (Expiring Mandates) -->
 
   <!-- ── Second row: Promise-to-Pay + Checkout Drop-off ────────────────────── -->
   <div class="content content-2col" style="margin-top:12px;">

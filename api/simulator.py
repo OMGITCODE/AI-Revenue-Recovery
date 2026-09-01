@@ -37,6 +37,7 @@ from src.agent.checkout_recovery import checkout_agent, DropOffReason
 from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.spend_pattern import spend_pattern_tracker
 from src.agent.customer_identity import customer_identity_registry
+from src.agent.mandate_expiry import mandate_expiry_scanner
 from src.integrations.setu_aa import setu_aa
 from api.store import RecoveryEvent, store
 
@@ -280,6 +281,18 @@ SCENARIOS: dict[str, dict] = {
         "retry_attempt": 0,
         "customer_id":   "CUST-ICICI-018",
         "category":      "credit_card",
+    },
+    "proactive_mandate_expiry": {
+        "name":          "🔔 Proactive Expiry Interceptor (T-48h Pre-BT02)",
+        "failure_code":  UPIFailureCode.BT02,
+        "event_type":    "mandate.expired",
+        "vpa":           "priya@okhdfcbank",
+        "bank":          "HDFC",
+        "amount":        1499.0,
+        "mandate_state": MandateState.EXPIRED,
+        "retry_attempt": 0,
+        "customer_id":   "CUST-HDFC-002",
+        "category":      "general",
     },
 }
 
@@ -552,6 +565,14 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
                 confidence = 0.62,
                 channel    = "whatsapp",
             )
+            modules_changed = True
+
+    # Auto-dispatch proactive nudge on expiring mandate if BT02
+    if upi_event.failure_code == UPIFailureCode.BT02:
+        expiring = mandate_expiry_scanner.find_expiring_mandates(within_hours=72)
+        matching = [m for m in expiring if m.customer_vpa == upi_event.customer_vpa]
+        if matching and matching[0].status == "PENDING":
+            await mandate_expiry_scanner.dispatch_proactive_nudge(matching[0].mandate_id)
             modules_changed = True
 
     if modules_changed:

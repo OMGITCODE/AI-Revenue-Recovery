@@ -224,6 +224,8 @@ async def scenario_3_technical_error_then_escalation():
     await run_pipeline(event)
 
 
+from src.agent.mandate_expiry import mandate_expiry_scanner
+
 async def scenario_4_daily_limit_exceeded():
     """U69 — Customer hit daily UPI limit. Retry next morning + WhatsApp nudge."""
     _print_scenario(
@@ -236,6 +238,30 @@ async def scenario_4_daily_limit_exceeded():
     await run_pipeline(event)
 
 
+async def scenario_5_proactive_mandate_expiry():
+    """T-72h Proactive Expiry — Intercepts mandate expiry before BT02 debit failure occurs."""
+    _print_scenario(
+        5, "Proactive Mandate Expiry Interceptor (T-72h Prevention)",
+        "Scans active UPI Autopay mandates nearing validity lapse. Dispatches 1-click renewal link to prevent BT02 failure."
+    )
+    expiring = mandate_expiry_scanner.find_expiring_mandates(within_hours=72)
+    print(f"  🔍  Scanner Found  : {len(expiring)} active recurring mandates expiring within 72h window")
+    for m in expiring[:3]:
+        print(f"      • {m.mandate_id} | {m.customer_name} ({m.customer_vpa}) | ₹{m.amount:,.2f} | {m.bank_name} | {m.hours_remaining():.1f}h remaining")
+
+    target = expiring[0]
+    print(f"\n  ⚡  Proactive Action: Dispatching 1-Click WhatsApp Renewal Magic Link for {target.customer_vpa}...")
+    nudged = await mandate_expiry_scanner.dispatch_proactive_nudge(target.mandate_id)
+    print(f"      Status         : ✅ Nudge Dispatched via WhatsApp")
+    print(f"      Renewal Link   : {nudged.renewal_link}")
+    print(f"      Audit Trail    : Logged to RecoveryLedger as BT02_PREVENTED")
+
+    print(f"\n  🎉  Simulating Customer 1-Click Renewal Self-Cure...")
+    renewed = await mandate_expiry_scanner.simulate_proactive_renewal(target.mandate_id)
+    print(f"      Outcome        : ✅ Mandate Renewed Successfully")
+    print(f"      Protected ₹    : ₹{renewed.amount:,.2f} recurring revenue protected from BT02 churn")
+
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 async def main():
@@ -245,15 +271,17 @@ async def main():
     await scenario_2_mandate_revoked()
     await scenario_3_technical_error_then_escalation()
     await scenario_4_daily_limit_exceeded()
+    await scenario_5_proactive_mandate_expiry()
 
     print(f"\n{DSEP}")
-    print("   📊  Demo Complete — All 4 UPI Autopay scenarios processed.")
+    print("   📊  Demo Complete — All 5 UPI Autopay scenarios processed.")
     print()
     print("   Recovery strategies applied:")
     print("   • Scenario 1 → Smart Retry (salary window) + UPI Collect")
     print("   • Scenario 2 → Mandate Renewal Link + WhatsApp Nudge")
     print("   • Scenario 3 → Escalation to Support (max retries hit)")
     print("   • Scenario 4 → Next-day Retry + WhatsApp Nudge")
+    print("   • Scenario 5 → Proactive Mandate Renewal (T-72h pre-failure prevention)")
     print()
     print("   Plug in your RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET in .env")
     print("   to switch from demo mode to live API calls.")

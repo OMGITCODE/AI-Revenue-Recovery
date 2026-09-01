@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-161%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-173%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -138,10 +138,11 @@ RecoverIQ models personalized historical spend baselines (mean, median, range, a
 
 RecoverIQ is built as a modular, high-throughput autonomous revenue recovery architecture. Below is the complete catalog of all components across the codebase:
 
-### 🤖 1. Core AI & Decision Systems (`src/agent/` — 14 Modules)
+### 🤖 1. Core AI & Decision Systems (`src/agent/` — 15 Modules)
 
 | Module | File | Responsibility & Key Innovation |
 |---|---|---|
+| **Proactive Mandate Expiry Interceptor** | `src/agent/mandate_expiry.py` | Proactive $T-72\text{h}$ pre-failure scanner scanning active recurring UPI Autopay mandates nearing validity lapse, dispatching 1-click WhatsApp/SMS renewal magic links before NPCI `BT02` ("Mandate Expired") debit failures can occur, and logging pre-empted recovery to the audit ledger. |
 | **Customer Identity Registry** | `src/agent/customer_identity.py` | Canonical identity graph resolving and merging fragmented customer identifiers (`customer_id`, multiple VPAs, phone numbers, and emails) into a unified profile. Synchronizes behavioral history, cumulative daily touches, retry counts, and compliance holds. |
 | **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
 | **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): RBI Digital Payments E-Mandate Framework category-aware limits (GR7: ₹1,00,000 for insurance, mutual funds, and credit cards; ₹15,000 baseline ceiling for general/education), TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
@@ -203,13 +204,14 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | File | Type | Description |
 |---|---|---|
 | `data/upi_failures_dataset.json` | Dataset (JSON) | 40 curated real-world failure scenarios spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹499 to ₹1,45,000, varied DND states, and historical commitment records. |
+| `data/expiring_mandates_dataset.json` | Dataset (JSON) | 8 diverse recurring mandate archetypes nearing validity expiration across Indian banks (HDFC, SBI, ICICI, Axis, Kotak, Yes Bank) and categories (SaaS, Cloud, OTT, Fitness, Insurance). |
 | `data/batch_run.py` | Script | Headless batch runner iterating over datasets to evaluate recovery pipeline throughput and success metrics. |
 | `benchmark.py` | Benchmark Engine | Probabilistic Monte Carlo simulator running N=50 iterations comparing RecoverIQ vs. fixed-schedule retries, generating mean ± std statistics and 20% pessimistic sensitivity haircut analysis. |
-| `upi_demo.py` & `demo.py` | Interactive Demos | Terminal-based walkthrough scripts demonstrating 4 key UPI failure recovery scenarios and generic recovery pipelines. |
+| `upi_demo.py` & `demo.py` | Interactive Demos | Terminal-based walkthrough scripts demonstrating 5 live UPI Autopay recovery & proactive expiry scenarios and generic recovery pipelines. |
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 141 Tests across 8 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 173 Tests across 10 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -221,8 +223,9 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
-| **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **10 tests** | Natural language scenario generator, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
-| **Total Test Suite** | `pytest tests/` | **159 passing** | **100% test pass rate in ~5s** |
+| **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **12 tests** | Natural language scenario generator, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
+| **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **12 tests** | $T-72\text{h}$ validity window filtering, 1-click magic link dispatch, ledger logging, simulator scenario, and live REST endpoints. |
+| **Total Test Suite** | `pytest tests/` | **173 passing** | **100% test pass rate in ~5s** |
 
 ---
 
@@ -350,7 +353,7 @@ flowchart TD
 ai-revenue-recovery-agent/
 ├── benchmark.py                 # Monte Carlo policy benchmark (Baseline vs RecoverIQ)
 ├── demo.py                      # Generic payment recovery demo
-├── upi_demo.py                  # UPI Autopay 4-scenario live pipeline demo
+├── upi_demo.py                  # UPI Autopay 5-scenario live pipeline & proactive expiry demo
 ├── test_inbound_demo.py         # 2-way conversational WhatsApp inbound live test runner
 ├── requirements.txt
 ├── .env.example
@@ -367,12 +370,14 @@ ai-revenue-recovery-agent/
 │
 ├── data/                        # Datasets & Batch Tools
 │   ├── batch_run.py             # Dataset runner script
-│   └── upi_failures_dataset.json# 40 real-world failure scenarios
+│   ├── upi_failures_dataset.json# 40 real-world failure scenarios
+│   └── expiring_mandates_dataset.json # 8 proactive expiring mandate scenarios
 │
 ├── src/                         # Core Agent Engine
 │   ├── config.py                # Pydantic environment configuration (Gemini & OpenAI support)
 │   │
 │   ├── agent/                   # Production AI Logic & Decision Engines
+│   │   ├── mandate_expiry.py    # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 Prevention
 │   │   ├── customer_identity.py # Canonical Customer Identity Graph & Alias Matcher
 │   │   ├── spend_pattern.py     # Rolling spend profile & anomaly spike detector
 │   │   ├── bandit.py            # Bayesian Contextual Thompson Sampling MAB
@@ -404,7 +409,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (161 passing tests across 9 files)
+└── tests/                       # Test Suite (173 passing tests across 10 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
@@ -413,7 +418,8 @@ ai-revenue-recovery-agent/
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
-    └── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (12 tests)
+    ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, rate limiter & eval benchmark tests (12 tests)
+    └── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (12 tests)
 ```
 
 ---
@@ -444,7 +450,7 @@ python -X utf8 benchmark.py
 ### 3. Run the Demos
 
 ```bash
-# UPI Autopay Recovery Demo (4 live scenarios)
+# UPI Autopay Recovery & Proactive Expiry Demo (5 live scenarios)
 python -X utf8 upi_demo.py
 
 # Generic Revenue Recovery Pipeline Demo
@@ -463,7 +469,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 147 passed in ~4s
+# 173 passed in ~5s
 ```
 
 ---
@@ -598,6 +604,12 @@ LLM_PROVIDER=gemini
 | `GET` | `/api/ledger/export?format=csv` | Downloads complete regulatory audit trail as CSV |
 | `GET` | `/api/ledger/export?format=json`| Exports complete compliance ledger as structured JSON |
 | `GET` | `/api/roi` | Returns real-time ROI breakdown (net ₹ recovered minus channel costs) |
+| `GET` | `/api/mandates/expiring` | Retrieves mandates expiring within lookahead window ($T-72\text{h}$) |
+| `GET` | `/api/mandates/all` | Lists all tracked recurring UPI Autopay mandates |
+| `GET` | `/api/mandates/stats` | Summary of pre-empted revenue & proactive nudge conversion metrics |
+| `POST`| `/api/mandates/proactive-nudge/{mandate_id}` | Dispatches 1-click WhatsApp renewal magic link before `BT02` expiry |
+| `POST`| `/api/mandates/renew/{mandate_id}` | Simulates customer completing proactive mandate renewal |
+| `POST`| `/api/mandates/register` | Registers custom recurring mandate with expiration timestamp |
 | `POST`| `/api/webhook` | Ingests gateway webhooks with duplicate rejection & concurrency locks |
 | `POST`| `/api/webhook/whatsapp/twilio` | Ingests live inbound Twilio WhatsApp webhooks (Form-encoded) |
 | `POST`| `/api/webhook/whatsapp/inbound` | Ingests simulated / JSON inbound WhatsApp messages |

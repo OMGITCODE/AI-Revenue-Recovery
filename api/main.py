@@ -51,6 +51,7 @@ from src.integrations.messaging import messenger, verify_twilio_signature
 from src.integrations.razorpay_upi import verify_webhook_signature
 from src.agent.classifier_eval import classifier_benchmark
 from src.integrations.llm_classifier import llm_classifier
+from src.agent.mandate_expiry import mandate_expiry_scanner
 
 _decision_engine = DecisionEngine()
 
@@ -158,6 +159,9 @@ PUBLIC_EXACT_PATHS = {
     "/api/project-chat",
     "/api/prompt-to-scenario",
     "/api/classifier/eval",
+    "/api/mandates/expiring",
+    "/api/mandates/all",
+    "/api/mandates/stats",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -1263,6 +1267,116 @@ async def get_whatsapp_conversation(identifier: str):
         "identifier": identifier,
         "history": conversation_log.get_history(identifier),
     }
+
+
+# ── Proactive Mandate Expiry Interceptor Endpoints ────────────────────────────
+
+class RegisterMandateRequest(BaseModel):
+    mandate_id: str
+    customer_id: str
+    customer_vpa: str
+    customer_name: str
+    amount: float
+    plan_name: str
+    bank_name: str
+    expiry_hours: float = Field(default=48.0, description="Hours until expiry from now")
+
+
+@app.get("/api/mandates/expiring")
+async def get_expiring_mandates(within_hours: int = 72):
+    """
+    Returns active UPI Autopay mandates expiring within the specified lookahead window (default 72h).
+    Enables proactive pre-BT02 renewal intervention before recurring payment failure occurs.
+    """
+    expiring = mandate_expiry_scanner.find_expiring_mandates(within_hours=within_hours)
+    return {
+        "within_hours": within_hours,
+        "count": len(expiring),
+        "mandates": [m.to_dict() for m in expiring],
+        "stats": mandate_expiry_scanner.get_stats(),
+    }
+
+
+@app.get("/api/mandates/all")
+async def get_all_mandates():
+    """Returns all tracked recurring mandates."""
+    mandates = mandate_expiry_scanner.get_all_mandates()
+    return {
+        "count": len(mandates),
+        "mandates": [m.to_dict() for m in mandates],
+        "stats": mandate_expiry_scanner.get_stats(),
+    }
+
+
+@app.get("/api/mandates/stats")
+async def get_mandate_stats():
+    """Returns aggregated summary metrics of proactive mandate expiry prevention."""
+    return mandate_expiry_scanner.get_stats()
+
+
+@app.post("/api/mandates/proactive-nudge/{mandate_id}")
+async def trigger_proactive_nudge(mandate_id: str):
+    """
+    Dispatches a proactive 1-click renewal magic link via WhatsApp/SMS to prevent BT02 expiry failure.
+    Logs the prevention action in RecoveryLedger for compliance audit trails.
+    """
+    m = await mandate_expiry_scanner.dispatch_proactive_nudge(mandate_id)
+    if not m:
+        raise HTTPException(status_code=404, detail=f"Mandate {mandate_id} not found.")
+
+    # Notify dashboard via module listener
+    from api.simulator import _notify_module_listeners
+    await _notify_module_listeners()
+
+    return {
+        "status": "success",
+        "message": f"Proactive renewal magic link dispatched to {m.customer_vpa} ({m.customer_name})",
+        "mandate": m.to_dict(),
+    }
+
+
+@app.post("/api/mandates/renew/{mandate_id}")
+async def simulate_proactive_renewal(mandate_id: str):
+    """
+    Simulates customer successfully completing the proactive 1-click renewal before expiry date.
+    Logs confirmed pre-empted revenue recovery in RecoveryLedger.
+    """
+    m = await mandate_expiry_scanner.simulate_proactive_renewal(mandate_id)
+    if not m:
+        raise HTTPException(status_code=404, detail=f"Mandate {mandate_id} not found.")
+
+    # Notify dashboard via module listener
+    from api.simulator import _notify_module_listeners
+    await _notify_module_listeners()
+
+    return {
+        "status": "success",
+        "message": f"Mandate {mandate_id} renewed proactively! ₹{m.amount:.2f} protected from BT02 churn.",
+        "mandate": m.to_dict(),
+    }
+
+
+@app.post("/api/mandates/register")
+async def register_mandate(req: RegisterMandateRequest):
+    """Registers a new mandate into the proactive scanner with a custom expiry window."""
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    exp_date = datetime.now(IST) + timedelta(hours=req.expiry_hours)
+    m = mandate_expiry_scanner.register_mandate(
+        mandate_id=req.mandate_id,
+        customer_id=req.customer_id,
+        customer_vpa=req.customer_vpa,
+        customer_name=req.customer_name,
+        amount=req.amount,
+        plan_name=req.plan_name,
+        bank_name=req.bank_name,
+        expiry_date=exp_date,
+    )
+    return {
+        "status": "success",
+        "mandate": m.to_dict(),
+    }
+
 
 
 

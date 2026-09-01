@@ -1,0 +1,98 @@
+[
+  {
+    "mandate_id": "mand_hdfc_exp_002",
+    "customer_id": "CUST-HDFC-002",
+    "customer_vpa": "priya@okhdfcbank",
+    "customer_name": "Priya Mehta",
+    "amount": 1499.0,
+    "plan_name": "SaaS Pro Annual Subscription",
+    "bank_name": "HDFC",
+    "expiry_hours_from_now": 18.0,
+    "category": "saas",
+    "customer_tier": "gold"
+  },
+  {
+    "mandate_id": "mand_sbi_exp_001",
+    "customer_id": "CUST-SBI-001",
+    "customer_vpa": "rahul@oksbi",
+    "customer_name": "Rahul Sharma",
+    "amount": 999.0,
+    "plan_name": "OTT Annual VIP Stream",
+    "bank_name": "SBI",
+    "expiry_hours_from_now": 36.0,
+    "category": "streaming",
+    "customer_tier": "silver"
+  },
+  {
+    "mandate_id": "mand_ybl_exp_003",
+    "customer_id": "CUST-YBL-003",
+    "customer_vpa": "vikram@ybl",
+    "customer_name": "Vikram Patel",
+    "amount": 2999.0,
+    "plan_name": "Health & Fitness Gold Pass",
+    "bank_name": "Yes Bank",
+    "expiry_hours_from_now": 52.0,
+    "category": "fitness",
+    "customer_tier": "gold"
+  },
+  {
+    "mandate_id": "mand_icici_exp_004",
+    "customer_id": "CUST-ICICI-004",
+    "customer_vpa": "arjun.nair@okicici",
+    "customer_name": "Arjun Nair",
+    "amount": 4500.0,
+    "plan_name": "Cloud Infrastructure Server Tier-2",
+    "bank_name": "ICICI",
+    "expiry_hours_from_now": 14.5,
+    "category": "cloud",
+    "customer_tier": "gold"
+  },
+  {
+    "mandate_id": "mand_axis_exp_005",
+    "customer_id": "CUST-AXIS-005",
+    "customer_vpa": "meera.iyer@okaxis",
+    "customer_name": "Meera Iyer",
+    "amount": 1250.0,
+    "plan_name": "EdTech AI Upskilling Bootcamp",
+    "bank_name": "Axis",
+    "expiry_hours_from_now": 28.0,
+    "category": "education",
+    "customer_tier": "silver"
+  },
+  {
+    "mandate_id": "mand_kotak_exp_006",
+    "customer_id": "CUST-KOTAK-006",
+    "customer_vpa": "deepak.joshi@kotak",
+    "customer_name": "Deepak Joshi",
+    "amount": 899.0,
+    "plan_name": "Digital Music & Podcast Premium",
+    "bank_name": "Kotak",
+    "expiry_hours_from_now": 44.0,
+    "category": "streaming",
+    "customer_tier": "bronze"
+  },
+  {
+    "mandate_id": "mand_sbi_exp_007",
+    "customer_id": "CUST-SBI-007",
+    "customer_vpa": "ananya.sen@oksbi",
+    "customer_name": "Ananya Sen",
+    "amount": 3499.0,
+    "plan_name": "Term Life Health Rider Autopay",
+    "bank_name": "SBI",
+    "expiry_hours_from_now": 62.0,
+    "category": "insurance",
+    "customer_tier": "gold"
+  },
+  {
+    "mandate_id": "mand_hdfc_exp_008",
+    "customer_id": "CUST-HDFC-008",
+    "customer_vpa": "rohit.verma@okhdfcbank",
+    "customer_name": "Rohit Verma",
+    "amount": 1999.0,
+    "plan_name": "B2B Analytics API Developer Tier",
+    "bank_name": "HDFC",
+    "expiry_hours_from_now": 68.0,
+    "category": "saas",
+    "customer_tier": "silver"
+  }
+]

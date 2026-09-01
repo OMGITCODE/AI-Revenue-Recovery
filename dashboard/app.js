@@ -454,6 +454,15 @@ async function runScenario(key) {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     toast(`${data.scenario_name || key.toUpperCase()} processed`, 'ok');
+
+    if (key === 'proactive_mandate_expiry') {
+      const card = document.getElementById('mandate-expiry-card');
+      if (card) {
+        card.classList.add('pulse-card');
+        setTimeout(() => card.classList.remove('pulse-card'), 3000);
+      }
+      await loadExpiringMandates();
+    }
   } catch (e) {
     toast(e.message, 'err');
   } finally {
@@ -719,7 +728,7 @@ async function submitJsonUpload() {
 const AUTO_DEMO_KEYS     = [
   'spike_critical', 'normal_variation', 'u30', 'u29', 'bt01', 'bt02', 'u13',
   'tm', 'u69', 'ba', 'xb', 'te', 'rb', 'u66', 'rbi_threshold',
-  'rbi_enhanced_insurance', 'rbi_enhanced_breach'
+  'rbi_enhanced_insurance', 'rbi_enhanced_breach', 'proactive_mandate_expiry'
 ];
 const AUTO_DEMO_INTERVAL = 3500; // ms between events
 
@@ -755,7 +764,16 @@ async function fireNextAutoDemo() {
   _autoDemoIdx++;
 
   try {
-    await fetch(`/api/simulate/${key}`, { method: 'POST' });
+    const res = await fetch(`/api/simulate/${key}`, { method: 'POST' });
+    if (key === 'proactive_mandate_expiry') {
+      const card = document.getElementById('mandate-expiry-card');
+      if (card) {
+        card.classList.add('pulse-card');
+        setTimeout(() => card.classList.remove('pulse-card'), 3000);
+      }
+      await loadExpiringMandates();
+      toast('🔔 Proactive Expiry: 1-Click WhatsApp Renewal link dispatched before BT02 lapse!', 'blue');
+    }
   } catch (e) { /* ignore — SSE will handle display */ }
 
   if (_autoDemoActive) {
@@ -763,10 +781,101 @@ async function fireNextAutoDemo() {
   }
 }
 
-// ── Module Panels: Promise-to-Pay, Checkout, B2B ─────────────────────────────
+// ── Module Panels: Promise-to-Pay, Checkout, B2B, Expiring Mandates ─────────
 
 async function loadModules() {
-  await Promise.allSettled([loadP2P(), loadCheckout(), loadB2B(), loadLedger(), loadROI()]);
+  await Promise.allSettled([loadExpiringMandates(), loadP2P(), loadCheckout(), loadB2B(), loadLedger(), loadROI()]);
+}
+
+// ── Proactive Mandate Expiry Interceptor ─────────────────────────────────────
+
+async function loadExpiringMandates() {
+  try {
+    const res = await fetch('/api/mandates/expiring?within_hours=72');
+    const data = await res.json();
+    renderExpiringStats(data.stats);
+    renderExpiringTable(data.mandates);
+  } catch (e) { console.warn('Expiring mandates load failed', e); }
+}
+
+function renderExpiringStats(s) {
+  if (!s) return;
+  set('exp-at-risk', `${s.expiring_within_72h} mandates expiring (<72h)`);
+  set('exp-nudged', `${s.nudges_dispatched} nudges sent`);
+  set('exp-protected', `${fmtInr(s.revenue_protected)} churn prevented`);
+}
+
+function renderExpiringTable(mandates) {
+  const tbody = document.getElementById('exp-tbody');
+  if (!tbody) return;
+  if (!mandates || !mandates.length) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><p>No mandates expiring in the next 72 hours ✅</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  mandates.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.id = `exp-row-${esc(m.mandate_id)}`;
+    const hrs = m.hours_remaining;
+    const hrsBadge = hrs <= 24 ? `<span class="stat-chip chip-red" style="font-size:11px">${hrs}h left ⚠️</span>`
+                              : `<span class="stat-chip chip-amber" style="font-size:11px">${hrs}h left</span>`;
+    const stCls = m.status === 'RENEWED' ? 'status-ok' : m.status === 'NUDGED' ? 'p2p-pending' : 'muted';
+
+    tr.innerHTML = `
+      <td class="mono fw6">${esc(m.mandate_id)}</td>
+      <td><strong>${esc(m.customer_name)}</strong><br><span class="muted" style="font-size:11px">${esc(m.customer_vpa)}</span></td>
+      <td>${esc(m.plan_name)}</td>
+      <td class="fw6">${fmtInr(m.amount)}</td>
+      <td>${esc(m.bank_name)}</td>
+      <td class="muted" style="font-size:11px">${esc(m.expiry_date)}</td>
+      <td>${hrsBadge}</td>
+      <td class="${stCls}">${esc(m.status)}</td>
+      <td class="exp-actions-td"></td>
+    `;
+    const actionTd = tr.querySelector('.exp-actions-td');
+    if (m.status === 'PENDING') {
+      const btn = document.createElement('button');
+      btn.className = 'btn-act btn-amber';
+      btn.textContent = '⚡ Send WhatsApp Nudge';
+      btn.onclick = function() { triggerProactiveNudge(m.mandate_id, this); };
+      actionTd.appendChild(btn);
+    } else if (m.status === 'NUDGED') {
+      const btn = document.createElement('button');
+      btn.className = 'btn-act btn-green';
+      btn.textContent = '✓ Simulate Renewal';
+      btn.onclick = function() { simulateProactiveRenewal(m.mandate_id, this); };
+      actionTd.appendChild(btn);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'status-ok';
+      span.style.fontSize = '11px';
+      span.textContent = '✓ Pre-Empted';
+      actionTd.appendChild(span);
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+async function triggerProactiveNudge(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const res = await fetch(`/api/mandates/proactive-nudge/${encodeURIComponent(id)}`, { method: 'POST' });
+    const data = await res.json();
+    toast(`🔔 Proactive 1-click renewal link sent to ${data.mandate.customer_vpa} — ledger updated`, 'blue');
+    await loadExpiringMandates(); await loadLedger(); await loadROI();
+  } catch (e) { toast('Failed: ' + e.message, 'red'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Send WhatsApp Nudge'; } }
+}
+
+async function simulateProactiveRenewal(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Renewing…'; }
+  try {
+    const res = await fetch(`/api/mandates/renew/${encodeURIComponent(id)}`, { method: 'POST' });
+    const data = await res.json();
+    toast(`🎉 ${data.message}`, 'green');
+    await loadExpiringMandates(); await loadLedger(); await loadROI();
+  } catch (e) { toast('Failed: ' + e.message, 'red'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '✓ Simulate Renewal'; } }
 }
 
 // ── Promise-to-Pay ───────────────────────────────────────────────────────────
