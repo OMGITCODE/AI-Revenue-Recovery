@@ -207,15 +207,15 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | File | Type | Description |
 |---|---|---|
-| `data/upi_failures_dataset.json` | Dataset (JSON) | 40 curated real-world failure scenarios spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹499 to ₹1,45,000, varied DND states, and historical commitment records. |
-| `data/expiring_mandates_dataset.json` | Dataset (JSON) | 8 diverse recurring mandate archetypes nearing validity expiration across Indian banks (HDFC, SBI, ICICI, Axis, Kotak, Yes Bank) and categories (SaaS, Cloud, OTT, Fitness, Insurance). |
+| `data/upi_failures_dataset.json` | Dataset (JSON) | **60 curated real-world failure scenarios** spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹199 to ₹1,45,000, varied DND states, and historical commitment records. |
+| `data/expiring_mandates_dataset.json` | Dataset (JSON) | **20 diverse recurring mandate archetypes** nearing validity expiration across 13 Indian banks (SBI, HDFC, ICICI, Axis, Kotak, Yes Bank, BoB, IndusInd, PNB, Canara, Union, Federal, RBL) and categories (SaaS, Cloud, OTT, Fitness, Insurance). |
 | `data/batch_run.py` | Script | Headless batch runner iterating over datasets to evaluate recovery pipeline throughput and success metrics. |
 | `benchmark.py` | Benchmark Engine | Probabilistic Monte Carlo simulator running N=50 iterations comparing RecoverIQ vs. fixed-schedule retries, generating mean ± std statistics and 20% pessimistic sensitivity haircut analysis. |
 | `upi_demo.py` & `demo.py` | Interactive Demos | Terminal-based walkthrough scripts demonstrating 5 live UPI Autopay recovery & proactive expiry scenarios and generic recovery pipelines. |
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 174 Tests across 10 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 176 Tests across 10 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -228,8 +228,8 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **12 tests** | Natural language scenario generator, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
-| **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **13 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **174 passing** | **100% test pass rate in ~5s** |
+| **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
+| **Total Test Suite** | `pytest tests/` | **176 passing** | **100% test pass rate in ~40s** |
 
 ---
 
@@ -264,7 +264,7 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-During development and testing, we encountered three significant real-world technical failures:
+During development and testing, we encountered five significant real-world technical failures:
 
 ### 1. Windows `cp1252` Stdout Encoding vs. Currency (`₹`) & Emojis
 * **The Bug:** Running Python scripts or streaming Server-Sent Events (SSE) on Windows crashed with `UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9'` because the default Windows console pipe initializes with legacy `cp1252` encoding.
@@ -291,6 +291,12 @@ During development and testing, we encountered three significant real-world tech
 * **The Fix:**
   1. **Canonical Customer Identity Graph (`CustomerIdentityRegistry`)**: Resolves and merges fragmented identifiers (`customer_id`, VPAs, phones, emails) into a unified profile (`cust:identifier`), unifying rolling spend history, daily touch limits, and compliance holds across all aliases.
   2. **Anti-Depletion Spend Pattern Guardrail (GR10)**: Built `SpendPatternTracker` to analyze transaction amounts against the user's historical spend baseline (mean, range, std dev). Massive upward spikes trigger a critical safety block on silent automated retries, routing them to interactive customer confirmation.
+
+### 5. Proactive/Reactive Mandate Disconnect & Broken Promise Escalation Bridge
+* **The Bug:** Proactive mandate expiry monitoring and reactive BT02 failure recovery operated as disconnected subsystems. Forcing an unrenewed mandate to lapse did not trigger reactive failure handling, and breaking a promise in the tracker did not automatically prompt live customer escalation in the 2-way chat.
+* **The Fix:**
+  1. **Force Lapse Live Bridge (`POST /api/mandates/force-lapse/{id}`)**: Marks the mandate status as `LAPSED` and seamlessly feeds the customer, plan, bank, and amount into a genuine `BT02` (Mandate Expired) failure event through the canonical decision and recovery pipeline, updating the live event stream.
+  2. **Promise State Transition Live Chat Bridge**: When an agent marks a promise as broken (or when an automated sweep flags it as overdue), the system immediately lifts GR5 suppression, applies a $-0.15$ Trust Score penalty, logs an escalation to the Recovery Ledger, posts an urgent escalation notification to the **2-Way WhatsApp Live Chat** window, and pre-fills support reply inputs with the debtor's exact details.
 
 ---
 
@@ -615,7 +621,10 @@ LLM_PROVIDER=gemini
 | `POST`| `/api/mandates/proactive-nudge/{mandate_id}` | Dispatches 1-click WhatsApp renewal magic link before `BT02` expiry |
 | `POST`| `/api/mandates/nudge-all` | Batch dispatches proactive WhatsApp renewal magic links across all pending expiring mandates (<72h) |
 | `POST`| `/api/mandates/renew/{mandate_id}` | Simulates customer completing proactive mandate renewal |
+| `POST`| `/api/mandates/force-lapse/{mandate_id}` | Simulates unrenewed mandate lapsing past expiry cutoff $\implies$ fires genuine `BT02` failure event into reactive stream |
 | `POST`| `/api/mandates/register` | Registers custom recurring mandate with expiration timestamp |
+| `POST`| `/api/promises/{promise_id}/break` | Marks promise as BROKEN $\implies$ applies trust penalty ($-0.15$), logs escalation to ledger, posts urgent WhatsApp notice |
+| `POST`| `/api/promises/{promise_id}/fulfill`| Marks promise as FULFILLED $\implies$ logs verified recovery to ledger, updates trust score, posts WhatsApp confirmation |
 | `POST`| `/api/webhook` | Ingests gateway webhooks with duplicate rejection & concurrency locks |
 | `POST`| `/api/webhook/whatsapp/twilio` | Ingests live inbound Twilio WhatsApp webhooks (Form-encoded) |
 | `POST`| `/api/webhook/whatsapp/inbound` | Ingests simulated / JSON inbound WhatsApp messages |
