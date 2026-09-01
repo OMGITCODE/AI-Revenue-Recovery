@@ -167,8 +167,10 @@ class TestInboundStateTransitions:
 
 class TestFailSafeLLMClassifier:
     @pytest.mark.asyncio
-    async def test_llm_success_classification(self, monkeypatch):
+    async def test_openai_success_classification(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "")
         monkeypatch.setattr(settings, "openai_api_key", "sk-test-mock-key")
+        monkeypatch.setattr(settings, "llm_provider", "openai")
 
         mock_response = {
             "choices": [
@@ -189,9 +191,42 @@ class TestFailSafeLLMClassifier:
             assert res["intent"] == "dispute"
             assert res["confidence"] == 0.95
             assert "unauthorized" in res["reasoning"]
+            assert res["provider"] == "openai"
+
+    @pytest.mark.asyncio
+    async def test_gemini_success_classification(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "AQ.test-gemini-key")
+        monkeypatch.setattr(settings, "openai_api_key", "")
+        monkeypatch.setattr(settings, "llm_provider", "gemini")
+
+        mock_response = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": '{"intent": "promise", "confidence": 0.96, "reasoning": "Customer commits to pay tomorrow", "extracted_deadline_hours": 24}'
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = httpx.Response(status_code=200, json=mock_response)
+            classifier = LLMIntentClassifier()
+            res = await classifier.classify("Bhai kal shaam tak pakka pay kar dunga")
+
+            assert res is not None
+            assert res["intent"] == "promise"
+            assert res["confidence"] == 0.96
+            assert res["extracted_deadline_hours"] == 24
+            assert res["provider"] == "gemini"
 
     @pytest.mark.asyncio
     async def test_llm_fallback_on_malformed_json(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "")
         monkeypatch.setattr(settings, "openai_api_key", "sk-test-mock-key")
 
         mock_response = {
@@ -213,6 +248,7 @@ class TestFailSafeLLMClassifier:
 
     @pytest.mark.asyncio
     async def test_llm_fallback_on_http_500_error(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "")
         monkeypatch.setattr(settings, "openai_api_key", "sk-test-mock-key")
 
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
@@ -223,6 +259,7 @@ class TestFailSafeLLMClassifier:
 
     @pytest.mark.asyncio
     async def test_llm_fallback_on_timeout(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "")
         monkeypatch.setattr(settings, "openai_api_key", "sk-test-mock-key")
 
         with patch("httpx.AsyncClient.post", side_effect=httpx.TimeoutException("Read timeout")):
@@ -232,6 +269,7 @@ class TestFailSafeLLMClassifier:
 
     @pytest.mark.asyncio
     async def test_llm_missing_api_key_returns_none_immediately(self, monkeypatch):
+        monkeypatch.setattr(settings, "gemini_api_key", "")
         monkeypatch.setattr(settings, "openai_api_key", "")
         classifier = LLMIntentClassifier()
         res = await classifier.classify("some message")
