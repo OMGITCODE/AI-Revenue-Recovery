@@ -168,13 +168,14 @@ class TestCrossAliasSuppression:
         customer_identity_registry.reset()
         suppression_registry.reset()
 
-    def test_whatsapp_inbound_wrong_number_suppresses_vpa_and_cust_id(self):
+    @pytest.mark.asyncio
+    async def test_whatsapp_inbound_wrong_number_suppresses_vpa_and_cust_id(self):
         phone = "+919800000001"
         vpa = "rahul@oksbi"
         cust_id = "CUST-SBI-001"
 
         # Customer sends "galat number hai opt out" via WhatsApp phone
-        res = whatsapp_inbound_handler.handle_inbound(
+        res = await whatsapp_inbound_handler.handle_inbound(
             from_phone=phone,
             customer_vpa=vpa,
             message="Galat number hai, stop messaging me not my account",

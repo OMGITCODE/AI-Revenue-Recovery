@@ -363,6 +363,7 @@ ai-revenue-recovery-agent/
 │   │   └── diagnoser.py         # Multi-channel root-cause diagnoser
 │   │
 │   ├── integrations/            # External APIs
+│   │   ├── llm_classifier.py    # Fail-safe OpenAI LLM intent classifier (with regex fallback)
 │   │   ├── messaging.py         # Twilio WhatsApp & SMS client (live API & mock fallback)
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
 │   │   └── setu_aa.py           # Setu Account Aggregator balance stub
@@ -377,12 +378,12 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (141 passing tests across 8 files)
+└── tests/                       # Test Suite (146 passing tests across 8 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
     ├── test_spend_pattern.py    # Historical profile & critical spike anomaly tests (14 tests)
-    ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier & compliance holds (15 tests)
+    ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier, fail-safe LLM & compliance holds (20 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     └── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)

@@ -28,6 +28,7 @@ from datetime import datetime, timezone, timedelta
 from .recovery_ledger import ledger as recovery_ledger
 from .promise_tracker import promise_tracker
 from .customer_identity import customer_identity_registry, normalize_identifier
+from ..integrations.llm_classifier import llm_classifier
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -189,8 +190,8 @@ class WhatsAppInboundHandler:
         ]
     }
 
-    def classify_message(self, message: str) -> Tuple[InboundIntent, float, List[str], Optional[int]]:
-        """Classify inbound text into one of the 5 intent buckets with extracted deadline."""
+    def _classify_message_regex(self, message: str) -> Tuple[InboundIntent, float, List[str], Optional[int]]:
+        """Deterministic regex-based classification fallback."""
         text = message.lower().strip()
         matched: Dict[InboundIntent, List[str]] = {}
 
@@ -229,7 +230,46 @@ class WhatsAppInboundHandler:
 
         return top_intent, confidence, keywords, deadline_hours
 
-    def handle_inbound(
+    async def classify_message(self, message: str) -> Tuple[InboundIntent, float, List[str], Optional[int], str]:
+        """
+        Classifies inbound text using LLM first; gracefully falls back to deterministic regex.
+        Returns: (intent, confidence, matched_keywords: List[str], deadline_hours: Optional[int], reasoning: str)
+        """
+        # 1. Attempt LLM classification
+        llm_result = await llm_classifier.classify(message)
+        if llm_result:
+            raw_intent = llm_result.get("intent", "").lower().strip()
+            try:
+                intent = InboundIntent(raw_intent)
+            except ValueError:
+                intent = InboundIntent.UNKNOWN
+
+            conf = float(llm_result.get("confidence", 0.85))
+            keywords: List[str] = []
+            deadline_hours = llm_result.get("extracted_deadline_hours")
+            reasoning = f"[LLM] {llm_result.get('reasoning', 'Classified via LLM')} (conf: {conf:.0%})"
+            return intent, conf, keywords, deadline_hours, reasoning
+
+        # 2. Fallback to deterministic regex
+        intent, conf, keywords, deadline_hours = self._classify_message_regex(message)
+        reasoning = (
+            f"[Regex] Classified as '{intent.value}' based on keywords {keywords} (conf: {conf:.0%})."
+            if keywords
+            else f"[Regex] No keywords matched; default '{intent.value}'."
+        )
+        return intent, conf, keywords, deadline_hours, reasoning
+
+    def classify_message_sync(self, message: str) -> Tuple[InboundIntent, float, List[str], Optional[int], str]:
+        """Synchronous deterministic regex-only classification helper."""
+        intent, conf, keywords, deadline_hours = self._classify_message_regex(message)
+        reasoning = (
+            f"[Regex] Classified as '{intent.value}' based on keywords {keywords} (conf: {conf:.0%})."
+            if keywords
+            else f"[Regex] No keywords matched; default '{intent.value}'."
+        )
+        return intent, conf, keywords, deadline_hours, reasoning
+
+    async def handle_inbound(
         self,
         from_phone: str,
         customer_vpa: str,
@@ -244,7 +284,7 @@ class WhatsAppInboundHandler:
         if from_phone or customer_vpa or customer_id:
             customer_identity_registry.resolve_canonical_id(customer_vpa, from_phone, customer_id)
 
-        intent, conf, keywords, deadline_hours = self.classify_message(message)
+        intent, conf, keywords, deadline_hours, reasoning = await self.classify_message(message)
         identifier = customer_vpa or from_phone or customer_id
 
         if intent == InboundIntent.PROMISE:
@@ -364,7 +404,7 @@ class WhatsAppInboundHandler:
         return InboundClassificationResult(
             intent=intent,
             confidence=conf,
-            reasoning=f"Classified as '{intent.value}' based on keywords {keywords} (conf: {conf:.0%}).",
+            reasoning=reasoning,
             extracted_deadline_hours=deadline_hours,
             action_taken=action_taken,
             reply_text=reply_text,

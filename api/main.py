@@ -1007,7 +1007,7 @@ async def webhook_whatsapp_inbound(req: InboundWhatsAppRequest):
       - hardship      -> grants 30-day compassionate pause (RBI Fair Practices)
       - wrong_number  -> permanent compliance blacklist suppression
     """
-    res = whatsapp_inbound_handler.handle_inbound(
+    res = await whatsapp_inbound_handler.handle_inbound(
         from_phone=req.from_phone,
         customer_vpa=req.customer_vpa,
         message=req.message,
@@ -1040,7 +1040,7 @@ async def webhook_whatsapp_twilio(
             raise HTTPException(status_code=401, detail="Invalid Twilio webhook signature")
 
     phone = From.replace("whatsapp:", "").strip()
-    res = whatsapp_inbound_handler.handle_inbound(
+    res = await whatsapp_inbound_handler.handle_inbound(
         from_phone=phone,
         customer_vpa="",
         message=Body,
