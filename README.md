@@ -3,7 +3,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-141%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
@@ -326,6 +326,7 @@ ai-revenue-recovery-agent/
 ├── benchmark.py                 # Monte Carlo policy benchmark (Baseline vs RecoverIQ)
 ├── demo.py                      # Generic payment recovery demo
 ├── upi_demo.py                  # UPI Autopay 4-scenario live pipeline demo
+├── test_inbound_demo.py         # 2-way conversational WhatsApp inbound live test runner
 ├── requirements.txt
 ├── .env.example
 │
@@ -344,7 +345,7 @@ ai-revenue-recovery-agent/
 │   └── upi_failures_dataset.json# 40 real-world failure scenarios
 │
 ├── src/                         # Core Agent Engine
-│   ├── config.py                # Pydantic environment configuration
+│   ├── config.py                # Pydantic environment configuration (Gemini & OpenAI support)
 │   │
 │   ├── agent/                   # Production AI Logic & Decision Engines
 │   │   ├── customer_identity.py # Canonical Customer Identity Graph & Alias Matcher
@@ -363,7 +364,7 @@ ai-revenue-recovery-agent/
 │   │   └── diagnoser.py         # Multi-channel root-cause diagnoser
 │   │
 │   ├── integrations/            # External APIs
-│   │   ├── llm_classifier.py    # Fail-safe OpenAI LLM intent classifier (with regex fallback)
+│   │   ├── llm_classifier.py    # Fail-safe Google Gemini & OpenAI LLM intent classifier (with regex fallback)
 │   │   ├── messaging.py         # Twilio WhatsApp & SMS client (live API & mock fallback)
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
 │   │   └── setu_aa.py           # Setu Account Aggregator balance stub
@@ -378,12 +379,12 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (146 passing tests across 8 files)
+└── tests/                       # Test Suite (147 passing tests across 8 files)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
     ├── test_spend_pattern.py    # Historical profile & critical spike anomaly tests (14 tests)
-    ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier, fail-safe LLM & compliance holds (20 tests)
+    ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier, fail-safe Gemini/OpenAI & compliance holds (21 tests)
     ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     └── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
@@ -436,7 +437,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 141 passed in ~3.5s
+# 147 passed in ~4s
 ```
 
 ---
@@ -490,6 +491,31 @@ flowchart TD
         SSE --> DASHBOARD
     end
 ```
+
+### 🤖 LLM Intent Classification (Google Gemini & OpenAI Integration)
+
+RecoverIQ includes an isolated, fail-safe LLM intent classifier ([`src/integrations/llm_classifier.py`](file:///src/integrations/llm_classifier.py)) to parse unstructured Indian conversational responses into 5 standardized recovery buckets:
+
+1. **PROMISE**: Commits to future payment or salary window (*"Bhai kal sham tak pakka de dunga"*).
+2. **ALREADY_PAID**: Claims debit completed (*"Account se paise kat gaye check bank statement"*).
+3. **DISPUTE**: Fraud/charge dispute (*"Maine ye service cancel kar di thi refund do"*).
+4. **HARDSHIP**: Financial or medical crisis (*"Job chali gayi hospital emergency hai"*).
+5. **WRONG_NUMBER**: Permanent opt-out / wrong alias (*"Wrong number bhai stop messaging"*).
+
+#### Configuring Gemini (Recommended) or OpenAI in `.env`:
+
+```env
+# ── Google Gemini Configuration ───────────────────────────────────────────
+GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
+GEMINI_MODEL=gemini-3.6-flash
+LLM_PROVIDER=gemini
+
+# ── OpenAI Configuration (Alternative) ────────────────────────────────────
+# OPENAI_API_KEY=sk-proj-your-openai-key
+# OPENAI_MODEL=gpt-4o-mini
+```
+
+> 🛡️ **Guaranteed Design Invariant (Zero-Downtime Fallback)**: If an API key is omitted, rate-limited, or network drops, the classifier returns `None` safely and instantly falls back to the deterministic regex engine in `whatsapp_inbound.py`. It never throws an unhandled exception or blocks customer recovery.
 
 ### Setting Up Live Twilio + Ngrok Tunneling:
 
