@@ -132,6 +132,13 @@ RecoverIQ models personalized historical spend baselines (mean, median, range, a
 - **Sudden Upward Spike Detection**: Flags transactions that drastically exceed historical patterns (e.g. ₹70,000 debit on a subscriber with a ₹100 typical spend baseline $\implies 335\times$ spike).
 - **Anti-Depletion Protection (GR10)**: Automatically blocks blind silent retries for critical spend spikes to protect payers from unauthorized overdraft or account depletion, routing them instead to interactive customer consent channels.
 
+### 5. Proactive Mandate Expiry Interceptor ($T-72\text{h}$ Pre-Failure Prevention)
+Shifts RecoverIQ from purely reactive recovery after payment failure to **proactive churn prevention**:
+- **Pre-Emptive $T-72\text{h}$ Lookahead Window**: Automatically scans active recurring UPI Autopay mandates within $24\text{--}72\text{h}$ of validity expiration.
+- **1-Click Self-Cure Magic Links**: Generates personalized Razorpay mandate renewal deep links and dispatches friendly conversational reminders via WhatsApp/SMS.
+- **Pre-Empted Revenue Protection**: Eliminates NPCI `BT02` ("Mandate Expired") debit failures before they ever occur, preventing involuntary churn, bank decline fees, and service disruption.
+- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `BT02_PREVENTED`.
+
 ---
 
 ## 🎯 Full-Spectrum System Architecture & Component Breakdown
@@ -310,6 +317,7 @@ flowchart TD
 
     subgraph DIAGNOSIS["3. Diagnosis, Spend Anomaly & NLP"]
         NPCI_DIAG["UPIAutopayDetector<br/><b>14 NPCI Error Codes</b><br/>(U30, BT01, BT02, TM, BA, U69, etc.)"]
+        EXP_SCANNER["MandateExpiryScanner<br/><b>T-72h Expiry Interceptor</b><br/>(Pre-BT02 Churn Prevention)"]
         SPEND_PAT["SpendPatternTracker<br/><b>Historical Spend Profiler</b><br/>(Spike Ratio & Anomaly Z-Score)"]
         H_CLASS["Hinglish Inbound Intent Classifier<br/>(PROMISE, ALREADY_PAID, DISPUTE, HARDSHIP)"]
     end
