@@ -11,7 +11,7 @@
    - Hover state #F7F8FF
 ────────────────────────────────────────────────────────────────────────────── */
 :root {
-  --nav-h:     52px;
+  --nav-h:     66px;
   /* light palette */
   --canvas:    #F4F5F7;
   --white:     #FFFFFF;
@@ -123,37 +123,38 @@ body {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-decoration: none;
-  margin-right: 32px;
+  margin-right: 28px;
   flex-shrink: 0;
 }
 
 .nav-logo-mark-img {
-  height: 32px;
+  height: 44px;
   width: auto;
   border-radius: 6px;
   object-fit: contain;
-  filter: drop-shadow(0 0 10px rgba(77, 142, 255, 0.55));
+  filter: drop-shadow(0 0 12px rgba(77, 142, 255, 0.6));
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease;
 }
 
 .nav-logo-wordmark-img {
-  height: 28px;
+  height: 42px;
   width: auto;
-  max-width: 220px;
+  max-width: 290px;
   object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(77, 142, 255, 0.35));
   transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .nav-logo:hover .nav-logo-mark-img {
   transform: scale(1.08) rotate(-2deg);
-  filter: drop-shadow(0 0 16px rgba(77, 142, 255, 0.85));
+  filter: drop-shadow(0 0 18px rgba(77, 142, 255, 0.95));
 }
 
 .nav-logo:hover .nav-logo-wordmark-img {
   transform: scale(1.03);
-  filter: drop-shadow(0 0 8px rgba(77, 142, 255, 0.4));
+  filter: drop-shadow(0 0 14px rgba(77, 142, 255, 0.65));
 }
 
 .nav-logo-mark {
