@@ -44,15 +44,31 @@ document.addEventListener('DOMContentLoaded', () => {
   loadBenchmark();                       // load benchmark panel on boot
 });
 
-// â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Initial load & Data Loaders ──────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await fetch('/api/stats').then(r => r.json());
+    syncStats(s);
+  } catch (e) { console.warn('Stats load failed:', e); }
+}
+
+async function loadEvents(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
+  try {
+    const ev = await fetch('/api/events').then(r => r.json());
+    if (ev) { events = ev; rebuildTable(); }
+    if (btn) toast('⚡ Live events stream refreshed', 'ok');
+  } catch (e) {
+    console.warn('Events load failed:', e);
+    if (btn) toast('Failed to refresh events', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; btn.style.opacity = '1'; }
+  }
+}
+
 async function loadInitial() {
   try {
-    const [s, ev] = await Promise.all([
-      fetch('/api/stats').then(r => r.json()),
-      fetch('/api/events').then(r => r.json()),
-    ]);
-    syncStats(s);
-    if (ev.length) { events = ev; rebuildTable(); }
+    await Promise.all([loadStats(), loadEvents()]);
   } catch (e) { console.warn('init load failed:', e); }
 }
 
@@ -784,21 +800,77 @@ async function fireNextAutoDemo() {
 // ── Module Panels: Promise-to-Pay, Checkout, B2B, Expiring Mandates ─────────
 
 async function loadModules() {
-  await Promise.allSettled([loadExpiringMandates(), loadP2P(), loadCheckout(), loadB2B(), loadLedger(), loadROI()]);
+  await Promise.allSettled([
+    loadStats(),
+    loadEvents(),
+    loadExpiringMandates(),
+    loadP2P(),
+    loadCheckout(),
+    loadB2B(),
+    loadLedger(),
+    loadROI(),
+    loadBandit(),
+  ]);
+}
+
+async function refreshAllDashboard(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '↻ Refreshing…';
+    btn.style.opacity = '0.75';
+  }
+  try {
+    await Promise.allSettled([
+      loadStats(),
+      loadEvents(),
+      loadExpiringMandates(),
+      loadP2P(),
+      loadCheckout(),
+      loadB2B(),
+      loadLedger(),
+      loadROI(),
+      loadBandit(),
+      loadBenchmark(),
+    ]);
+    toast('✨ All dashboard panels & metrics refreshed!', 'ok');
+  } catch (e) {
+    toast('Refresh failed: ' + e.message, 'err');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh All';
+      btn.style.opacity = '1';
+    }
+  }
 }
 
 // ── Proactive Mandate Expiry Interceptor ─────────────────────────────────────
 let currentExpiringMandates = [];
 let currentPreviewMandateId = null;
 
-async function loadExpiringMandates() {
+async function loadExpiringMandates(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '↻ Refreshing…';
+    btn.style.opacity = '0.75';
+  }
   try {
     const res = await fetch('/api/mandates/expiring?within_hours=72');
     const data = await res.json();
     currentExpiringMandates = data.mandates || [];
     renderExpiringStats(data.stats);
     renderExpiringTable(currentExpiringMandates);
-  } catch (e) { console.warn('Expiring mandates load failed', e); }
+    if (btn) toast('🔔 Expiring mandates refreshed', 'ok');
+  } catch (e) {
+    console.warn('Expiring mandates load failed', e);
+    if (btn) toast('Failed to refresh expiring mandates', 'err');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh';
+      btn.style.opacity = '1';
+    }
+  }
 }
 
 function renderExpiringStats(s) {
@@ -1001,13 +1073,20 @@ async function renewFromPreviewModal() {
 
 // ── Promise-to-Pay ───────────────────────────────────────────────────────────
 
-async function loadP2P() {
+async function loadP2P(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
   try {
     const res  = await fetch('/api/promises');
     const data = await res.json();
     renderP2PStats(data.stats);
     renderP2PTable(data.promises);
-  } catch (e) { console.warn('P2P load failed', e); }
+    if (btn) toast('🤝 Promise-to-Pay tracker refreshed', 'ok');
+  } catch (e) {
+    console.warn('P2P load failed', e);
+    if (btn) toast('Failed to refresh promises', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; btn.style.opacity = '1'; }
+  }
 }
 
 function renderP2PStats(s) {
@@ -1090,7 +1169,8 @@ async function p2pBreak(id, btn) {
 
 // ── Checkout Drop-off ────────────────────────────────────────────────────────
 
-async function loadCheckout() {
+async function loadCheckout(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
   try {
     const res  = await fetch('/api/checkout');
     const data = await res.json();
@@ -1175,14 +1255,21 @@ async function chkRecover(id, btn) {
 
 // ── B2B Receivables ──────────────────────────────────────────────────────────
 
-async function loadB2B() {
+async function loadB2B(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
   try {
     const res  = await fetch('/api/b2b');
     const data = await res.json();
     renderB2BStats(data.stats);
     renderAgingBuckets(data.stats.buckets);
     renderB2BTable(data.receivables);
-  } catch (e) { console.warn('B2B load failed', e); }
+    if (btn) toast('🏢 B2B Receivables refreshed', 'ok');
+  } catch (e) {
+    console.warn('B2B load failed', e);
+    if (btn) toast('Failed to refresh B2B receivables', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; btn.style.opacity = '1'; }
+  }
 }
 
 function renderB2BStats(s) {
@@ -1305,7 +1392,8 @@ const CHANNEL_UNIT_COSTS = {
   escalation: 25.00, legal: 500.00, ar_specialist: 150.00,
 };
 
-async function loadLedger() {
+async function loadLedger(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
   try {
     const res  = await fetch('/api/ledger?limit=30');
     const data = await res.json();
@@ -1313,7 +1401,13 @@ async function loadLedger() {
     set('ldg-entries',  `${o.total_entries} entries`);
     set('ldg-avg-conf', `conf: ${Math.round(o.avg_confidence * 100)}%`);
     renderLedgerTable(data.entries);
-  } catch (e) { console.warn('Ledger load failed', e); }
+    if (btn) toast('📋 Recovery audit ledger refreshed', 'ok');
+  } catch (e) {
+    console.warn('Ledger load failed', e);
+    if (btn) toast('Failed to refresh ledger', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; btn.style.opacity = '1'; }
+  }
 }
 
 function confPips(conf) {
@@ -1361,7 +1455,8 @@ function renderLedgerTable(entries) {
 
 // ── Recovery ROI ─────────────────────────────────────────────────────────────
 
-async function loadROI() {
+async function loadROI(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; btn.style.opacity = '0.75'; }
   try {
     const res  = await fetch('/api/roi');
     const data = await res.json();
@@ -1379,7 +1474,13 @@ async function loadROI() {
     set('roi-net',   fmtInr(o.net_roi) + ' net');
     set('roi-rate',  o.recovery_rate_pct + '% rate');
     renderROITable(data.by_channel);
-  } catch (e) { console.warn('ROI load failed', e); }
+    if (btn) toast('💰 Recovery ROI metrics refreshed', 'ok');
+  } catch (e) {
+    console.warn('ROI load failed', e);
+    if (btn) toast('Failed to refresh ROI metrics', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; btn.style.opacity = '1'; }
+  }
 }
 
 function renderROITable(byChannel) {
@@ -1572,11 +1673,11 @@ async function confirmSettle() {
 }
 
 // ── Benchmark Panel ──────────────────────────────────────────────────────────
-async function loadBenchmark() {
-  const btn  = document.getElementById('bm-refresh-btn');
+async function loadBenchmark(btn) {
+  const refreshBtn = btn || document.getElementById('bm-refresh-btn');
   const chip = document.getElementById('bm-uplift-chip');
-  if (btn)  { btn.disabled = true; btn.textContent = '↻ Loading…'; }
-  if (chip) { chip.textContent = 'Running…'; chip.className = 'stat-chip chip-blue'; }
+  if (refreshBtn)  { refreshBtn.disabled = true; refreshBtn.textContent = '↻ Running Monte Carlo…'; refreshBtn.style.opacity = '0.75'; }
+  if (chip) { chip.textContent = 'Running (n=50)…'; chip.className = 'stat-chip chip-blue'; }
   try {
     const data = await fetch('/api/benchmark').then(r => r.json());
     const b    = data.baseline;
@@ -1621,13 +1722,14 @@ async function loadBenchmark() {
         </tr>`
       ).join('');
     }
+    if (btn) toast('📊 Monte Carlo benchmark refreshed (50 runs)', 'ok');
   } catch (e) {
     console.error('Benchmark load failed:', e);
     if (chip) { chip.textContent = 'Error'; chip.className = 'stat-chip chip-red'; }
     const tbody = document.getElementById('bm-tbody');
     if (tbody) tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>Benchmark failed to load. Is the server running?</p></div></td></tr>';
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.textContent = '↻ Refresh'; refreshBtn.style.opacity = '1'; }
   }
 }
 

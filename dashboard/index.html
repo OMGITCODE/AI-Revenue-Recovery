@@ -42,10 +42,9 @@
     <button class="btn-ghost auto-demo-btn" id="auto-demo-btn" onclick="toggleAutoDemo()" title="Auto-fire scenarios for live demo">
       ▶ Auto Demo
     </button>
-    <div class="live-pill">
-      <span class="pulse"></span>
-      Agent Live
-    </div>
+    <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics" style="display:inline-flex;align-items:center;gap:4px;">
+      ↻ Refresh All
+    </button>
     <button class="btn-nav btn-seed" id="seed-btn" onclick="seedDemo()">🌱 Seed Demo</button>
     <button class="btn-nav btn-danger" id="hard-reset-btn" onclick="hardReset()">💥 Hard Reset</button>
   </div>
@@ -96,6 +95,7 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="text" id="cust-filter-input" placeholder="🔍 Filter customer (ID / VPA)..." oninput="filterEventsByCustomer(this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--text);width:190px;" />
           <button class="btn-ghost" onclick="clearCustomerFilter()" id="cust-filter-clear" style="display:none;padding:4px 8px;font-size:11px">✕ Clear</button>
+          <button class="btn-ghost" onclick="loadEvents(this)" title="Refresh recovery events stream">↻ Refresh</button>
           <button class="btn-ghost" onclick="openQuickP2P()" title="Manually create a Promise-to-Pay">+ P2P</button>
           <button class="btn-ghost" onclick="resetAll()">Clear all</button>
         </div>
@@ -375,7 +375,7 @@
             <span class="stat-chip chip-green" id="exp-protected">₹0 churn prevented</span>
           </div>
           <button class="btn-act btn-amber" id="exp-nudge-all-btn" onclick="nudgeAllExpiring(this)" title="Dispatch WhatsApp renewal links to all pending expiring mandates">⚡ Nudge All (&lt;72h)</button>
-          <button class="btn-ghost" onclick="loadExpiringMandates()" title="Refresh expiring mandates">↻ Refresh</button>
+          <button class="btn-ghost" id="exp-refresh-btn" onclick="loadExpiringMandates(this)" title="Refresh expiring mandates">↻ Refresh</button>
         </div>
       </div>
 
@@ -418,6 +418,7 @@
             <span class="stat-chip chip-green" id="p2p-fulfilled">0 fulfilled</span>
             <span class="stat-chip chip-red"   id="p2p-broken">0 broken</span>
           </div>
+          <button class="btn-ghost" onclick="loadP2P(this)" title="Refresh promises">↻ Refresh</button>
           <button class="btn-ghost" onclick="openP2PForm()" title="Log a new promise">+ Add Promise</button>
         </div>
       </div>
@@ -503,6 +504,7 @@
             <span class="stat-chip chip-green" id="chk-recovered">0 recovered</span>
             <span class="stat-chip chip-amber" id="chk-nudges">0 nudges</span>
           </div>
+          <button class="btn-ghost" onclick="loadCheckout(this)" title="Refresh checkout sessions">↻ Refresh</button>
           <button class="btn-ghost" onclick="openCheckoutForm()" title="Log a drop-off session">+ Log Drop-off</button>
         </div>
       </div>
@@ -669,6 +671,7 @@
             <span class="stat-chip chip-red"   id="b2b-outstanding">₹0 outstanding</span>
             <span class="stat-chip chip-amber" id="b2b-escalated">0 escalated</span>
           </div>
+          <button class="btn-ghost" onclick="loadB2B(this)" title="Refresh invoices">↻ Refresh</button>
           <button class="btn-ghost" onclick="openB2BForm()" title="Add an invoice">+ Add Invoice</button>
         </div>
       </div>
@@ -757,9 +760,12 @@
           <div class="card-title">📋 Recovery Audit Ledger</div>
           <div class="card-sub">Every decision · Plain-English reasoning · Confidence score · Append-only</div>
         </div>
-        <div class="module-stats" id="ledger-stats-bar">
-          <span class="stat-chip chip-blue"  id="ldg-entries">0 entries</span>
-          <span class="stat-chip chip-green" id="ldg-avg-conf">conf: —</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="module-stats" id="ledger-stats-bar">
+            <span class="stat-chip chip-blue"  id="ldg-entries">0 entries</span>
+            <span class="stat-chip chip-green" id="ldg-avg-conf">conf: —</span>
+          </div>
+          <button class="btn-ghost" onclick="loadLedger(this)" title="Refresh audit ledger">↻ Refresh</button>
         </div>
       </div>
       <div class="module-table-wrap">
@@ -783,9 +789,12 @@
           <div class="card-title">💰 Recovery ROI &amp; Revenue Protection</div>
           <div class="card-sub">Separated breakdown: Reactive recovery (post-failure) + Proactive prevention (pre-empted churn)</div>
         </div>
-        <div class="module-stats" id="roi-stats-bar">
-          <span class="stat-chip chip-green" id="roi-net">₹0 net</span>
-          <span class="stat-chip chip-blue"  id="roi-rate">0% rate</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="module-stats" id="roi-stats-bar">
+            <span class="stat-chip chip-green" id="roi-net">₹0 net</span>
+            <span class="stat-chip chip-blue"  id="roi-rate">0% rate</span>
+          </div>
+          <button class="btn-ghost" onclick="loadROI(this)" title="Refresh ROI stats">↻ Refresh</button>
         </div>
       </div>
 
@@ -845,7 +854,7 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span class="stat-chip chip-green" id="bm-uplift-chip">Loading...</span>
-          <button class="btn-ghost" id="bm-refresh-btn" onclick="loadBenchmark()" title="Refresh benchmark">↻ Refresh</button>
+          <button class="btn-ghost" id="bm-refresh-btn" onclick="loadBenchmark(this)" title="Refresh Monte Carlo benchmark">↻ Refresh</button>
         </div>
       </div>
 
