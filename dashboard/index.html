@@ -322,6 +322,21 @@
           </button>
 
         </div>
+        
+        <div class="dataset-explorer-box" style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px;">📁 Full Dataset Explorer (60 Scenarios)</span>
+            <span class="stat-chip chip-blue" style="font-size:9.5px;padding:1px 6px;">upi_failures_dataset.json</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <select id="dataset-scenario-select" class="form-input" style="font-size:11.5px;padding:5px 8px;flex:1;text-overflow:ellipsis;">
+              <option value="">-- Select scenario from 60 dataset items --</option>
+            </select>
+            <button class="btn-submit" id="btn-run-dataset-sc" onclick="runSelectedDatasetScenario()" style="padding:5px 12px;font-size:11.5px;white-space:nowrap;">
+              ▶ Run
+            </button>
+          </div>
+        </div>
 
         <div class="sim-footer">
           <button class="run-all-btn" id="run-all-btn" onclick="runAll()">

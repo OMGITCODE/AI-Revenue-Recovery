@@ -282,8 +282,49 @@ async def get_scenarios():
     ]
 
 
+@app.get("/api/scenarios/dataset")
+async def get_dataset_scenarios():
+    """Returns all 60 failure scenarios from upi_failures_dataset.json for direct UI execution."""
+    data_path = ROOT / "data" / "upi_failures_dataset.json"
+    if not data_path.exists():
+        return {"count": 0, "scenarios": []}
+    with open(data_path, "r", encoding="utf-8") as f:
+        ds = json.load(f)
+    return {
+        "count": len(ds),
+        "scenarios": [
+            {
+                "key": f"ds_{i}",
+                "index": i,
+                "name": item.get("scenario_name", f"Scenario #{i+1}"),
+                "code": item.get("failure_code", "UNKNOWN"),
+                "amount": item.get("amount", 0),
+                "bank": item.get("bank", ""),
+                "vpa": item.get("vpa", ""),
+                "category": item.get("category", "general"),
+                "tier": item.get("customer_tier", "silver"),
+            }
+            for i, item in enumerate(ds)
+        ],
+    }
+
+
 @app.post("/api/simulate/{scenario_key}")
 async def simulate(scenario_key: str):
+    if scenario_key.startswith("ds_"):
+        try:
+            idx = int(scenario_key.split("_")[1])
+            data_path = ROOT / "data" / "upi_failures_dataset.json"
+            if data_path.exists():
+                with open(data_path, "r", encoding="utf-8") as f:
+                    ds = json.load(f)
+                if 0 <= idx < len(ds):
+                    ev = await run_custom_scenario(ds[idx])
+                    if ev:
+                        return ev.to_dict()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to run dataset scenario: {e}")
+
     if scenario_key not in SCENARIOS and scenario_key != "all":
         raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario_key}")
 
@@ -523,6 +564,112 @@ async def seed_demo_data_endpoint():
 
     await _broadcast_modules_updated()
     return {"status": "seeded", "message": "Demo data loaded successfully"}
+
+
+# ── Canonical Customer Identity & Customer 360° History ───────────────────────
+
+@app.get("/api/customers")
+async def list_canonical_customers():
+    """Lists all active canonical customer profiles and alias mappings."""
+    profiles = customer_identity_registry.all_profiles()
+    return {
+        "count": len(profiles),
+        "customers": [
+            {
+                "canonical_id": p.canonical_id,
+                "primary_name": p.primary_name,
+                "vpas": list(p.vpas),
+                "phones": list(p.phones),
+                "emails": list(p.emails),
+                "customer_ids": list(p.customer_ids),
+                "aliases": list(p.aliases),
+                "daily_touches": p.get_daily_touches_count(),
+                "retries_30d": p.get_retry_count_30d(),
+            }
+            for p in profiles
+        ],
+    }
+
+
+@app.get("/api/customer/{identifier}/history")
+async def get_customer_360_history(identifier: str):
+    """
+    Returns complete 360-degree cross-rail customer profile:
+    - Unified Identity & Aliases (CustomerIdentityRegistry)
+    - Active & Historical UPI Mandates (mandate_expiry_scanner)
+    - B2B Receivables / Invoices (b2b_chaser)
+    - Abandoned Checkout Drop-off Sessions (checkout_agent)
+    - Active & Historical Promises-to-Pay (promise_tracker)
+    - Spend Pattern Anomaly Profile (spend_pattern_tracker)
+    - Unified Regulatory Audit Ledger Events (recovery_ledger)
+    - Real-Time Suppression & Hold Status
+    """
+    clean_id = normalize_identifier(identifier)
+    profile = customer_identity_registry.get_or_create_profile(clean_id)
+    aliases = customer_identity_registry.get_all_aliases(clean_id)
+
+    # 1. Associated Mandates
+    all_mandates = list(mandate_expiry_scanner._mandates.values())
+    matching_mandates = [
+        m.to_dict() for m in all_mandates
+        if any(customer_identity_registry.is_same_person(m.customer_vpa, a) for a in aliases)
+        or any(customer_identity_registry.is_same_person(m.customer_id, a) for a in aliases)
+    ]
+
+    # 2. Associated B2B Receivables
+    all_b2b = b2b_chaser.all_receivables()
+    matching_b2b = [
+        r.to_dict() for r in all_b2b
+        if any(customer_identity_registry.is_same_person(r.debtor_vpa, a) for a in aliases)
+        or any(customer_identity_registry.is_same_person(r.debtor_phone, a) for a in aliases)
+        or r.debtor_name.lower() in [a.lower() for a in aliases]
+    ]
+
+    # 3. Associated Checkout Drop-offs
+    all_chk = checkout_agent.all_sessions()
+    matching_chk = [
+        s.to_dict() for s in all_chk
+        if any(customer_identity_registry.is_same_person(s.customer_vpa, a) for a in aliases)
+        or any(customer_identity_registry.is_same_person(s.customer_phone, a) for a in aliases)
+    ]
+
+    # 4. Associated Promises-to-Pay
+    all_p2p = promise_tracker.all_promises()
+    matching_p2p = [
+        p.to_dict() for p in all_p2p
+        if any(customer_identity_registry.is_same_person(p.vpa, a) for a in aliases)
+    ]
+
+    # 5. Associated Audit Ledger Decisions
+    all_ledger = recovery_ledger.all_entries()
+    matching_ledger = [
+        e.to_dict() for e in all_ledger
+        if any(customer_identity_registry.is_same_person(e.vpa, a) for a in aliases)
+    ]
+
+    # 6. Spend Pattern & Suppression
+    spend_prof = spend_pattern_tracker.get_profile(clean_id)
+    is_supp, supp_reason = suppression_registry.is_suppressed(clean_id)
+
+    return {
+        "canonical_id": profile.canonical_id,
+        "primary_name": profile.primary_name,
+        "aliases": list(profile.aliases),
+        "vpas": list(profile.vpas),
+        "phones": list(profile.phones),
+        "emails": list(profile.emails),
+        "customer_ids": list(profile.customer_ids),
+        "daily_touches": profile.get_daily_touches_count(),
+        "retries_30d": profile.get_retry_count_30d(),
+        "is_suppressed": is_supp,
+        "suppression_reason": supp_reason,
+        "spend_profile": spend_prof.to_dict() if spend_prof and hasattr(spend_prof, "to_dict") else None,
+        "mandates": matching_mandates,
+        "b2b_invoices": matching_b2b,
+        "checkout_sessions": matching_chk,
+        "promises": matching_p2p,
+        "ledger_history": matching_ledger,
+    }
 
 
 # ── Decision Engine (Guardrails) ───────────────────────────────────────────────

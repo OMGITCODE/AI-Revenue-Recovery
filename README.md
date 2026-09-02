@@ -818,22 +818,28 @@ python qr_demo.py
 python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 ```
 
+### 4. Full 60-Scenario Dataset Explorer & Customer 360° Drawer
+
+- **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 real-world failure scenarios** directly from [`data/upi_failures_dataset.json`](file:///c:/Users/BIT/.gemini/antigravity-ide/scratch/ai-revenue-recovery-agent/data/upi_failures_dataset.json) with 1 click.
+- **Customer 360° Drawer**: Clicking on any customer handle or event row opens a unified behavioral drawer showing their **canonical profile**, **linked aliases** across all 3 financial rails (Autopay, B2B, Carts), **rolling spend baseline**, **P2P promises**, and **compliance holds**.
+
 ---
 
 ## 📡 REST API & Audit Export Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/customers` | Lists all active canonical customer profiles and alias mappings |
-| `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, compliance holds, and event ledger |
+| `GET` | `/api/customers` | Lists all active canonical customer profiles and alias mappings across financial rails |
+| `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, active mandates, B2B invoices, cart drop-offs, compliance holds, and event ledger |
 | `GET` | `/api/whatsapp/conversation/{identifier}` | Retrieves multi-turn conversational message history for a customer |
 | `POST`| `/api/project-chat` | Grounded Q&A chatbot answering architecture, benchmark, and design questions via Gemini |
 | `POST`| `/api/prompt-to-scenario` | Natural language scenario generator extracting structured parameters from freeform text via schema-constrained LLM |
 | `GET` | `/api/classifier/eval` | Cached evaluation benchmark returning Accuracy (93.3% regex vs 96.7% LLM), Precision, Recall, and F1 on 30 held-out items |
 | `GET` | `/api/pattern/history` | Retrieves statistical spend profile (mean, median, range, std dev) for a customer VPA/ID |
 | `POST`| `/api/pattern/analyze` | Evaluates a transaction amount against customer baseline for critical upward spikes (GR10) |
-| `GET` | `/api/scenarios` | Lists all 14 curated real-world failure scenario configurations |
-| `POST`| `/api/simulate/{scenario_key}` | Executes a named failure scenario through the complete detection, guardrail, bandit, and intervention pipeline |
+| `GET` | `/api/scenarios` | Lists all 18 curated real-world failure scenario configurations |
+| `GET` | `/api/scenarios/dataset` | Returns all 60 failure scenarios from upi_failures_dataset.json for direct UI execution |
+| `POST`| `/api/simulate/{scenario_key}` | Executes a named scenario (or `ds_{index}` from dataset) through the complete detection, guardrail, bandit, and intervention pipeline |
 | `GET` | `/api/stats` | Returns real-time aggregated recovery metrics, active event counts, and recovery rate |
 | `GET` | `/api/benchmark` | Runs Monte Carlo benchmark simulation and returns ₹ delta & uplift statistics |
 | `GET` | `/api/bandit` | Inspects current Thompson Sampling Beta posterior distributions $(\alpha, \beta)$ |

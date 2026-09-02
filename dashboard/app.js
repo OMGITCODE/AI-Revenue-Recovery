@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadInitial();
   connectSSE();
   loadModules();                         // load P2P, Checkout, B2B
+  populateDatasetDropdown();             // load all 60 scenarios from upi_failures_dataset.json
   setInterval(loadModules, 15_000);      // refresh every 15s
   loadBenchmark();                       // load benchmark panel on boot
 });
@@ -524,6 +525,47 @@ async function runAll() {
   } finally {
     allBtns.forEach(b => b.classList.remove('loading'));
     if (runBtn) { runBtn.textContent = '▶\u00A0 Run All Scenarios'; runBtn.disabled = false; }
+  }
+}
+
+async function populateDatasetDropdown() {
+  const sel = document.getElementById('dataset-scenario-select');
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/scenarios/dataset');
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = data.scenarios || [];
+    sel.innerHTML = '<option value="">-- Choose from 60 dataset scenarios --</option>';
+    items.forEach((item, i) => {
+      const opt = document.createElement('option');
+      opt.value = item.key;
+      opt.textContent = `[#${i+1}] ${item.name} (${item.code} · ₹${Number(item.amount).toLocaleString('en-IN')})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.debug('Dataset scenarios dropdown load failed:', e);
+  }
+}
+
+async function runSelectedDatasetScenario() {
+  const sel = document.getElementById('dataset-scenario-select');
+  const btn = document.getElementById('btn-run-dataset-sc');
+  if (!sel || !sel.value) {
+    toast('Please select a scenario from the dropdown first', 'err');
+    return;
+  }
+  const key = sel.value;
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+  try {
+    const res = await fetch(`/api/simulate/${key}`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    toast(`Dataset Scenario processed: ${data.scenario_name || key}`, 'ok');
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Run'; }
   }
 }
 
