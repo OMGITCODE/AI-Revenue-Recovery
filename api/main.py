@@ -1516,7 +1516,8 @@ async def project_chat_endpoint(req: ProjectChatRequest, request: Request):
         if "rahul" in q_lower:
             event_ctx = {
                 "customer": "Rahul Sharma",
-                "vpa": "rahul@okhdfcbank",
+                "vpa": "rahul@oksbi",
+                "bank": "SBI",
                 "phone": "+91-9876543210",
                 "failure_code": "U30",
                 "failure_reason": "Insufficient Funds (Debit Account Unfunded)",

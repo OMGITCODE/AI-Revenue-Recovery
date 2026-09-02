@@ -380,12 +380,29 @@ Rules:
                 "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
                 "- **Test Suite**: 194 automated unit & integration test cases passing."
             )
+        elif event_context and any(w in q for w in ["this", "event", "transaction", "failure", "status", "why", "recommend", "current"]):
+            cust = event_context.get("customer") or event_context.get("customer_name") or event_context.get("customer_vpa") or "Customer"
+            vpa = event_context.get("vpa") or event_context.get("customer_vpa") or "N/A"
+            code = event_context.get("failure_code") or "U30"
+            reason = event_context.get("failure_reason") or "Payment failure"
+            amt = event_context.get("amount") or event_context.get("mandate_amount") or 999.0
+            bank = event_context.get("bank") or "SBI"
+            guardrail = event_context.get("guardrail_triggered") or "Deterministic safety policy (GR1/GR5)"
+            outcome = event_context.get("decision_outcome") or "Automated recovery pipeline active"
+            return (
+                f"**Live Event Diagnosis for {cust} ({code}):**\n\n"
+                f"- **Failure Code & Reason**: **{code}** ({reason}) on {bank}.\n"
+                f"- **Amount**: ₹{amt:,.0f} | **VPA**: `{vpa}`\n"
+                f"- **Guardrail & Safety Check**: {guardrail}\n"
+                f"- **Autonomous Recovery Action**: {outcome}\n"
+                f"- **Channel Allocation**: Bayesian Thompson Sampling selects the highest expected utility channel without exhausting retry limits."
+            )
         elif "rahul" in q or ("u30" in q and ("retry" in q or "immediate" in q or "not" in q)):
             bal = event_context.get("setu_aa_balance_check", {}).get("available_balance", 432.63) if event_context else 432.63
             amt = event_context.get("mandate_amount", 999.0) if event_context else 999.0
             return (
                 "**Why Rahul's U30 Payment Was Not Retried Immediately:**\n\n"
-                f"- **Failure Code & Mandate**: Rahul's ₹{amt:.0f} OTT subscription debit failed with **U30 (Insufficient Funds)**.\n"
+                f"- **Failure Code & Mandate**: Rahul's ₹{amt:.0f} OTT subscription debit on SBI failed with **U30 (Insufficient Funds)** (`rahul@oksbi`).\n"
                 f"- **Setu Account Aggregator Verification**: A pre-flight balance inquiry via Setu AA revealed only **₹{bal:.2f} available** in his account (a deficit of ₹{amt - bal:.2f}).\n"
                 "- **Deterministic Guardrail Triggered**: Under **GR1 (Liquidity Protection)**, an immediate retry was blocked to prevent unnecessary bank bounce charges and avoid bank-level cooldown locks.\n"
                 "- **Autonomous Recovery Action**: RecoverIQ rescheduled the debit for his predicted **salary-credit window on the 5th** at 10:00 AM IST, ensuring funds are present before executing."
@@ -396,6 +413,27 @@ Rules:
                 "1. **Primary Action**: **Salary-Cycle Smart Retry** scheduled for the 5th at 10:00 AM IST (synchronized with his Setu AA verified liquidity window).\n"
                 "2. **Alternative Digital Fallback**: Dispatch an interactive **1-Click WhatsApp renewal link** with a dynamic NPCI UPI QR code if immediate settlement is desired.\n"
                 "3. **Compliance Hold**: Outbound voice and dunning calls remain suppressed under Guardrail 5 to preserve customer goodwill."
+            )
+        elif "priya" in q or "bt01" in q or "revoked" in q:
+            return (
+                "**How RecoverIQ Handles Priya / BT01 (Revoked Mandate):**\n\n"
+                "- **Diagnosis**: Mandate was revoked by customer or issuing bank (HDFC, ₹1,499 SaaS Pro, `priya@okhdfcbank`).\n"
+                "- **Deterministic Guardrail (GR6)**: All automated debit retries are immediately blocked (retrying a revoked mandate is futile and damages trust).\n"
+                "- **Autonomous Recovery Action**: RecoverIQ dispatches a 1-click re-registration mandate link via WhatsApp with seamless UPI auth."
+            )
+        elif "arjun" in q or "tm" in q or "timeout" in q:
+            return (
+                "**How RecoverIQ Handles Arjun / TM (Technical Timeout):**\n\n"
+                "- **Diagnosis**: Transient issuer bank or NPCI switch timeout (ICICI Bank, ₹4,500 Cloud Infra, `arjun@okicici`).\n"
+                "- **Deterministic Guardrail (GR2)**: Adaptive jittered backoff prevents hammering the degraded banking switch.\n"
+                "- **Autonomous Recovery Action**: Scheduled for automated retry after a 15-minute cooldown window, yielding 82%+ recovery upon bank switch stabilization."
+            )
+        elif "vikram" in q or "bt02" in q or "expired" in q:
+            return (
+                "**How RecoverIQ Handles Vikram / BT02 (Expired Mandate):**\n\n"
+                "- **Diagnosis**: Mandate validity period lapsed (Yes Bank, ₹2,999 Gym Gold Pass, `vikram@ybl`).\n"
+                "- **Deterministic Guardrail (GR5)**: When customer commits a Promise-to-Pay, active dunning and retries are suppressed for the agreed window.\n"
+                "- **Autonomous Recovery Action**: Dispatched interactive WhatsApp renewal with dynamic NPCI UPI QR code, achieving fast self-serve reactivation."
             )
         elif "u30" in q or "insufficient" in q or "salary" in q:
             return (
