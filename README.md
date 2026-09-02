@@ -125,7 +125,7 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 - **Fulfilled Reward**: $+0.10$ reward per fulfilled promise.
 
 ### 3. Unified Customer Identity Graph & Customer 360 Architecture
-Payment failures do not happen in a vacuum — a single customer frequently transacts across multiple payment methods, secondary VPAs, and bank accounts. RecoverIQ solves fragmented customer tracking through the **Canonical Customer Identity Graph** ([`customer_identity.py`](file:///src/agent/customer_identity.py)), uniting all decision modules, financial rails, and recovery channels around the same canonical entity:
+Payment failures do not happen in a vacuum — a single customer frequently transacts across multiple payment methods, secondary VPAs, and bank accounts. RecoverIQ solves fragmented customer tracking through the **Canonical Customer Identity Graph** ([`src/agent/customer_identity.py`](src/agent/customer_identity.py)), uniting all decision modules, financial rails, and recovery channels around the same canonical entity:
 
 ```mermaid
 flowchart TD
@@ -204,7 +204,7 @@ Shifts RecoverIQ from purely reactive recovery after payment failure to **proact
 - **⚡ Batch "Nudge All (<72h)"**: 1-click batch dispatch (`POST /api/mandates/nudge-all`) dispatches personalized renewal magic links across all pending expiring mandates simultaneously.
 - **💬 Authentic WhatsApp Message Live Preview**: Interactive modal displays the exact Hinglish WhatsApp chat bubble with read receipts (`✓✓`), clickable Razorpay 1-click renewal deep link, and "Open in WhatsApp Web" launcher.
 - **Pre-Empted Revenue Protection**: Eliminates NPCI `BT02` ("Mandate Expired") debit failures before they ever occur, preventing involuntary churn, bank decline fees, and service disruption.
-- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries in the ROI breakdown.
+- **Immutable Ledger Logging**: All proactive nudges and completed pre-empted renewals log directly into the [`src/agent/recovery_ledger.py`](src/agent/recovery_ledger.py) under `recovery_type="proactive"`, cleanly segregated from post-failure reactive recoveries in the ROI breakdown.
 
 ### 6. B2B Receivables Chaser & Statutory MSMED Act Dunning Engine
 Enterprise invoices require specialized handling distinct from consumer micro-transactions. The B2B Chaser automates invoice dunning with full Indian regulatory compliance:
@@ -259,7 +259,7 @@ For high-exposure B2B invoices and abandoned checkout carts where text dunning f
   - For micro and small enterprise suppliers collecting from corporate buyers (e.g. Mega Retail, 75d overdue), the agent issues an explicit statutory warning:
     > *"Statutory MSMED Act 2006 (Section 16) Notice: Overdue balances carry penal interest at three times the Reserve Bank of India bank rate, compounded monthly. Dispatched prior to formal recovery proceedings."*
 - **Audit-Grade Ledger Unit Economics**:
-  - Every outbound IVR call automatically records an entry in the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `channel="ivr"`, deducting the statutory **₹1.50 unit cost** and updating net ROI calculations live.
+  - Every outbound IVR call automatically records an entry in the [`src/agent/recovery_ledger.py`](src/agent/recovery_ledger.py) under `channel="ivr"`, deducting the statutory **₹1.50 unit cost** and updating net ROI calculations live.
 - **Strict Security & Route Architecture**:
   - `GET /api/voice/scenarios` is registered in `PUBLIC_EXACT_PATHS` for zero-friction catalog browsing.
   - `POST /api/voice/call/{receivable_id}` is **strictly protected** under `SecurityAndAuthMiddleware`, rejecting unauthorized calls with `401 Unauthorized` when an API key is configured.
@@ -687,7 +687,7 @@ flowchart TD
 
 ### 🤖 LLM Intent Classification (Google Gemini & OpenAI Integration)
 
-RecoverIQ includes an isolated, fail-safe LLM intent classifier ([`src/integrations/llm_classifier.py`](file:///src/integrations/llm_classifier.py)) to parse unstructured Indian conversational responses into 5 standardized recovery buckets:
+RecoverIQ includes an isolated, fail-safe LLM intent classifier ([`src/integrations/llm_classifier.py`](src/integrations/llm_classifier.py)) to parse unstructured Indian conversational responses into 5 standardized recovery buckets:
 
 1. **PROMISE**: Commits to future payment or salary window (*"Bhai kal sham tak pakka de dunga"*).
 2. **ALREADY_PAID**: Claims debit completed (*"Account se paise kat gaye check bank statement"*).
