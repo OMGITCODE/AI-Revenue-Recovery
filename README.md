@@ -617,6 +617,9 @@ python -X utf8 benchmark.py
 ### 3. Run the Demos
 
 ```bash
+# Dynamic UPI QR & Mobile Intent Deep Links Demo (4 dataset personas)
+python -X utf8 qr_demo.py
+
 # Setu Account Aggregator (AA) Consent & Balance Verification Demo (5 dataset scenarios)
 python -X utf8 setu_demo.py
 
