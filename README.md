@@ -449,6 +449,7 @@ flowchart TD
         RZP["Razorpay UPI Webhooks<br/>(payment.failed / autopay)"]
         INBOUND_WA["Inbound Twilio / WhatsApp<br/>(/api/webhook/whatsapp/twilio)"]
         CART["Checkout & B2B Invoices<br/>(/api/checkout/drop · /api/b2b)"]
+        NL_PROMPT["Prompt-to-Scenario AI Generator<br/>(/api/prompt-to-scenario)"]
     end
 
     subgraph IDENTITY["2. Identity Resolution & Concurrency Layer"]
@@ -470,8 +471,10 @@ flowchart TD
     end
 
     subgraph INTERVENTIONS["5. Multi-Channel Recovery Dispatch"]
-        RETRY_SCHED["Salary-Cycle Retry Scheduler<br/>(1st–7th of Month + Setu AA Stub)"]
+        RETRY_SCHED["Salary-Cycle Retry Scheduler<br/>(1st–7th of Month + Setu AA Balance Check)"]
         RENEWAL["1-Click Mandate Re-registration<br/>(Interactive Magic Link via WhatsApp)"]
+        QR_INTENT["Dynamic UPI QR & Mobile Intents<br/>(Universal Intent · GPay · PhonePe · Paytm)"]
+        VOICE_AI["Autonomous Voice AI / IVR Studio<br/>(Edge Neural TTS · MSMED Section 16 Notice)"]
         COLLECT["UPI Collect Request<br/>(Push-to-VPA via Razorpay)"]
         MESSAGING["Twilio WhatsApp & SMS Messenger<br/>(Live API with Safe Mock Fallback)"]
         ESCALATION["Assisted Human Escalation<br/>(High-Touch B2B / Tier A Priority)"]
@@ -482,7 +485,7 @@ flowchart TD
         P2P_TRACKER["Promise-to-Pay Tracker<br/>(Continuous Payer Trust Score 0.0–1.0)"]
         CUST_360["Customer 360 Profile & Behavioral History<br/>(/api/customer/{id}/history)"]
         SSE_STREAM["FastAPI Real-Time SSE Stream<br/>(/api/stream)"]
-        DASHBOARD["RecoverIQ Live Web Dashboard<br/>(Customer 360 Drawer · Live Search Filter)"]
+        DASHBOARD["RecoverIQ Live Web Dashboard<br/>(UPI QR Modal · Voice AI Studio · Setu AA Simulator)"]
     end
 
     INGRESS --> LOCKS --> DEDUP --> ID_GRAPH
@@ -532,7 +535,6 @@ ai-revenue-recovery-agent/
 │   ├── upi_failures_dataset.json# 60 real-world failure scenarios
 │   └── expiring_mandates_dataset.json # 20 proactive expiring mandate scenarios
 │
-├── setu_demo.py                 # Setu Account Aggregator (AA) standalone CLI demo
 ├── src/                         # Core Agent Engine
 │   ├── config.py                # Pydantic environment configuration (Gemini & OpenAI support)
 │   │
