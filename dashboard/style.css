@@ -115,22 +115,22 @@ body {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  gap: 0;
+  padding: 0 16px;
+  gap: 8px;
   z-index: 200;
 }
 
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
-  margin-right: 32px;
+  margin-right: 14px;
   flex-shrink: 0;
 }
 
 .nav-logo-mark-img {
-  height: 32px;
+  height: 30px;
   width: auto;
   border-radius: 6px;
   object-fit: contain;
@@ -139,9 +139,9 @@ body {
 }
 
 .nav-logo-wordmark-img {
-  height: 28px;
+  height: 24px;
   width: auto;
-  max-width: 220px;
+  max-width: 180px;
   object-fit: contain;
   transition: transform 0.25s ease, filter 0.25s ease;
 }
@@ -181,13 +181,13 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .nav-link {
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-2);
   text-decoration: none;
@@ -196,14 +196,15 @@ body {
 }
 
 .nav-link:hover      { background: var(--canvas); color: var(--text-1); }
-.nav-link.active     { background: var(--blue-lt); color: var(--blue); }
+.nav-link.active     { background: var(--blue-lt); color: var(--blue); font-weight: 600; }
 
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   margin-left: auto;
   flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 .live-pill {
@@ -339,22 +340,24 @@ body {
 }
 
 .btn-nav {
-  padding: 6px 16px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  border: 1.5px solid var(--blue);
-  background: var(--blue);
-  color: #fff;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text-1);
   font-family: inherit;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
-.btn-nav:hover { background: var(--blue-dk); border-color: var(--blue-dk); }
+.btn-nav:hover { background: var(--hover); border-color: var(--blue); }
 
 /* ── Theme toggle button ───────────────────────────────────────────────────────────────────── */
 .btn-theme {
@@ -514,6 +517,7 @@ body {
 ────────────────────────────────────────────────────────────────────────────── */
 .table-scroll {
   overflow-y: auto;
+  min-height: 480px;
   max-height: 60vh;   /* tall enough to show many rows, still scrollable */
 }
 
@@ -735,7 +739,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  /* natural height — no overflow clipping */
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .sc-btn {

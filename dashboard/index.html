@@ -35,7 +35,7 @@
   <div class="nav-actions">
     <span class="nav-badge">Demo Mode</span>
     <button class="btn-nav btn-ai" id="project-chat-btn" onclick="toggleProjectChat()" title="Ask RecoverIQ AI (Powered by Gemini)" style="background:linear-gradient(135deg, #3b82f6, #8b5cf6);color:#fff;border:none;box-shadow:0 0 12px rgba(139,92,246,0.35);font-weight:600;">
-      ✨ 🤖 Ask AI (Gemini)
+      ✨ Ask AI
     </button>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
       <span id="theme-icon">☀️</span>
@@ -43,20 +43,20 @@
     <button class="btn-ghost auto-demo-btn" id="auto-demo-btn" onclick="toggleAutoDemo()" title="Auto-fire scenarios for live demo">
       ▶ Auto Demo
     </button>
-    <button class="btn-nav" id="setu-sim-nav-btn" onclick="openSetuAAModal()" title="Simulate RBI Account Aggregator (Setu) digital consent &amp; real-time balance check" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(16,185,129,0.45);color:var(--green);font-weight:600;">
-      🏦 Setu AA Simulator
+    <button class="btn-nav" id="setu-sim-nav-btn" onclick="openSetuAAModal()" title="Simulate RBI Account Aggregator (Setu) digital consent &amp; balance check" style="border-color:rgba(16,185,129,0.45);color:var(--green);font-weight:600;">
+      🏦 Setu AA
     </button>
-    <button class="btn-nav" id="voice-sim-nav-btn" onclick="openVoiceModal()" title="Outbound Voice AI Outreach Studio (MSMED Act Section 16 &amp; Hinglish IVR)" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(139,92,246,0.45);color:#8b5cf6;font-weight:600;">
-      📞 Voice AI Studio
+    <button class="btn-nav" id="voice-sim-nav-btn" onclick="openVoiceModal()" title="Outbound Voice AI Outreach Studio (MSMED Act Section 16 &amp; Hinglish IVR)" style="border-color:rgba(139,92,246,0.45);color:#8b5cf6;font-weight:600;">
+      📞 Voice AI
     </button>
-    <button class="btn-nav" id="upi-qr-nav-btn" onclick="openUPIQRModal()" title="Dynamic UPI QR Code &amp; Intent Deep Links (PhonePe / GPay / Paytm)" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(59,130,246,0.45);color:#60a5fa;font-weight:600;">
-      📲 UPI QR Pay
+    <button class="btn-nav" id="upi-qr-nav-btn" onclick="openUPIQRModal()" title="Dynamic UPI QR Code &amp; Intent Deep Links" style="border-color:rgba(59,130,246,0.45);color:#60a5fa;font-weight:600;">
+      📲 UPI QR
     </button>
-    <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics" style="display:inline-flex;align-items:center;gap:4px;">
-      ↻ Refresh All
+    <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics">
+      ↻ Refresh
     </button>
-    <button class="btn-nav btn-seed" id="seed-btn" onclick="seedDemo()">🌱 Seed Demo</button>
-    <button class="btn-nav btn-danger" id="hard-reset-btn" onclick="hardReset()">💥 Hard Reset</button>
+    <button class="btn-nav btn-seed" id="seed-btn" onclick="seedDemo()" title="Seed demo state across all modules">🌱 Seed</button>
+    <button class="btn-nav btn-danger" id="hard-reset-btn" onclick="hardReset()" title="Reset all state">💥 Reset</button>
   </div>
 </nav>
 
