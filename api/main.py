@@ -9,7 +9,9 @@ import asyncio
 import json
 import sys
 import os
+import uuid
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request, Form
@@ -162,6 +164,7 @@ PUBLIC_EXACT_PATHS = {
     "/api/mandates/expiring",
     "/api/mandates/all",
     "/api/mandates/stats",
+    "/api/voice/scenarios",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -170,6 +173,7 @@ PUBLIC_EXACT_PATHS = {
 # Prefix-based public paths (static assets & signature-protected webhook ingestion)
 PUBLIC_PREFIX_PATHS = (
     "/static",
+    "/assets",
     "/api/webhook",             # HMAC / signature protected (Razorpay, Twilio)
     "/api/whatsapp/conversation",
 )
@@ -232,9 +236,12 @@ class SecurityAndAuthMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityAndAuthMiddleware)
 
-# Serve dashboard static files
+# Serve dashboard and audio static files
 DASHBOARD = ROOT / "dashboard"
+ASSETS_DIR = ROOT / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")
+app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -1501,6 +1508,224 @@ async def setu_check_balance(payload: SetuCheckBalanceRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Setu AA check failed: {str(exc)}")
+
+
+# ── Outbound Voice AI Channel Preview ─────────────────────────────────────────
+
+VOICE_SCENARIOS = [
+    {
+        "id": "startup_xyz",
+        "title": "StartupXYZ · Tier C Early (₹12,500)",
+        "receivable_id": "INV-2026-003",
+        "debtor_name": "StartupXYZ (Rohan Sharma)",
+        "amount": 12500.0,
+        "days_overdue": 45,
+        "tier": "Tier C (< ₹25K)",
+        "status_label": "45d Overdue · WhatsApp + IVR",
+        "ringback_url": "/assets/audio/telecom_ringback.mp3",
+        "dialects": {
+            "hinglish": {
+                "label": "Hinglish (Colloquial)",
+                "voice": "hi-IN-MadhurNeural",
+                "audio_url": "/assets/audio/b2b_early_hinglish.mp3",
+                "duration_sec": 16.5,
+                "cues": [
+                    {"start": 0.0, "end": 2.8, "text": "Namaste Rohan ji. Yeh RecoverIQ automated system se ek zaroori update hai."},
+                    {"start": 2.9, "end": 6.8, "text": "Aapka invoice INV-2026-003, amount baarah hazaar paanch sau rupaye, abhi pending hai."},
+                    {"start": 6.9, "end": 10.4, "text": "Kripya aaj hi payment complete karein taaki services uninterrupted rahein."},
+                    {"start": 10.5, "end": 14.2, "text": "Direct payment link aapke registered WhatsApp aur email par bhej diya gaya hai."},
+                    {"start": 14.3, "end": 16.5, "text": "Shukriya aur aapka din shubh ho."}
+                ]
+            },
+            "english": {
+                "label": "Indian English (Formal)",
+                "voice": "en-IN-NeerjaNeural",
+                "audio_url": "/assets/audio/b2b_early_english.mp3",
+                "duration_sec": 15.0,
+                "cues": [
+                    {"start": 0.0, "end": 3.4, "text": "Hello Rohan. This is an automated reminder from RecoverIQ on behalf of your vendor."},
+                    {"start": 3.5, "end": 7.2, "text": "Your invoice INV-2026-003 for rupees twelve thousand five hundred is currently overdue."},
+                    {"start": 7.3, "end": 10.8, "text": "Please clear this pending balance today to maintain uninterrupted software access."},
+                    {"start": 10.9, "end": 13.6, "text": "A secure payment link has been dispatched to your registered WhatsApp and email."},
+                    {"start": 13.7, "end": 15.0, "text": "Thank you and have a productive day."}
+                ]
+            }
+        }
+    },
+    {
+        "id": "mega_retail",
+        "title": "Mega Retail · Tier C Late Overdue (₹84,200)",
+        "receivable_id": "INV-2026-004",
+        "debtor_name": "Mega Retail (Amit Patel)",
+        "amount": 84200.0,
+        "days_overdue": 75,
+        "tier": "Tier C (Statutory MSMED Section 16 Notice)",
+        "status_label": "75d Overdue · Compounding Interest Accruing",
+        "ringback_url": "/assets/audio/telecom_ringback.mp3",
+        "dialects": {
+            "hinglish": {
+                "label": "Hinglish (Colloquial)",
+                "voice": "hi-IN-MadhurNeural",
+                "audio_url": "/assets/audio/b2b_late_hinglish.mp3",
+                "duration_sec": 20.0,
+                "cues": [
+                    {"start": 0.0, "end": 4.5, "text": "Namaste Amit ji. Yeh RecoverIQ se Mega Retail ke pending invoice INV-2026-004 ke regarding ek zaroori alert hai."},
+                    {"start": 4.6, "end": 8.7, "text": "Aapka amount chaurasi hazaar do sau rupaye ab pachhattar din overdue ho chuka hai."},
+                    {"start": 8.8, "end": 13.8, "text": "MSMED Act Section 16 ke tahet, RBI bank rate ke teen guna monthly compounding interest accrue ho raha hai."},
+                    {"start": 13.9, "end": 17.5, "text": "Formal legal notice dispatch hone se pehle kripya aaj hi payment complete karein."},
+                    {"start": 17.6, "end": 20.0, "text": "Payment link aapke WhatsApp par available hai. Shukriya."}
+                ]
+            },
+            "english": {
+                "label": "Indian English (Formal)",
+                "voice": "en-IN-PrabhatNeural",
+                "audio_url": "/assets/audio/b2b_late_english.mp3",
+                "duration_sec": 19.0,
+                "cues": [
+                    {"start": 0.0, "end": 4.0, "text": "Hello Amit. This is an urgent notice from RecoverIQ regarding Mega Retail's pending invoice INV-2026-004."},
+                    {"start": 4.1, "end": 8.0, "text": "Your balance of rupees eighty-four thousand two hundred is now seventy-five days overdue."},
+                    {"start": 8.1, "end": 13.5, "text": "Under Section 16 of the MSMED Act, statutory penal interest is accruing at three times the RBI bank rate, compounded monthly."},
+                    {"start": 13.6, "end": 17.5, "text": "To avoid formal escalation and recovery proceedings, please clear this invoice today via the secure WhatsApp payment link."},
+                    {"start": 17.6, "end": 19.0, "text": "Thank you."}
+                ]
+            }
+        }
+    },
+    {
+        "id": "cart_rahul",
+        "title": "Rahul Sharma · Cart Drop-off (₹999)",
+        "receivable_id": "CART-2026-099",
+        "debtor_name": "Rahul Sharma",
+        "amount": 999.0,
+        "days_overdue": 0,
+        "tier": "Checkout Drop-off Recovery",
+        "status_label": "High-Intent Drop-off · 1-Tap UPI",
+        "ringback_url": "/assets/audio/telecom_ringback.mp3",
+        "dialects": {
+            "hinglish": {
+                "label": "Hinglish (Colloquial)",
+                "voice": "hi-IN-SwaraNeural",
+                "audio_url": "/assets/audio/cart_recovery_hinglish.mp3",
+                "duration_sec": 14.5,
+                "cues": [
+                    {"start": 0.0, "end": 2.8, "text": "Namaste Rahul ji! RecoverIQ checkout assistant se call hai."},
+                    {"start": 2.9, "end": 6.8, "text": "Aapka annual subscription plan lagbhag complete ho gaya tha, par payment complete nahi ho payi."},
+                    {"start": 6.9, "end": 9.9, "text": "Humne aapke liye ek special instant discount link WhatsApp par bheja hai."},
+                    {"start": 10.0, "end": 13.4, "text": "Bas ek tap mein UPI se payment karke apna subscription turant activate karein."},
+                    {"start": 13.5, "end": 14.5, "text": "Shukriya!"}
+                ]
+            },
+            "english": {
+                "label": "Indian English (Formal)",
+                "voice": "en-IN-NeerjaNeural",
+                "audio_url": "/assets/audio/cart_recovery_english.mp3",
+                "duration_sec": 13.5,
+                "cues": [
+                    {"start": 0.0, "end": 3.2, "text": "Hi Rahul! This is RecoverIQ checkout assistant following up on your pending subscription order."},
+                    {"start": 3.3, "end": 7.0, "text": "We noticed your payment of nine hundred and ninety-nine rupees was interrupted before completion."},
+                    {"start": 7.1, "end": 10.8, "text": "We have sent an instant 1-tap UPI payment link with an exclusive revival discount directly to your WhatsApp."},
+                    {"start": 10.9, "end": 12.8, "text": "Simply tap the link to complete your setup in seconds."},
+                    {"start": 12.9, "end": 13.5, "text": "Thank you!"}
+                ]
+            }
+        }
+    }
+]
+
+
+@app.get("/api/voice/scenarios")
+async def get_voice_scenarios():
+    """
+    Returns pre-rendered voice outreach scenarios with dual-dialect audio metadata,
+    statutory MSMED Section 16 text, and exact subtitle cue timestamps.
+    Exempt from API key auth (public read-only catalog).
+    """
+    return {"scenarios": VOICE_SCENARIOS}
+
+
+class VoiceCallRequest(BaseModel):
+    debtor_name: Optional[str] = None
+    amount: Optional[float] = None
+    vpa: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@app.post("/api/voice/call/{receivable_id}")
+async def trigger_voice_call_preview(receivable_id: str, payload: Optional[VoiceCallRequest] = None):
+    """
+    Simulates triggering an outbound IVR voice call preview for a debtor invoice.
+    Logs immutable audit ledger entry with channel='ivr', deducting ₹1.50 unit cost
+    from overall_roi()['total_cost'] and headline net_roi.
+    Protected under SecurityAndAuthMiddleware (requires X-API-Key when configured).
+    """
+    # Look up receivable if existing
+    r = None
+    for item in b2b_chaser.all_receivables():
+        if item.receivable_id == receivable_id or item.invoice_number == receivable_id:
+            r = item
+            break
+
+    amount = payload.amount if (payload and payload.amount is not None) else (r.amount if r else 12500.0)
+    debtor_name = payload.debtor_name if (payload and payload.debtor_name) else (r.debtor_name if r else "StartupXYZ")
+    vpa = payload.vpa if (payload and payload.vpa) else (r.debtor_vpa if r else "startup@okaxis")
+
+    # Log to recovery ledger with channel="ivr" (charges ₹1.50)
+    reasoning = (
+        f"{receivable_id}: Outbound Voice AI Channel Preview dispatched to {debtor_name}. "
+        f"Statutory ₹1.50 IVR unit cost deducted in recovery ledger."
+    )
+    ledger_entry = recovery_ledger.log(
+        event_type="b2b",
+        vpa=vpa,
+        amount=amount,
+        reasoning=reasoning,
+        confidence=0.82,
+        channel="ivr",
+        outcome="pending",
+        recovery_type="reactive",
+    )
+
+    phone = r.debtor_phone if r else "+91-9800000003"
+    # Dispatch through unified messaging client
+    messenger.send_voice_call(to=phone, script=reasoning)
+
+    # Add to in-memory store so Event Stream shows the voice action in real time
+    from api.store import RecoveryEvent, IST
+    now_ist = datetime.now(IST).strftime("%H:%M:%S")
+    ev = RecoveryEvent(
+        id=f"EVT-VOICE-{uuid.uuid4().hex[:6].upper()}",
+        timestamp=now_ist,
+        event_type="b2b.ivr.dispatched",
+        failure_code="IVR_CHASE",
+        failure_reason=reasoning,
+        customer_id=debtor_name,
+        customer_vpa=vpa,
+        bank="Axis Bank",
+        amount=amount,
+        severity="medium",
+        interventions=["ivr_outreach"],
+        intervention_msgs=[f"Outbound Voice AI call dispatched to {debtor_name} ({phone}) · ₹1.50 statutory IVR unit cost"],
+        scheduled_at=None,
+        action_url=None,
+        success=True,
+        status="recovering",
+        amount_recovered=0.0,
+        scenario_name=f"Voice Outreach: {debtor_name}",
+        trust_score=0.75,
+    )
+    await store.add_event(ev)
+
+    return {
+        "status": "connected",
+        "receivable_id": receivable_id,
+        "debtor_name": debtor_name,
+        "amount": amount,
+        "vpa": vpa,
+        "channel": "ivr",
+        "channel_cost": 1.50,
+        "ledger_id": ledger_entry.ledger_id,
+        "overall_roi": recovery_ledger.overall_roi(),
+    }
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────────────

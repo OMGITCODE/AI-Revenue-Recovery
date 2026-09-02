@@ -1497,11 +1497,23 @@ function renderB2BTable(receivables) {
       chaseBtn.className = 'btn-act btn-blue';
       chaseBtn.textContent = '↺ Chase';
       chaseBtn.onclick = function() { b2bChase(r.receivable_id, this); };
+
+      const voiceBtn = document.createElement('button');
+      voiceBtn.className = 'btn-act';
+      voiceBtn.style.cssText = 'border-color:rgba(139,92,246,0.45);color:#8b5cf6;background:rgba(139,92,246,0.08);font-weight:600;';
+      voiceBtn.innerHTML = '📞 Voice';
+      voiceBtn.title = 'Preview Outbound Voice AI IVR Call';
+      voiceBtn.onclick = function() {
+        const scenarioId = (r.debtor_name && r.debtor_name.toLowerCase().includes('mega')) ? 'mega_retail' : 'startup_xyz';
+        openVoiceModal(scenarioId);
+      };
+
       const settleBtn = document.createElement('button');
       settleBtn.className = 'btn-act btn-green';
       settleBtn.textContent = '₹ Settle';
       settleBtn.onclick = function() { b2bSettle(r.receivable_id, r.debtor_name, r.amount, this); };
       actDiv.appendChild(chaseBtn);
+      actDiv.appendChild(voiceBtn);
       actDiv.appendChild(settleBtn);
       actionTd.appendChild(actDiv);
     } else {
@@ -2471,6 +2483,404 @@ async function executeSetuConsentFlow() {
   } catch (err) {
     toast(`Setu AA Error: ${err.message}`, 'err');
     resetSetuModalForm();
+  }
+}
+
+// ── Outbound Voice AI Outreach Studio Controller ────────────────────────────
+
+let g_voiceScenarios = [];
+let g_selectedVoiceScenarioId = 'startup_xyz';
+let g_selectedVoiceDialect = 'hinglish';
+let g_voiceAudio = null;
+let g_voiceRingbackAudio = null;
+let g_voiceTimerInterval = null;
+let g_voiceCallSeconds = 0;
+let g_voiceState = 'idle'; // 'idle' | 'calling' | 'playing' | 'paused' | 'completed'
+
+async function loadVoiceScenarios() {
+  if (g_voiceScenarios && g_voiceScenarios.length > 0) return g_voiceScenarios;
+  try {
+    const res = await fetch('/api/voice/scenarios');
+    if (res.ok) {
+      const data = await res.json();
+      g_voiceScenarios = data.scenarios || [];
+      return g_voiceScenarios;
+    }
+  } catch (e) {
+    console.warn('Failed to load voice scenarios from API:', e);
+  }
+  return [];
+}
+
+function getActiveVoiceScenario() {
+  return g_voiceScenarios.find(s => s.id === g_selectedVoiceScenarioId) || g_voiceScenarios[0] || null;
+}
+
+async function openVoiceModal(scenarioId, dialect) {
+  const backdrop = document.getElementById('voice-backdrop');
+  const modal = document.getElementById('voice-modal');
+  if (backdrop) backdrop.classList.add('open');
+  if (modal) modal.classList.add('open');
+
+  await loadVoiceScenarios();
+
+  if (scenarioId) g_selectedVoiceScenarioId = scenarioId;
+  if (dialect) g_selectedVoiceDialect = dialect;
+
+  renderVoiceScenarioUI();
+}
+
+function closeVoiceModal() {
+  hangupVoiceCall();
+  const backdrop = document.getElementById('voice-backdrop');
+  const modal = document.getElementById('voice-modal');
+  if (backdrop) backdrop.classList.remove('open');
+  if (modal) modal.classList.remove('open');
+}
+
+function selectVoiceScenario(scenarioId) {
+  hangupVoiceCall();
+  g_selectedVoiceScenarioId = scenarioId;
+  renderVoiceScenarioUI();
+}
+
+function setVoiceDialect(dialect) {
+  hangupVoiceCall();
+  g_selectedVoiceDialect = dialect;
+  renderVoiceScenarioUI();
+}
+
+function renderVoiceScenarioUI() {
+  // 1. Highlight preset pills
+  ['startup_xyz', 'mega_retail', 'cart_rahul'].forEach(id => {
+    const pill = document.getElementById(`vpill-${id}`);
+    if (pill) {
+      if (id === g_selectedVoiceScenarioId) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    }
+  });
+
+  // 2. Highlight dialect toggle
+  const hBtn = document.getElementById('vdialect-hinglish');
+  const eBtn = document.getElementById('vdialect-english');
+  if (hBtn) hBtn.className = g_selectedVoiceDialect === 'hinglish' ? 'voice-dialect-btn active' : 'voice-dialect-btn';
+  if (eBtn) eBtn.className = g_selectedVoiceDialect === 'english' ? 'voice-dialect-btn active' : 'voice-dialect-btn';
+
+  const s = getActiveVoiceScenario();
+  if (!s) return;
+
+  const d = (s.dialects && s.dialects[g_selectedVoiceDialect]) ? s.dialects[g_selectedVoiceDialect] : (s.dialects?.hinglish || null);
+
+  // 3. Update Voice badges
+  const hBadge = document.getElementById('vvoice-hinglish-badge');
+  const eBadge = document.getElementById('vvoice-english-badge');
+  if (hBadge && s.dialects?.hinglish) hBadge.textContent = s.dialects.hinglish.voice;
+  if (eBadge && s.dialects?.english) eBadge.textContent = s.dialects.english.voice;
+
+  // 4. Update caller box
+  const nameEl = document.getElementById('voice-target-name');
+  const metaEl = document.getElementById('voice-target-meta');
+  const avatarEl = document.getElementById('voice-avatar-icon');
+  if (nameEl) nameEl.textContent = s.debtor_name;
+  if (metaEl) metaEl.textContent = `${s.receivable_id} · ₹${Number(s.amount).toLocaleString('en-IN')} · ${s.status_label}`;
+  if (avatarEl) {
+    avatarEl.textContent = s.id === 'mega_retail' ? '⚖️' : (s.id === 'cart_rahul' ? '🛒' : '🏢');
+  }
+
+  // 5. Statutory MSMED Alert visibility
+  const statBox = document.getElementById('voice-statutory-box');
+  if (statBox) {
+    statBox.style.display = (s.id === 'mega_retail') ? 'flex' : 'none';
+  }
+
+  // 6. Subtitle Cues container
+  const cuesBox = document.getElementById('voice-cues-container');
+  if (cuesBox && d && d.cues) {
+    cuesBox.innerHTML = d.cues.map((cue, idx) => `
+      <div class="voice-cue-item" id="vcue-${idx}" data-start="${cue.start}" data-end="${cue.end}">
+        <span style="font-size:10px;opacity:0.6;font-family:monospace;margin-right:4px;">[${cue.start.toFixed(1)}s]</span>
+        ${esc(cue.text)}
+      </div>
+    `).join('');
+  }
+
+  // 7. Reset call state to idle
+  resetVoiceCallState();
+}
+
+function resetVoiceCallState() {
+  g_voiceState = 'idle';
+  g_voiceCallSeconds = 0;
+  if (g_voiceTimerInterval) {
+    clearInterval(g_voiceTimerInterval);
+    g_voiceTimerInterval = null;
+  }
+  const timerEl = document.getElementById('voice-screen-timer');
+  const statusEl = document.getElementById('voice-status-badge');
+  const callBtn = document.getElementById('voice-call-trigger-btn');
+  const callIcon = document.getElementById('voice-call-icon');
+  const callLabel = document.getElementById('voice-call-label');
+  const hangupBtn = document.getElementById('voice-hangup-btn');
+  const waveform = document.getElementById('voice-waveform');
+  const avatarEl = document.getElementById('voice-avatar-icon');
+
+  if (timerEl) timerEl.textContent = '00:00';
+  if (statusEl) {
+    statusEl.className = 'voice-status-pill';
+    statusEl.textContent = '● Idle · Ready to Dispatch';
+  }
+  if (callBtn) {
+    callBtn.style.display = 'flex';
+    callBtn.style.background = 'linear-gradient(135deg, #10B981, #059669)';
+  }
+  if (callIcon) callIcon.textContent = '📞';
+  if (callLabel) callLabel.textContent = 'Initiate Outbound Call & Log Ledger';
+  if (hangupBtn) hangupBtn.style.display = 'none';
+  if (waveform) waveform.classList.remove('playing');
+  if (avatarEl) avatarEl.classList.remove('pulsing');
+
+  // Clear cue active classes
+  document.querySelectorAll('.voice-cue-item').forEach(el => el.classList.remove('active'));
+}
+
+async function toggleVoicePlayback() {
+  const s = getActiveVoiceScenario();
+  if (!s) return;
+  const d = (s.dialects && s.dialects[g_selectedVoiceDialect]) ? s.dialects[g_selectedVoiceDialect] : s.dialects?.hinglish;
+  if (!d) return;
+
+  if (g_voiceState === 'idle' || g_voiceState === 'completed') {
+    // 1. Enter Calling State & play Indian telecom ringback chime
+    g_voiceState = 'calling';
+    const statusEl = document.getElementById('voice-status-badge');
+    const hangupBtn = document.getElementById('voice-hangup-btn');
+    const callBtn = document.getElementById('voice-call-trigger-btn');
+    const avatarEl = document.getElementById('voice-avatar-icon');
+    const ledgerPill = document.getElementById('voice-ledger-pill');
+
+    if (statusEl) {
+      statusEl.className = 'voice-status-pill calling';
+      statusEl.textContent = '🔔 Dialing & Ringing...';
+    }
+    if (avatarEl) avatarEl.classList.add('pulsing');
+    if (callBtn) callBtn.style.display = 'none';
+    if (hangupBtn) hangupBtn.style.display = 'flex';
+    if (ledgerPill) {
+      ledgerPill.textContent = 'Dispatching Call...';
+      ledgerPill.className = 'stat-chip chip-amber';
+    }
+
+    // Simultaneously trigger the protected backend POST endpoint with API Key if present
+    dispatchBackendVoiceCall(s);
+
+    // Play telecom ringback tone
+    if (!g_voiceRingbackAudio) {
+      g_voiceRingbackAudio = new Audio(s.ringback_url || '/assets/audio/telecom_ringback.mp3');
+    } else {
+      g_voiceRingbackAudio.src = s.ringback_url || '/assets/audio/telecom_ringback.mp3';
+    }
+    g_voiceRingbackAudio.currentTime = 0;
+
+    let ringbackTimeout = null;
+    const startSpeech = () => {
+      if (ringbackTimeout) clearTimeout(ringbackTimeout);
+      if (g_voiceState !== 'calling') return;
+      playSpeechAudio(d);
+    };
+
+    g_voiceRingbackAudio.onended = startSpeech;
+    g_voiceRingbackAudio.onerror = startSpeech;
+
+    try {
+      await g_voiceRingbackAudio.play();
+      ringbackTimeout = setTimeout(startSpeech, 1800);
+    } catch (e) {
+      startSpeech();
+    }
+
+  } else if (g_voiceState === 'playing') {
+    // Pause speech
+    if (g_voiceAudio) g_voiceAudio.pause();
+    g_voiceState = 'paused';
+    const statusEl = document.getElementById('voice-status-badge');
+    const waveform = document.getElementById('voice-waveform');
+    const callLabel = document.getElementById('voice-call-label');
+    const callIcon = document.getElementById('voice-call-icon');
+    const callBtn = document.getElementById('voice-call-trigger-btn');
+
+    if (statusEl) statusEl.textContent = '⏸ Call Paused';
+    if (waveform) waveform.classList.remove('playing');
+    if (callBtn) callBtn.style.display = 'flex';
+    if (callIcon) callIcon.textContent = '▶';
+    if (callLabel) callLabel.textContent = 'Resume Speech';
+
+  } else if (g_voiceState === 'paused') {
+    // Resume speech
+    if (g_voiceAudio) {
+      g_voiceAudio.play().catch(() => {});
+      g_voiceState = 'playing';
+      const statusEl = document.getElementById('voice-status-badge');
+      const waveform = document.getElementById('voice-waveform');
+      const callBtn = document.getElementById('voice-call-trigger-btn');
+
+      if (statusEl) {
+        statusEl.className = 'voice-status-pill connected';
+        statusEl.textContent = '🟢 Connected & Speaking';
+      }
+      if (waveform) waveform.classList.add('playing');
+      if (callBtn) callBtn.style.display = 'none';
+    }
+  }
+}
+
+function playSpeechAudio(d) {
+  g_voiceState = 'playing';
+  if (g_voiceRingbackAudio) {
+    g_voiceRingbackAudio.pause();
+  }
+
+  const statusEl = document.getElementById('voice-status-badge');
+  const waveform = document.getElementById('voice-waveform');
+  const callBtn = document.getElementById('voice-call-trigger-btn');
+  const hangupBtn = document.getElementById('voice-hangup-btn');
+  const avatarEl = document.getElementById('voice-avatar-icon');
+
+  if (statusEl) {
+    statusEl.className = 'voice-status-pill connected';
+    statusEl.textContent = '🟢 Connected & Speaking';
+  }
+  if (waveform) waveform.classList.add('playing');
+  if (avatarEl) avatarEl.classList.remove('pulsing');
+  if (callBtn) callBtn.style.display = 'none';
+  if (hangupBtn) hangupBtn.style.display = 'flex';
+
+  // Start duration timer
+  g_voiceCallSeconds = 0;
+  if (g_voiceTimerInterval) clearInterval(g_voiceTimerInterval);
+  g_voiceTimerInterval = setInterval(() => {
+    g_voiceCallSeconds++;
+    const timerEl = document.getElementById('voice-screen-timer');
+    if (timerEl) {
+      const mins = Math.floor(g_voiceCallSeconds / 60).toString().padStart(2, '0');
+      const secs = (g_voiceCallSeconds % 60).toString().padStart(2, '0');
+      timerEl.textContent = `${mins}:${secs}`;
+    }
+  }, 1000);
+
+  // Initialize speech audio
+  if (!g_voiceAudio) {
+    g_voiceAudio = new Audio(d.audio_url);
+  } else {
+    g_voiceAudio.src = d.audio_url;
+  }
+  const speedSelect = document.getElementById('voice-speed-select');
+  if (speedSelect) g_voiceAudio.playbackRate = parseFloat(speedSelect.value) || 1.0;
+  g_voiceAudio.currentTime = 0;
+
+  // Real-time cue highlighting synced to exact timestamps
+  g_voiceAudio.ontimeupdate = () => {
+    const t = g_voiceAudio.currentTime;
+    if (!d.cues) return;
+
+    d.cues.forEach((cue, idx) => {
+      const cueEl = document.getElementById(`vcue-${idx}`);
+      if (cueEl) {
+        if (t >= cue.start && t < cue.end) {
+          if (!cueEl.classList.contains('active')) {
+            cueEl.classList.add('active');
+            cueEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        } else {
+          cueEl.classList.remove('active');
+        }
+      }
+    });
+  };
+
+  g_voiceAudio.onended = () => {
+    g_voiceState = 'completed';
+    if (g_voiceTimerInterval) clearInterval(g_voiceTimerInterval);
+    const statusEl = document.getElementById('voice-status-badge');
+    const waveform = document.getElementById('voice-waveform');
+    const callBtn = document.getElementById('voice-call-trigger-btn');
+    const callIcon = document.getElementById('voice-call-icon');
+    const callLabel = document.getElementById('voice-call-label');
+    const hangupBtn = document.getElementById('voice-hangup-btn');
+
+    if (statusEl) {
+      statusEl.className = 'voice-status-pill';
+      statusEl.textContent = '✓ Call Completed (Audited)';
+    }
+    if (waveform) waveform.classList.remove('playing');
+    if (callBtn) {
+      callBtn.style.display = 'flex';
+      callBtn.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+    }
+    if (callIcon) callIcon.textContent = '↺';
+    if (callLabel) callLabel.textContent = 'Replay Call Preview';
+    if (hangupBtn) hangupBtn.style.display = 'none';
+  };
+
+  g_voiceAudio.play().catch(err => {
+    console.warn('Audio play prevented by browser policy:', err);
+    toast('Tap button to allow browser audio playback', 'warn');
+  });
+}
+
+function hangupVoiceCall() {
+  if (g_voiceRingbackAudio) {
+    g_voiceRingbackAudio.pause();
+    g_voiceRingbackAudio.currentTime = 0;
+  }
+  if (g_voiceAudio) {
+    g_voiceAudio.pause();
+    g_voiceAudio.currentTime = 0;
+  }
+  resetVoiceCallState();
+}
+
+function changeVoiceSpeed(rate) {
+  const r = parseFloat(rate) || 1.0;
+  if (g_voiceAudio) g_voiceAudio.playbackRate = r;
+}
+
+async function dispatchBackendVoiceCall(scenario) {
+  const ledgerPill = document.getElementById('voice-ledger-pill');
+  try {
+    const apiKey = localStorage.getItem('recoveriq_api_key') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['X-API-Key'] = apiKey;
+
+    const res = await fetch(`/api/voice/call/${encodeURIComponent(scenario.receivable_id)}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        debtor_name: scenario.debtor_name,
+        amount: scenario.amount,
+        notes: `Outbound IVR Voice preview (${g_selectedVoiceDialect}) dispatched`,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (ledgerPill) {
+        ledgerPill.textContent = `Ledger #${data.ledger_id} (₹1.50 Cost)`;
+        ledgerPill.className = 'stat-chip chip-green';
+      }
+      toast(`📞 Voice AI call logged in Recovery Ledger (#${data.ledger_id}) · ₹1.50 IVR cost deducted`, 'purple');
+      await Promise.allSettled([loadLedger(), loadROI(), loadEvents()]);
+    } else {
+      const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+      if (ledgerPill) {
+        ledgerPill.textContent = `Auth Protected: ${err.detail || res.status}`;
+        ledgerPill.className = 'stat-chip chip-amber';
+      }
+    }
+  } catch (err) {
+    console.warn('Voice call dispatch error:', err);
   }
 }
 

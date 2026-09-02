@@ -88,7 +88,7 @@ def verify_twilio_signature(
 
 @dataclass
 class MessageResult:
-    channel: str                       # "whatsapp" | "sms"
+    channel: str                       # "whatsapp" | "sms" | "ivr"
     to: str
     body: str
     sent: bool                         # True only if Twilio actually accepted it
@@ -99,11 +99,12 @@ class MessageResult:
 
 class MessagingClient:
     """
-    One client, two channels, safe by default.
+    One client, multi-channel (WhatsApp, SMS, Outbound IVR Voice), safe by default.
 
     Usage:
         from src.integrations.messaging import messenger
         result = messenger.send_whatsapp(to="+919876543210", body="...")
+        call = messenger.send_voice_call(to="+919876543210", script="...")
     """
 
     def __init__(self, force_mock: bool = False):
@@ -135,6 +136,38 @@ class MessagingClient:
 
     def send_sms(self, to: str, body: str) -> MessageResult:
         return self._send("sms", to, body)
+
+    def send_voice_call(self, to: str, script: str, twiml_url: Optional[str] = None) -> MessageResult:
+        """
+        Outbound IVR / Voice AI outreach call.
+        Has its own dedicated branch rather than shoehorning into _send()
+        because Twilio Voice calls.create() takes twiml=/url= rather than body=.
+        """
+        if not self.is_live:
+            logger.info("[IVR mock -> %s] %s", to, script)
+            return MessageResult(channel="ivr", to=to, body=script, sent=False, mode="mock")
+
+        override = self.demo_sms_override or self.demo_whatsapp_override
+        effective_to = override or to
+
+        try:
+            from_number = self.sms_from or self.whatsapp_from.replace("whatsapp:", "")
+            if not from_number:
+                raise ValueError("TWILIO_SMS_FROM not set — need a voice-capable Twilio number")
+
+            if twiml_url:
+                call = self._client.calls.create(to=effective_to, from_=from_number, url=twiml_url)
+            else:
+                escaped = script.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                twiml_xml = f"<Response><Say voice='Polly.Aditi' language='hi-IN'>{escaped}</Say></Response>"
+                call = self._client.calls.create(to=effective_to, from_=from_number, twiml=twiml_xml)
+
+            logger.info("[IVR live -> %s] sid=%s", effective_to, call.sid)
+            return MessageResult(channel="ivr", to=effective_to, body=script, sent=True, mode="live", provider_sid=call.sid)
+
+        except Exception as e:
+            logger.warning("[IVR CALL FAILED -> %s] %s — recorded as mock", effective_to, e)
+            return MessageResult(channel="ivr", to=effective_to, body=script, sent=False, mode="mock", error=str(e))
 
     def _send(self, channel: str, to: str, body: str) -> MessageResult:
         if not self.is_live:

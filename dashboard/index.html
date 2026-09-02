@@ -46,6 +46,9 @@
     <button class="btn-nav" id="setu-sim-nav-btn" onclick="openSetuAAModal()" title="Simulate RBI Account Aggregator (Setu) digital consent &amp; real-time balance check" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(16,185,129,0.45);color:var(--green);font-weight:600;">
       🏦 Setu AA Simulator
     </button>
+    <button class="btn-nav" id="voice-sim-nav-btn" onclick="openVoiceModal()" title="Outbound Voice AI Outreach Studio (MSMED Act Section 16 &amp; Hinglish IVR)" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(139,92,246,0.45);color:#8b5cf6;font-weight:600;">
+      📞 Voice AI Studio
+    </button>
     <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics" style="display:inline-flex;align-items:center;gap:4px;">
       ↻ Refresh All
     </button>
@@ -509,6 +512,7 @@
             <span class="stat-chip chip-amber" id="chk-nudges">0 nudges</span>
           </div>
           <button class="btn-ghost" onclick="loadCheckout(this)" title="Refresh checkout sessions">↻ Refresh</button>
+          <button class="btn-ghost" onclick="openVoiceModal('cart_rahul')" title="Simulate Outbound Voice AI Cart Drop-off Outreach" style="border-color:rgba(139,92,246,0.45);color:#8b5cf6;">📞 Voice Nudge</button>
           <button class="btn-ghost" onclick="openCheckoutForm()" title="Log a drop-off session">+ Log Drop-off</button>
         </div>
       </div>
@@ -1335,6 +1339,124 @@
   </div><!-- /setu-modal-content -->
 </div>
 
+<!-- ── Outbound Voice AI Outreach Studio Modal ────────────────────────────── -->
+<div class="modal-backdrop" id="voice-backdrop" onclick="closeVoiceModal()"></div>
+<div class="modal voice-phone-modal" id="voice-modal" role="dialog" aria-modal="true" aria-labelledby="voice-modal-heading">
+  <div class="modal-head" style="border-bottom:1px solid var(--border);padding:14px 18px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg, rgba(139,92,246,0.25), rgba(59,130,246,0.2));display:flex;align-items:center;justify-content:center;font-size:18px;">📞</div>
+      <div>
+        <div class="modal-title" id="voice-modal-heading">Outbound Voice AI Outreach Studio</div>
+        <div class="modal-sub">Autonomous IVR Dialer · Multi-Dialect Neural Speech · MSMED Act Section 16 Notice</div>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="closeVoiceModal()" aria-label="Close" style="padding:4px 8px;font-size:14px;">&#x2715;</button>
+  </div>
+
+  <div class="voice-modal-content">
+    <!-- Preset Persona / Scenario Selector -->
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);margin-bottom:6px;">Select Recovery Scenario Persona</div>
+      <div class="voice-preset-pills">
+        <button type="button" class="voice-preset-pill active" id="vpill-startup_xyz" onclick="selectVoiceScenario('startup_xyz')">
+          🏢 StartupXYZ · ₹12.5k (Tier C Early)
+        </button>
+        <button type="button" class="voice-preset-pill" id="vpill-mega_retail" onclick="selectVoiceScenario('mega_retail')">
+          ⚖️ Mega Retail · ₹84.2k (MSMED §16 Notice)
+        </button>
+        <button type="button" class="voice-preset-pill" id="vpill-cart_rahul" onclick="selectVoiceScenario('cart_rahul')">
+          🛒 Rahul Sharma · ₹999 (Cart Drop-off)
+        </button>
+      </div>
+    </div>
+
+    <!-- Dual Dialect Toggle -->
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);margin-bottom:6px;">Voice Synthesis Dialect &amp; Voice Engine</div>
+      <div class="voice-dialect-toggle">
+        <button type="button" class="voice-dialect-btn active" id="vdialect-hinglish" onclick="setVoiceDialect('hinglish')">
+          🇮🇳 Hinglish (Colloquial) <span id="vvoice-hinglish-badge" class="stat-chip chip-blue" style="font-size:10px;padding:1px 6px;">hi-IN-MadhurNeural</span>
+        </button>
+        <button type="button" class="voice-dialect-btn" id="vdialect-english" onclick="setVoiceDialect('english')">
+          🇮🇳 Indian English (Formal) <span id="vvoice-english-badge" class="stat-chip chip-purple" style="font-size:10px;padding:1px 6px;">en-IN-PrabhatNeural</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Simulated Phone Frame -->
+    <div class="voice-phone-frame">
+      <div class="voice-screen-bar">
+        <span id="voice-screen-timer">00:00</span>
+        <span class="voice-status-pill" id="voice-status-badge">● Idle · Ready to Dispatch</span>
+        <span>400Hz + 425Hz Standard Tone</span>
+      </div>
+
+      <div class="voice-caller-box">
+        <div class="voice-caller-avatar" id="voice-avatar-icon">🏢</div>
+        <div class="voice-caller-name" id="voice-target-name">StartupXYZ (Rohan Sharma)</div>
+        <div class="voice-caller-meta" id="voice-target-meta">INV-2026-003 · ₹12,500.00 · 45d Overdue (Tier C)</div>
+      </div>
+
+      <!-- Dynamic Waveform Equalizer -->
+      <div class="voice-waveform-wrap" id="voice-waveform">
+        <!-- 24 dynamic frequency bars -->
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+        <span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span>
+      </div>
+
+      <!-- Statutory MSMED Alert Box (conditionally shown for Mega Retail) -->
+      <div class="voice-statutory-alert" id="voice-statutory-box" style="display:none;">
+        <span style="font-size:16px;">⚖️</span>
+        <div>
+          <strong>Statutory MSMED Act 2006 (Section 16) Mandatory Notice:</strong><br/>
+          Overdue balances carry statutory penal interest at <em>3 times the Reserve Bank of India bank rate</em>, compounded monthly. Pre-escalation statutory notice dispatched prior to formal recovery proceedings.
+        </div>
+      </div>
+
+      <!-- Live Karaoke Subtitle Cue Box -->
+      <div class="voice-cues-card" id="voice-cues-container">
+        <!-- populated dynamically with synced cues -->
+      </div>
+
+      <!-- Audit Ledger Telemetry -->
+      <div class="voice-telemetry-row">
+        <div>
+          <span style="color:var(--text-3)">Audit Channel:</span> <strong>IVR Voice (₹1.50 statutory unit cost)</strong>
+        </div>
+        <div id="voice-ledger-status">
+          <span class="stat-chip chip-blue" id="voice-ledger-pill">Ready to Log</span>
+        </div>
+      </div>
+
+      <!-- Control Bar -->
+      <div class="voice-controls-bar">
+        <button class="btn-voice-call" id="voice-call-trigger-btn" onclick="toggleVoicePlayback()">
+          <span id="voice-call-icon">📞</span>
+          <span id="voice-call-label">Initiate Outbound Call &amp; Log Ledger</span>
+        </button>
+        <button class="btn-voice-hangup" id="voice-hangup-btn" onclick="hangupVoiceCall()" style="display:none;">
+          <span>🛑 Hang Up</span>
+        </button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <label style="font-size:11px;font-weight:600;color:var(--text-3);" for="voice-speed-select">Speed</label>
+          <select id="voice-speed-select" onchange="changeVoiceSpeed(this.value)" class="form-input" style="padding:4px 8px;font-size:11px;width:70px;">
+            <option value="1.0" selected>1.0x</option>
+            <option value="1.2">1.2x</option>
+            <option value="1.5">1.5x</option>
+          </select>
+        </div>
+      </div>
+
+    </div><!-- /voice-phone-frame -->
+  </div><!-- /voice-modal-content -->
+</div>
+
 <!-- ── Project AI Assistant Chatbot (Powered by Gemini) ────────────────── -->
 <div class="ai-chat-drawer hidden" id="project-chat-drawer">
   <div class="ai-chat-header">
@@ -1362,6 +1484,9 @@
     <button class="ai-quick-btn" onclick="askQuickProjectQuestion('How does RecoverIQ compare against the Razorpay fixed-schedule retry baseline?')">
       📊 Benchmark Results
     </button>
+    <button class="ai-quick-btn" onclick="openVoiceModal('mega_retail')" style="border-color:rgba(139,92,246,0.5);color:#8b5cf6;">
+      📞 Voice AI: Mega Retail (MSMED §16)
+    </button>
     <button class="ai-quick-btn" onclick="runClassifierEvalFromChat()" style="border-color:rgba(16,185,129,0.5);color:var(--green);">
       🎯 Intent Classifier Eval (30 Items)
     </button>
@@ -1388,6 +1513,6 @@
 <!-- Toast root -->
 <div id="toast-root"></div>
 
-<script src="/static/app.js?v=20260902-v3"></script>
+<script src="/static/app.js?v=20260902-v4"></script>
 </body>
 </html>

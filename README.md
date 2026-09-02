@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-181%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-189%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -124,8 +124,59 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 - **Broken Promise Penalty**: $-0.15$ deduction per broken commitment.
 - **Fulfilled Reward**: $+0.10$ reward per fulfilled promise.
 
-### 3. Unified Customer Identity Graph & Behavioral History
-Resolves customer identity across VPAs, phone numbers, customer IDs, and accounts into a single canonical entity with cross-channel touch-frequency caps (max 2 outbound touches/day across all VPAs) and combined historical spend analytics.
+### 3. Unified Customer Identity Graph & Customer 360 Architecture
+Payment failures do not happen in a vacuum — a single customer frequently transacts across multiple payment methods, secondary VPAs, and bank accounts. RecoverIQ solves fragmented customer tracking through the **Canonical Customer Identity Graph** ([`customer_identity.py`](file:///src/agent/customer_identity.py)), uniting all decision modules, financial rails, and recovery channels around the same canonical entity:
+
+```
+                       ┌────────────────────────────────────────────────────────┐
+                       │          Canonical Customer Identity Graph             │
+                       │             ID: cust:rahul@oksbi                       │
+                       │  Aliases: rahul@oksbi · rahul.sharma@okaxis            │
+                       │           +919800000001 · CUST-SBI-001                │
+                       └──────────────────────────┬─────────────────────────────┘
+                                                  │
+         ┌───────────────────┬────────────────────┼───────────────────┬────────────────────┐
+         ▼                   ▼                    ▼                   ▼                    ▼
+┌─────────────────┐ ┌─────────────────┐  ┌─────────────────┐ ┌─────────────────┐  ┌─────────────────┐
+│ Spend Pattern   │ │ Setu Account    │  │ Salary-Cycle    │ │ Payer Trust     │  │ 2-Way WhatsApp  │
+│ Anomaly Engine  │ │ Aggregator (AA) │  │ Retry Scheduler │ │ & P2P Tracker   │  │ Conversational  │
+│ Mean: ₹991      │ │ Balance: ₹433   │  │ Rescheduled to: │ │ Score: 0.40     │  │ "Bhai kal pay   │
+│ Range: ₹899-₹1k │ │ Signal: Low     │  │ 1st Oct, 10 AM  │ │ Suppresses DND  │  │  kar dunga"     │
+│ Anti-Depletion  │ │ No Blind Retry  │  │ (Salary Window) │ │ Active Promise  │  │ NLP: PROMISE    │
+└────────┬────────┘ └────────┬────────┘  └────────┬────────┘ └────────┬────────┘  └────────┬────────┘
+         │                   │                    │                   │                    │
+         └───────────────────┴────────────────────┼───────────────────┴────────────────────┘
+                                                  ▼
+                       ┌────────────────────────────────────────────────────────┐
+                       │           Thompson Sampling Contextual Bandit          │
+                       │ Context: [U30 : Silver : LowTrust] ⟹ Action: IVR / Nudge│
+                       └──────────────────────────┬─────────────────────────────┘
+                                                  │
+                 ┌────────────────────────────────┴────────────────────────────────┐
+                 ▼                                                                 ▼
+┌───────────────────────────────────────────────┐                 ┌───────────────────────────────────┐
+│     Proactive Mandate Expiry Interceptor      │                 │  Outbound Voice AI Outreach Studio │
+│ Mandate: mand_sbi_exp_001 (₹999 OTT Pass)     │                 │ Persona: Rahul Sharma (₹999 Cart) │
+│ Scanned at T-36h ⟹ 1-Click WhatsApp Renewal   │                 │ hi-IN-SwaraNeural · ₹1.50 IVR Cost │
+└───────────────────────┬───────────────────────┘                 └─────────────────┬─────────────────┘
+                        │                                                           │
+                        └─────────────────────────────┬─────────────────────────────┘
+                                                      ▼
+                       ┌────────────────────────────────────────────────────────┐
+                       │          Immutable Regulatory Recovery Ledger          │
+                       │  Logs reasoning, confidence, and ₹ channel unit costs   │
+                       │  Separates Reactive Recovered vs Proactive Protected   │
+                       └────────────────────────────────────────────────────────┘
+```
+
+- **Alias Merging**: Resolves fragmented identifiers (`vpa`, `phone`, `email`, `customer_id`) into a single canonical profile (`cust:rahul@oksbi`).
+- **Touch-Frequency Caps**: Enforces cross-channel touch limits (maximum 2 outbound touchpoints per day across all customer VPAs combined), preventing spam and consumer fatigue.
+- **Customer 360° API (`GET /api/customer/{identifier}/history`)**: In a single unified endpoint, returns the customer's alias tree, rolling spend baseline, live Payer Trust Score, active promise status, failure event stream, and audit ledger decisions.
+- **Cross-Subsystem Connection**:
+  - **Spend Anomaly Engine**: Protects the customer from overdraft by comparing debits against personal historical baselines (`GR10`).
+  - **Setu AA Liquidity**: Informs the retry engine of available bank balance, shifting `U30` retries to the salary window.
+  - **P2P Tracker**: Temporarily suspends automated dunning while promises are active.
+  - **Bandit Personalization**: Uses customer tier and trust score as contextual state to select the highest-ROI channel.
 
 ### 4. Spend Pattern Anomaly Engine & Anti-Depletion Guardrails (GR10)
 RecoverIQ models personalized historical spend baselines (mean, median, range, and standard deviation) for every customer profile:
@@ -174,9 +225,31 @@ Provides merchants with honest, audit-grade financial reporting by strictly dist
 - **Two-Part Impact Separation**:
   - **⚡ Reactive Recovered**: Revenue rescued after a debit failure occurred (Smart Retries, UPI Collect, B2B Settlement, Drop-off cart recovery).
   - **🛡️ Proactive Protected**: Revenue secured before failure occurred (Pre-emptive Mandate Expiry renewals eliminating `BT02` failures).
-- **Real-Time Unit-Cost Accounting**: Deducts exact channel communication costs (WhatsApp templates @ ₹0.50, SMS @ ₹0.15, Automated IVR @ ₹0.75, UPI Collect @ ₹0.25) to compute true net return:
+- **Real-Time Unit-Cost Accounting**: Deducts exact channel communication costs (WhatsApp templates @ ₹0.50, SMS @ ₹0.15, Automated IVR Voice @ ₹1.50, UPI Collect @ ₹0.25) to compute true net return:
   $$\text{Net Return (ROI)} = (\text{Reactive Recovered} + \text{Proactive Protected}) - \text{Total Channel Costs}$$
 - **Granular Per-Channel Breakdown**: Detailed table tracking unit costs, action volume, gross recovered, and net ROI per intervention channel.
+
+### 9. Outbound Voice AI Outreach Studio & Statutory MSMED Act Section 16 Notice
+For high-exposure B2B invoices and abandoned checkout carts where text dunning fails to engage, RecoverIQ deploys **Autonomous Outbound Voice AI** combining neural speech synthesis, authentic telecom call progression, and statutory compliance:
+- **Dual-Dialect Neural Speech Synthesis**:
+  - 🇮🇳 **Hinglish (Colloquial Conversational)**: `hi-IN-MadhurNeural` (male, natural cadence for B2B accounts) and `hi-IN-SwaraNeural` (female, friendly cart drop-off recovery).
+  - 🇮🇳 **Indian English (Formal Demand)**: `en-IN-PrabhatNeural` (authoritative AR specialist tone) and `en-IN-NeerjaNeural` (crisp corporate voice).
+- **Sub-Second Karaoke Subtitle Telemetry**:
+  - Every spoken line is broken into millisecond-accurate subtitle cues (`start`, `end`, `text`).
+  - During live playback, the studio player dynamically tracks HTML5 audio `timeupdate` events, scrolling and illuminating the active dialogue cue in real time.
+- **Authentic Telecom Call Progression**:
+  - Features standard Indian telecom dual-tone multi-frequency ringback chime (400Hz + 425Hz) during the dialing and ring state (`/assets/audio/telecom_ringback.mp3`).
+  - Animated pulsing avatar during ringing, transitioning seamlessly into a dynamic 24-bar frequency equalizer during speech.
+- **Statutory MSMED Act 2006 (Section 16) Compliance Notice**:
+  - For micro and small enterprise suppliers collecting from corporate buyers (e.g. Mega Retail, 75d overdue), the agent issues an explicit statutory warning:
+    > *"Statutory MSMED Act 2006 (Section 16) Notice: Overdue balances carry penal interest at three times the Reserve Bank of India bank rate, compounded monthly. Dispatched prior to formal recovery proceedings."*
+- **Audit-Grade Ledger Unit Economics**:
+  - Every outbound IVR call automatically records an entry in the [`RecoveryLedger`](file:///src/agent/recovery_ledger.py) under `channel="ivr"`, deducting the statutory **₹1.50 unit cost** and updating net ROI calculations live.
+- **Strict Security & Route Architecture**:
+  - `GET /api/voice/scenarios` is registered in `PUBLIC_EXACT_PATHS` for zero-friction catalog browsing.
+  - `POST /api/voice/call/{receivable_id}` is **strictly protected** under `SecurityAndAuthMiddleware`, rejecting unauthorized calls with `401 Unauthorized` when an API key is configured.
+- **Direct Interactive Dashboard Launcher**:
+  - Tap **`📞 Voice AI Studio`** in the top navigation bar, click **`📞 Voice`** in the B2B Receivables table, or trigger **`📞 Voice Nudge`** in the Checkout Drop-off card to launch the interactive dialer studio modal.
 
 ---
 
@@ -206,11 +279,12 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🔌 2. External Integrations (`src/integrations/`)
+### 🔌 2. External Integrations (`src/integrations/`, `scripts/`)
 
 | Module | File | Responsibility & Key Innovation |
 |---|---|---|
-| **Live Twilio WhatsApp & SMS** | `src/integrations/messaging.py` | Twilio REST client with lazy initialization, DLT template registration compliance, sandbox routing, and transparent mock fallback for testing without credentials. |
+| **Live Twilio WhatsApp, SMS & Voice IVR** | `src/integrations/messaging.py` | Multi-channel communication client supporting WhatsApp, SMS, and Twilio Voice IVR calling with automated TwiML (`<Say voice='Polly.Aditi'>`) synthesis, DLT template compliance, sandbox routing, and transparent mock fallback. |
+| **Neural Edge-TTS Audio Engine** | `scripts/generate_voice_assets.py` | Microsoft Edge Neural Speech engine generating authentic Hinglish (`hi-IN-MadhurNeural`, `hi-IN-SwaraNeural`) and Indian English (`en-IN-PrabhatNeural`, `en-IN-NeerjaNeural`) voice audio with sub-second synchronized karaoke subtitle cues. |
 | **Razorpay UPI Gateway** | `src/integrations/razorpay_upi.py` | Razorpay Autopay webhook parsing, mandate verification, and collect request dispatch. |
 | **Setu Account Aggregator (AA)** | `src/integrations/setu_aa.py` | Full RBI-regulated Account Aggregator sandbox integration & balance verification engine. Manages 1-tap digital consent flows (`request_consent`), deterministic sandbox balance checks (`fetch_balance`), trust score adjustments, and decision note generation. |
 
@@ -229,7 +303,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | Module | File | Responsibility |
 |---|---|---|
-| **FastAPI REST API Orchestrator** | `api/main.py` | High-performance backend hosting 28+ REST endpoints, Server-Sent Events (SSE) stream (`/api/stream`), Twilio webhook parsers, CSV/JSON audit export, and scenario simulator routes. |
+| **FastAPI REST API Orchestrator** | `api/main.py` | High-performance backend hosting 30+ REST endpoints, Server-Sent Events (SSE) stream (`/api/stream`), Twilio webhook parsers, CSV/JSON audit export, and scenario simulator routes. |
 | **Realistic Event Simulator** | `api/simulator.py` | Probabilistic failure event synthesizer executing real-time diagnosis, guardrail checks, MAB selection, and industry-modeled recovery conversions. |
 | **Thread-Safe Event Store** | `api/store.py` | In-memory thread-safe state store managing active events, concurrency mutexes, deduplication keys, and real-time dynamically aggregated recovery statistics. |
 
@@ -239,7 +313,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | File | Technology | Description |
 |---|---|---|
-| `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Global ↻ Refresh All synchronizer, Proactive Mandate Expiry Interceptor with authentic WhatsApp Preview Modal, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
+| `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Global ↻ Refresh All synchronizer, Outbound Voice AI Outreach Studio, Setu AA Simulator Modal, Proactive Mandate Expiry Interceptor with authentic WhatsApp Preview Modal, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
 | `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, parallel multi-panel refresh synchronization with toast feedback, audio alerts, and interactive simulation controls. |
 | `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, authentic WhatsApp chat bubbles, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
 
@@ -257,10 +331,12 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 176 Tests across 10 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 189 Tests across 12 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
+| **Outbound Voice AI Outreach** | `tests/test_voice_ai.py` | **8 tests** | Public scenarios catalog, dual-dialect audio validation, physical asset existence, security middleware auth enforcement, ₹1.50 ledger accounting, and mock/live Twilio Voice dispatch. |
+| **Setu Account Aggregator (AA)** | `tests/test_setu_aa_api.py` | **4 tests** | Digital consent creation, sandbox balance verification, API key auth, and trust score feedback. |
 | **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI rules, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
 | **RBI Category Guardrail (GR7)** | `tests/test_rbi_category_guardrail.py` | **27 tests** | Category limits (₹1L vs ₹15k), education fallback, DecisionEngine static resolver, serialization, API /decide, and simulator scenarios. |
 | **Customer Identity Graph** | `tests/test_customer_identity.py` | **9 tests** | Canonical alias resolution, multi-identifier merging, cross-alias touch caps, shared spend baselines, and REST profile API. |
@@ -271,7 +347,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **177 passing** | **100% test pass rate in ~40s** |
+| **Total Test Suite** | `pytest tests/` | **189 passing** | **100% test pass rate in ~88s** |
 
 ---
 
@@ -411,6 +487,13 @@ ai-revenue-recovery-agent/
 ├── requirements.txt
 ├── .env.example
 │
+├── assets/                      # Static assets & Neural TTS Audio
+│   ├── audio/                   # Pre-rendered Edge Neural TTS MP3s & telecom ringback audio
+│   └── logo.png                 # Project branding
+│
+├── scripts/
+│   └── generate_voice_assets.py # Async Edge-TTS neural speech generator with exact subtitle timestamps
+│
 ├── api/                         # FastAPI Backend & SSE Live Stream
 │   ├── main.py                  # API endpoints, webhook parser, audit export
 │   ├── simulator.py             # Event generator & realistic outcome engine
@@ -449,7 +532,7 @@ ai-revenue-recovery-agent/
 │   │
 │   ├── integrations/            # External APIs
 │   │   ├── llm_classifier.py    # Fail-safe Google Gemini & OpenAI LLM intent classifier (with regex fallback)
-│   │   ├── messaging.py         # Twilio WhatsApp & SMS client (live API & mock fallback)
+│   │   ├── messaging.py         # Twilio WhatsApp, SMS & Voice IVR client (live API & mock fallback)
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
 │   │   └── setu_aa.py           # Setu Account Aggregator digital consent & balance verification client
 │   │
@@ -463,7 +546,8 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (181 passing tests across 11 files)
+└── tests/                       # Test Suite (189 passing tests across 12 files)
+    ├── test_voice_ai.py         # Voice AI scenarios, dual dialects, audio assets, security auth & IVR cost tests (8 tests)
     ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (4 tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
@@ -513,6 +597,10 @@ python -X utf8 upi_demo.py
 
 # Generic Revenue Recovery Pipeline Demo
 python -X utf8 demo.py
+
+# Outbound Voice AI Outreach Studio & Scenario Catalog (Audio & Cues)
+# Launch dashboard at http://localhost:8000 or query public scenarios catalog:
+# curl http://localhost:8000/api/voice/scenarios
 ```
 
 ### 4. Launch the Live Dashboard & API
@@ -521,13 +609,13 @@ python -X utf8 demo.py
 # Explicit UTF-8 encoding flag prevents console character mangling on Windows
 python -X utf8 -m uvicorn api.main:app --port 8000 --reload
 ```
-Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, and the **`🏦 Setu AA Simulator`** modal in the top navigation bar.
+Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, the **`📞 Voice AI Studio`**, and the **`🏦 Setu AA Simulator`** modal in the top navigation bar.
 
 ### 5. Run the Automated Test Suite
 
 ```bash
 python -m pytest tests/ -v
-# 181 passed in ~50s
+# 189 passed in ~88s
 ```
 
 ---
@@ -680,6 +768,10 @@ LLM_PROVIDER=gemini
 | `POST`| `/api/decide` | Evaluates guardrails and Thompson Sampling for a custom failure event |
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |
+| `GET` | `/api/voice/scenarios` | Returns catalog of pre-rendered voice scenarios with dual-dialect audio URLs and synchronized karaoke subtitle cues (public exact path) |
+| `POST`| `/api/voice/call/{receivable_id}` | Initiates outbound voice AI IVR call, triggers Twilio/mock dispatch, streams `b2b.ivr.dispatched` event, and logs ₹1.50 IVR cost in audit ledger (protected route) |
+| `POST`| `/api/setu/consent/create` | Creates digital consent session (`CON-XXXXXXXX`) under RBI Account Aggregator framework |
+| `POST`| `/api/setu/check-balance` | Pre-flight liquidity check returning verified balance, liquidity decision, and trust score adjustment |
 | `GET` | `/api/b2b` | Retrieves all tracked B2B receivables, aging bucket counts, overdue days, and computed MSMED statutory interest |
 | `POST`| `/api/b2b/receivables` | Registers new B2B invoice and triggers initial automated dunning action |
 | `POST`| `/api/b2b/chase/{receivable_id}` | Dispatches next dunning action (IVR call / SMS / legal notice) with 60s duplicate throttle |
@@ -703,10 +795,10 @@ To provide a **frictionless evaluation experience** for hackathon judges, local 
 
 1. **Redis-Backed Distributed Locks & Webhook Idempotency**:
    - Production clustering with Redis distributed locking per `customer_vpa`/`invoice_id` and idempotency keys to handle duplicate or out-of-order gateway webhook delivery.
-2. **Autonomous Hinglish Voice AI Recovery (IVR / Twilio + Localized TTS)**:
-   - Real-time conversational agent capable of dialect switching (Hindi, Hinglish, Tamil, Telugu) for high-value B2B invoice dunning and cart recovery.
-3. **Live Setu Account Aggregator (AA) FIU Consent Pipeline**:
-   - Upgrading our balance check stub to production Financial Information User (FIU) consent flows for automated balance-verified debit execution.
+2. **Autonomous Voice AI Recovery (IVR / Twilio + Localized TTS)** — ✅ *Shipped in v2.4*:
+   - Multi-dialect Microsoft Edge Neural speech engine (Hinglish `hi-IN-MadhurNeural`/`hi-IN-SwaraNeural` and Indian English `en-IN-PrabhatNeural`/`en-IN-NeerjaNeural`) with sub-second synchronized karaoke cues, authentic Indian standard dual-frequency telecom ringback (400Hz + 425Hz), MSMED Act Section 16 compounding penal interest notice, and Twilio Voice IVR integration.
+3. **Setu Account Aggregator (AA) Pre-Flight Verification** — ✅ *Shipped in v2.3*:
+   - RBI-regulated consent-native sandbox integration with single-use digital consent sessions (`CON-XXXXXXXX`), 5 dataset persona presets, and dynamic Payer Trust Score feedback.
 4. **Cross-Merchant Federated Thompson Sampling**:
    - Privacy-preserving federated bandit learning across merchant networks to share optimal failure recovery priors without exposing customer PII.
 

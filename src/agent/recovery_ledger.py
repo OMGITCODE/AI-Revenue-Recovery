@@ -110,6 +110,9 @@ class RecoveryLedger:
         self._entries: List[LedgerEntry] = []
         self._max    = max_entries
 
+    def reset(self) -> None:
+        self._entries.clear()
+
     # ── Write ─────────────────────────────────────────────────────────────────
 
     def log(
