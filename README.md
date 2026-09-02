@@ -185,7 +185,7 @@ flowchart TD
 ```
 
 - **Alias Merging**: Resolves fragmented identifiers (`vpa`, `phone`, `email`, `customer_id`) into a single canonical profile (`cust:rahul@oksbi`).
-- **Touch-Frequency Caps**: Enforces cross-channel touch limits (maximum 2 outbound touchpoints per day across all customer VPAs combined), preventing spam and consumer fatigue.
+- **Touch-Frequency Caps**: Enforces cross-channel touch limits (maximum 3 outbound touchpoints per day across all customer VPAs combined, per `DAILY_CONTACT_CAP = 3`), preventing spam and consumer fatigue.
 - **Customer 360° API (`GET /api/customer/{identifier}/history`)**: In a single unified endpoint, returns the customer's alias tree, rolling spend baseline, live Payer Trust Score, active promise status, failure event stream, and audit ledger decisions.
 - **Cross-Subsystem Connection**:
   - **Spend Anomaly Engine**: Protects the customer from overdraft by comparing debits against personal historical baselines (`GR10`).
@@ -398,7 +398,9 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-During development and testing, we encountered five significant real-world technical failures:
+> 📖 **Full Technical War Story**: Read the deep-dive narrative of everything that broke at 2 AM, how we diagnosed it, and our architectural post-mortem in [**POSTMORTEM.md**](POSTMORTEM.md).
+
+During development and testing, we encountered critical real-world technical failures:
 
 ### 1. Windows `cp1252` Stdout Encoding vs. Currency (`₹`) & Emojis
 * **The Bug:** Running Python scripts or streaming Server-Sent Events (SSE) on Windows crashed with `UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9'` because the default Windows console pipe initializes with legacy `cp1252` encoding.
