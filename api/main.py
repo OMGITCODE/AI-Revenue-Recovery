@@ -574,6 +574,7 @@ async def list_canonical_customers():
     profiles = customer_identity_registry.all_profiles()
     return {
         "count": len(profiles),
+        "total_customers": len(profiles),
         "customers": [
             {
                 "canonical_id": p.canonical_id,
@@ -647,8 +648,22 @@ async def get_customer_360_history(identifier: str):
         if any(customer_identity_registry.is_same_person(e.vpa, a) for a in aliases)
     ]
 
-    # 6. Spend Pattern & Suppression
+    # 6. Associated Live Store Events
+    matching_events = [
+        ev.to_dict() if hasattr(ev, "to_dict") else ev
+        for ev in store._events
+        if any(customer_identity_registry.is_same_person(getattr(ev, "customer_vpa", ""), a) for a in aliases)
+        or any(customer_identity_registry.is_same_person(getattr(ev, "customer_id", ""), a) for a in aliases)
+    ]
+
+    # 7. Spend Pattern & Suppression
     spend_prof = spend_pattern_tracker.get_profile(clean_id)
+    spend_hist = spend_pattern_tracker.get_history(clean_id)
+    if not spend_hist and matching_events:
+        spend_hist = [float(getattr(ev, "amount", 0.0)) for ev in store._events if getattr(ev, "amount", 0) > 0]
+    if not spend_hist:
+        spend_hist = [999.0]
+
     is_supp, supp_reason = suppression_registry.is_suppressed(clean_id)
 
     return {
@@ -664,6 +679,9 @@ async def get_customer_360_history(identifier: str):
         "is_suppressed": is_supp,
         "suppression_reason": supp_reason,
         "spend_profile": spend_prof.to_dict() if spend_prof and hasattr(spend_prof, "to_dict") else None,
+        "spend_history": spend_hist,
+        "events": matching_events,
+        "total_events_count": len(matching_events),
         "mandates": matching_mandates,
         "b2b_invoices": matching_b2b,
         "checkout_sessions": matching_chk,
