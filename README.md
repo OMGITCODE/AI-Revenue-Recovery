@@ -398,8 +398,6 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-> 📖 **Full Technical War Story**: Read the deep-dive narrative of everything that broke at 2 AM, how we diagnosed it, and our architectural post-mortem in [**POSTMORTEM.md**](POSTMORTEM.md).
-
 During development and testing, we encountered critical real-world technical failures:
 
 ### 1. Windows `cp1252` Stdout Encoding vs. Currency (`₹`) & Emojis
