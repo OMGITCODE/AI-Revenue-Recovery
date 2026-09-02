@@ -272,7 +272,7 @@ For high-exposure B2B invoices and abandoned checkout carts where text dunning f
 
 RecoverIQ is built as a modular, high-throughput autonomous revenue recovery architecture. Below is the complete catalog of all components across the codebase:
 
-### 🤖 1. Core AI & Decision Systems (`src/agent/` — 15 Modules)
+### 🤖 1. Core AI & Decision Systems (`src/agent/` — 16 Modules)
 
 | Module | File | Responsibility & Key Innovation |
 |---|---|---|
@@ -291,6 +291,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Checkout Drop-off Recovery** | `src/agent/checkout_recovery.py` | High-intent abandoned cart recovery agent operating at $T+10\text{min}$ with personalized Hinglish WhatsApp nudges and 1-click UPI intent fallback. |
 | **B2B Receivables Chaser** | `src/agent/b2b_chaser.py` | 4-bucket dunning sequencer (0–30d, 31–60d, 61–90d, 90d+) with multi-channel outreach (WhatsApp, automated IVR, MSMED Act 2006 interest calculations, and formal legal notice generation). |
 | **Root-Cause Diagnoser** | `src/agent/diagnoser.py` | Multi-channel root cause diagnoser mapping transaction failures to technical vs. customer causes, evaluating recovery confidence, and selecting optimal recovery playbooks. |
+| **Classifier Evaluation Benchmark** | `src/agent/classifier_eval.py` | Labeled benchmark suite evaluating 30 held-out colloquial Hinglish/English customer replies across 5 recovery intents for O(1) live evaluation on `GET /api/classifier/eval`. |
 
 ---
 
@@ -553,6 +554,7 @@ ai-revenue-recovery-agent/
 │   │   ├── upi_detector.py      # UPI Autopay webhook detector (14 NPCI codes)
 │   │   ├── upi_interventions.py # 5 UPI recovery strategies (retry/collect/renewal/nudge/escalate)
 │   │   ├── whatsapp_inbound.py  # 2-way Hinglish conversational NLP intent classifier
+│   │   ├── classifier_eval.py   # Held-out 30-item labeled evaluation benchmark (GET /api/classifier/eval)
 │   │   └── diagnoser.py         # Multi-channel root-cause diagnoser
 │   │
 │   ├── integrations/            # External APIs
