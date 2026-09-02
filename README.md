@@ -823,6 +823,12 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 - **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 real-world failure scenarios** directly from [`data/upi_failures_dataset.json`](file:///c:/Users/BIT/.gemini/antigravity-ide/scratch/ai-revenue-recovery-agent/data/upi_failures_dataset.json) with 1 click.
 - **Customer 360° Drawer**: Clicking on any customer handle or event row opens a unified behavioral drawer showing their **canonical profile**, **linked aliases** across all 3 financial rails (Autopay, B2B, Carts), **rolling spend baseline**, **P2P promises**, and **compliance holds**.
 
+### 5. Dual-Mode Benchmark (Live Session Actuals ⟷ Global 60-Scenario Macro)
+
+RecoverIQ provides a dual-layer evaluative architecture directly inside the dashboard with an interactive segmented toggle:
+- **`🔴 Live Session Actuals` (Default)**: Dynamically evaluates the exact events currently active on the dashboard. Compares live recoveries, costs, and 0 compliance violations against what legacy fixed-schedule retry ($D+1, D+2, D+3$ blind retry) *would have done on those exact same events*. Auto-syncs in real time via SSE upon new event generation.
+- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](file:///c:/Users/BIT/.gemini/antigravity-ide/scratch/ai-revenue-recovery-agent/data/upi_failures_dataset.json), demonstrating **75.6%–75.8% ± 5.1%** recovery vs. **11.7%** baseline (+64.0 pts uplift) with automated 20% sensitivity haircut analysis.
+
 ---
 
 ## 📡 REST API & Audit Export Endpoints
@@ -841,7 +847,8 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 | `GET` | `/api/scenarios/dataset` | Returns all 60 failure scenarios from upi_failures_dataset.json for direct UI execution |
 | `POST`| `/api/simulate/{scenario_key}` | Executes a named scenario (or `ds_{index}` from dataset) through the complete detection, guardrail, bandit, and intervention pipeline |
 | `GET` | `/api/stats` | Returns real-time aggregated recovery metrics, active event counts, and recovery rate |
-| `GET` | `/api/benchmark` | Runs Monte Carlo benchmark simulation and returns ₹ delta & uplift statistics |
+| `GET` | `/api/benchmark/live` | Dynamically evaluates live active dashboard session events vs legacy fixed-schedule retry baseline |
+| `GET` | `/api/benchmark` | Runs Monte Carlo benchmark simulation across 60 scenarios (supports `?mode=live` or `?mode=global`) |
 | `GET` | `/api/bandit` | Inspects current Thompson Sampling Beta posterior distributions $(\alpha, \beta)$ |
 | `GET` | `/api/idempotency` | Inspects active idempotency deduplication cache & active mutex locks |
 | `GET` | `/api/ledger/export?format=csv` | Downloads complete regulatory audit trail as CSV |
