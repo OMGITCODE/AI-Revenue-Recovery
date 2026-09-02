@@ -398,39 +398,44 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-During development and testing, we encountered critical real-world technical failures:
+During development and testing, we ran into six real-world failures where our assumptions broke down. Here is how we diagnosed and fixed each one:
 
-### 1. Windows `cp1252` Stdout Encoding vs. Currency (`₹`) & Emojis
-* **The Bug:** Running Python scripts or streaming Server-Sent Events (SSE) on Windows crashed with `UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9'` because the default Windows console pipe initializes with legacy `cp1252` encoding.
+### 1. Windows Crashed on the Rupee Symbol (`₹`) and Emojis
+* **The Bug:** On Windows computers, our backend server crashed the moment it tried to send the Indian Rupee symbol (`₹`), Hindi text, or status emojis to the dashboard. The default Windows console couldn't read these special characters, throwing a fatal crash (`UnicodeEncodeError`).
 * **The Fix:**
-  1. Built a custom ASGI `Utf8CharsetMiddleware` in FastAPI to guarantee all HTTP, CSS, and JS payloads explicitly serve `charset=utf-8`.
-  2. Enforced `-X utf8` flag, stream reconfiguring (`sys.stdout.reconfigure(encoding="utf-8")`), and `PYTHONIOENCODING=utf-8` across all demo runners and batch execution scripts.
+  1. We added a custom setting to our backend server that forces every response, webpage, and live update to use universal UTF-8 text encoding.
+  2. We configured all Python scripts to run with universal text support (`-X utf8`), so the system never crashes on Indian currency symbols or regional languages.
 
-### 2. The Month-End `U30` Retry Trap & NPCI Bank Blackout Race Condition
-* **The Bug:** Standard payment gateway retry logic retries failed subscriptions on $D+1, D+2, D+3$. When a salaried subscriber fails on the 28th due to `U30` (insufficient funds), naive fixed retries fire on the 29th, 30th, and 31st — failing all 3 times, incurring bank penalty fees, exhausting the 3-retry lifetime limit, and permanently canceling the subscription right before salary credit on the 1st.
+### 2. The Fake "100% Recovery" Benchmark
+* **The Bug:** Our very first test script showed a "100% recovery rate." But that was fake—it assumed every customer answered WhatsApp, accepted discounts, and that bank networks never went down. In payments, claiming 100% recovery is an obvious red flag showing the system was never tested against reality.
 * **The Fix:**
-  1. Engineered `UPIRetryScheduler` to detect month-end dates and reschedule `U30` retries specifically into the **1st–7th of the following month (10:00 AM IST)**.
-  2. Integrated **Setu Account Aggregator (AA)** balance pre-flight check stub to verify funds availability before debit execution.
+  1. We completely rebuilt the testing tool (`benchmark.py`) to run **50 randomized simulations** using real data from Indian payment companies (Razorpay, NPCI, Juspay).
+  2. We added a **20% penalty** to simulate bad economic conditions, giving us an honest, verified **75.8% ± 4.9% recovery rate** that anyone can check by running one command.
 
-### 3. Cross-Module Duplicate Entry Propagation & Stats Inflation
-* **The Bug:** Gateway webhook retries and rapid repeated simulation triggers generated random UUIDs that bypassed cache lookups, creating duplicate pending promises, ghost checkout drop-offs, redundant dunning dispatches, and double-counted recovery revenue stats in the dashboard.
+### 3. The Month-End "Salary Trap" (Dumb Gateway Retries)
+* **The Bug:** Standard payment gateways blindly retry failed payments on Day 1, Day 2, and Day 3. When a customer's subscription failed on August 28th due to low funds (`U30`), naive retries fired on the 29th, 30th, and 31st. All 3 bounced, the user was charged bank penalty fees for each bounce, and their subscription was cancelled on August 31st—**just 12 hours before their monthly paycheck arrived on September 1st.**
 * **The Fix:**
-  1. **Deterministic Scenario Event Keys**: Bound simulated scenario executions to fixed event IDs (`EVT-SIM-{CODE}`) so repeated runs update existing records in-place.
-  2. **Audit Ledger Debounce Window**: Enforced a 5-second rapid debounce on `(event_type, vpa, amount, reasoning)` in `RecoveryLedger` to suppress duplicate log rows.
-  3. **Strictly Idempotent State Transitions**: Added state-guard checks across `PromiseToPayTracker.fulfill/break`, `CheckoutRecoveryAgent.mark_recovered`, and `B2BChaser.settle`.
-  4. **Dynamic Stats Computation**: Replaced error-prone incremental counters in `EventStore` with dynamic aggregation computed directly from active events, eliminating statistics drift.
+  1. We built a smart calendar scheduler (`UPIRetryScheduler`). If a payment fails near month-end due to low funds, all retries stop immediately.
+  2. The system pauses and waits until the **1st to 7th of the next month at 10:00 AM**, right when monthly salaries land in bank accounts.
 
-### 4. Multi-Identifier Alias Fragmentation & Blind Spike Depletion
-* **The Bug:** Customers in India often use different VPAs (e.g. `@oksbi` vs. `@okhdfcbank`), phone numbers, and customer IDs across transactions. This led to fragmented spend profiles, split touch counters (exceeding the daily contact cap), and missing customer history. Furthermore, blind automated retries on sudden $300\times+$ spikes (e.g. ₹70,000 debit on a ₹100 typical micro-ticket user) risked customer account depletion.
+### 4. Duplicate Payments & Fake Dashboard Numbers
+* **The Bug:** When someone refreshed the page or clicked "Simulate Payment" twice quickly, our server treated it as two different payments. It recorded the same ₹12,500 invoice twice, showing fake doubled revenue on our dashboard and confusing our AI decision model.
 * **The Fix:**
-  1. **Canonical Customer Identity Graph (`CustomerIdentityRegistry`)**: Resolves and merges fragmented identifiers (`customer_id`, VPAs, phones, emails) into a unified profile (`cust:identifier`), unifying rolling spend history, daily touch limits, and compliance holds across all aliases.
-  2. **Anti-Depletion Spend Pattern Guardrail (GR10)**: Built `SpendPatternTracker` to analyze transaction amounts against the user's historical spend baseline (mean, range, std dev). Massive upward spikes trigger a critical safety block on silent automated retries, routing them to interactive customer confirmation.
+  1. We gave all demo simulations permanent IDs so repeated clicks only update the existing record instead of creating duplicates.
+  2. In our backend code (`B2BChaser.settle`), we added a strict check: if an invoice is already marked "settled", the system immediately stops and rejects duplicate payments.
+  3. We made the dashboard calculate revenue by counting real, unique events instead of blindly adding numbers up.
 
-### 5. Proactive/Reactive Mandate Disconnect & Broken Promise Escalation Bridge
-* **The Bug:** Proactive mandate expiry monitoring and reactive BT02 failure recovery operated as disconnected subsystems. Forcing an unrenewed mandate to lapse did not trigger reactive failure handling, and breaking a promise in the tracker did not automatically prompt live customer escalation in the 2-way chat.
+### 5. Multiple UPI IDs & Dangerous Big Retries
+* **The Bug:** One customer often uses multiple UPI IDs (like Google Pay, PhonePe, and Paytm). Our agent initially treated them as separate people. It sent 3 messages to each of their 2 unmerged UPI IDs—sending 6 messages total in one day and blowing past our internal anti-spam limit of 3. Even worse: if a user who normally pays ₹100 had an accidental ₹45,000 corporate charge fail, our bot would blindly retry the ₹45,000 debit, risking draining their personal account.
 * **The Fix:**
-  1. **Force Lapse Live Bridge (`POST /api/mandates/force-lapse/{id}`)**: Marks the mandate status as `LAPSED` and seamlessly feeds the customer, plan, bank, and amount into a genuine `BT02` (Mandate Expired) failure event through the canonical decision and recovery pipeline, updating the live event stream.
-  2. **Promise State Transition Live Chat Bridge**: When an agent marks a promise as broken (or when an automated sweep flags it as overdue), the system immediately lifts GR5 suppression, applies a $-0.15$ Trust Score penalty, logs an escalation to the Recovery Ledger, posts an urgent escalation notification to the **2-Way WhatsApp Live Chat** window, and pre-fills support reply inputs with the debtor's exact details.
+  1. We built an identity merger (`CustomerIdentityRegistry`) that combines all phone numbers, emails, and UPI IDs into one customer profile. Now, the daily limit of 3 messages is shared across all their accounts combined (`DAILY_CONTACT_CAP = 3`).
+  2. We added an automatic spend safety check (`SpendPatternTracker`). If a payment is a statistically unusual spike far above their normal average, automated retries are permanently blocked until the customer confirms it.
+
+### 6. Proactive Warnings and Failure Recovery Didn't Talk to Each Other
+* **The Bug:** We built two separate features: one that warns users on WhatsApp 3 days before a recurring subscription expires, and another that handles failed payments after an expired subscription fails (`BT02`). But they were completely disconnected. If a customer ignored the 3-day warning and let the subscription expire, the system just stopped and gave up!
+* **The Fix:**
+  1. We built an automatic connection bridge (`POST /api/mandates/force-lapse/{id}`).
+  2. If a customer ignores the warning and the subscription expires, the system automatically creates a real failure event and starts the recovery process with a fresh 1-click renewal link.
 
 ---
 
