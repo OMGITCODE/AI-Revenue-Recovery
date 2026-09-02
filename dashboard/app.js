@@ -92,14 +92,16 @@ function connectSSE() {
     events.unshift(ev);
     if (events.length > 100) events.pop();
     prependRow(ev);
+    if (currentBenchmarkMode === 'live') loadBenchmark();
   });
 
   sse.addEventListener('stats', e => { syncStats(JSON.parse(e.data)); });
 
-  // Refresh all module panels when the backend signals data has changed
-  // (emitted after every scenario run — without this listener the panels
-  //  only update on the 15-second polling interval)
-  sse.addEventListener('modules_updated', () => { loadModules(); });
+  // Refresh all module panels and live benchmark when the backend signals data has changed
+  sse.addEventListener('modules_updated', () => {
+    loadModules();
+    if (currentBenchmarkMode === 'live') loadBenchmark();
+  });
 
   sse.onerror = () => setTimeout(connectSSE, 3000);
 }
@@ -1890,57 +1892,118 @@ async function confirmSettle() {
   finally { btn.disabled = false; btn.innerHTML = '&#8377;&nbsp; Confirm Settlement'; }
 }
 
-// ── Benchmark Panel ──────────────────────────────────────────────────────────
+// ── Benchmark Panel (Dual-Mode: Live Session vs Global 60-Scenario) ────────
+let currentBenchmarkMode = 'live'; // Default to live session for 100% real-time dashboard sync
+
+function setBenchmarkMode(mode) {
+  currentBenchmarkMode = mode;
+  const liveTab   = document.getElementById('bm-tab-live');
+  const globalTab = document.getElementById('bm-tab-global');
+  const cardTitle = document.getElementById('bm-card-title');
+  const cardSub   = document.getElementById('bm-card-sub');
+
+  if (mode === 'live') {
+    if (liveTab) {
+      liveTab.className = 'tab-pill active';
+      liveTab.style.background = 'var(--white)';
+      liveTab.style.color = 'var(--text-1)';
+      liveTab.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    }
+    if (globalTab) {
+      globalTab.className = 'tab-pill';
+      globalTab.style.background = 'transparent';
+      globalTab.style.color = 'var(--text-2)';
+      globalTab.style.boxShadow = 'none';
+    }
+    if (cardTitle) cardTitle.textContent = '🔴 Live Policy Benchmark: RecoverIQ vs Fixed-Schedule Retry Baseline';
+    if (cardSub) cardSub.textContent = 'Dynamic real-time evaluation of active dashboard events vs legacy gateway retry policy · Auto-syncs live';
+  } else {
+    if (globalTab) {
+      globalTab.className = 'tab-pill active';
+      globalTab.style.background = 'var(--white)';
+      globalTab.style.color = 'var(--text-1)';
+      globalTab.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    }
+    if (liveTab) {
+      liveTab.className = 'tab-pill';
+      liveTab.style.background = 'transparent';
+      liveTab.style.color = 'var(--text-2)';
+      liveTab.style.boxShadow = 'none';
+    }
+    if (cardTitle) cardTitle.textContent = '📊 Global 60-Scenario Benchmark: RecoverIQ vs Fixed-Schedule Retry Baseline (Monte Carlo)';
+    if (cardSub) cardSub.textContent = 'Probabilistic policy comparison across all 60 scenarios (n=50 runs) · Calibrated on Indian FinTech conversion benchmarks';
+  }
+  loadBenchmark();
+}
+
 async function loadBenchmark(btn) {
   const refreshBtn = btn || document.getElementById('bm-refresh-btn');
   const chip = document.getElementById('bm-uplift-chip');
-  if (refreshBtn)  { refreshBtn.disabled = true; refreshBtn.textContent = '↻ Running Monte Carlo…'; refreshBtn.style.opacity = '0.75'; }
-  if (chip) { chip.textContent = 'Running (n=50)…'; chip.className = 'stat-chip chip-blue'; }
+  const mode = currentBenchmarkMode || 'live';
+
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = mode === 'live' ? '↻ Syncing Live…' : '↻ Running Monte Carlo…';
+    refreshBtn.style.opacity = '0.75';
+  }
+  if (chip) {
+    chip.textContent = mode === 'live' ? 'Syncing live actuals…' : 'Running (n=50)…';
+    chip.className = 'stat-chip chip-blue';
+  }
+
   try {
-    const data = await fetch('/api/benchmark').then(r => r.json());
-    const b    = data.baseline;
-    const a    = data.ai_agent;
-    const d    = data.delta;
+    const url = mode === 'live' ? '/api/benchmark/live' : '/api/benchmark?mode=global';
+    const data = await fetch(url).then(r => r.json());
+    const b = data.baseline;
+    const a = data.ai_agent;
+    const d = data.delta;
+    const totalScenarios = data.total_scenarios ?? (data.n_runs ? 60 : 0);
 
     // Headline KPIs
     setText('bm-stake',      fmtInr(a.total_at_stake));
+    setText('bm-stake-sub',  mode === 'live' ? `${totalScenarios} active event${totalScenarios === 1 ? '' : 's'}` : '60 scenarios');
     setText('bm-base-rec',   fmtInr(b.total_recovered));
     setText('bm-ai-rec',     fmtInr(a.total_recovered) + (a.total_recovered_std ? ` ± ${fmtInr(a.total_recovered_std)}` : ''));
     setText('bm-base-rate',  b.recovery_rate_pct + '% rate (fixed)');
     setText('bm-ai-rate',    a.recovery_rate_pct + '%' + (a.recovery_rate_std ? ` ± ${a.recovery_rate_std}%` : '') + ' rate');
-    setText('bm-delta',      '+' + fmtInr(d.revenue_recovered_uplift));
-    setText('bm-rate-delta', '+' + d.recovery_rate_pts + ' pts recovery rate');
+    setText('bm-delta',      (d.revenue_recovered_uplift >= 0 ? '+' : '') + fmtInr(d.revenue_recovered_uplift));
+    setText('bm-rate-delta', (d.recovery_rate_pts >= 0 ? '+' : '') + d.recovery_rate_pts + ' pts recovery rate');
     setText('bm-violations', b.compliance_violations + ' (baseline)');
-    setText('bm-roi-uplift', '+' + fmtInr(d.net_roi_uplift));
+    setText('bm-roi-uplift', (d.net_roi_uplift >= 0 ? '+' : '') + fmtInr(d.net_roi_uplift));
 
     // Uplift chip
     if (chip) {
-      chip.textContent  = '+' + fmtInr(d.revenue_recovered_uplift) + ' uplift (+' + d.recovery_rate_pts + ' pts)';
-      chip.className    = 'stat-chip chip-green';
+      chip.textContent = (d.revenue_recovered_uplift >= 0 ? '+' : '') + fmtInr(d.revenue_recovered_uplift) + ' uplift (' + (d.recovery_rate_pts >= 0 ? '+' : '') + d.recovery_rate_pts + ' pts)';
+      chip.className = d.revenue_recovered_uplift >= 0 ? 'stat-chip chip-green' : 'stat-chip chip-blue';
     }
 
     // Comparison table
     const tbody = document.getElementById('bm-tbody');
     if (tbody) {
-      const rows = [
-        ['Revenue at Stake',           fmtInr(b.total_at_stake),          fmtInr(a.total_at_stake),         '—'],
-        ['Revenue Recovered',          fmtInr(b.total_recovered),         fmtInr(a.total_recovered) + (a.total_recovered_std ? ` ± ${fmtInr(a.total_recovered_std)}` : ''), '+' + fmtInr(d.revenue_recovered_uplift) + ' (' + ((d.revenue_recovered_uplift / b.total_recovered) * 100).toFixed(0) + '%)'],
-        ['Recovery Rate',              b.recovery_rate_pct + '%',         a.recovery_rate_pct + '%' + (a.recovery_rate_std ? ` ± ${a.recovery_rate_std}%` : ''), '+' + d.recovery_rate_pts + ' percentage points'],
-        ['Compliance Violations',      b.compliance_violations + ' (RBI/TRAI)', a.compliance_violations + ' ✅', '-' + d.violations_eliminated + ' violations eliminated'],
-        ['Wasted Retries',             b.retries + ' (blind flood)',      a.retries + ' (salary-targeted)', '-' + (b.retries - a.retries) + ' retries saved'],
-        ['Intervention Channel Costs', fmtInr(b.channel_costs),           fmtInr(a.channel_costs),          fmtInr(a.channel_costs - b.channel_costs)],
-        ['Net ROI (Recovered − Cost)', fmtInr(b.net_roi),                 fmtInr(a.net_roi),                '+' + fmtInr(d.net_roi_uplift) + ' net uplift'],
-      ];
-      tbody.innerHTML = rows.map(([label, bval, aval, delta]) =>
-        `<tr>
-          <td><strong>${label}</strong></td>
-          <td style="color:var(--red)">${bval}</td>
-          <td style="color:var(--green)">${aval}</td>
-          <td style="color:var(--accent);font-weight:600">${delta}</td>
-        </tr>`
-      ).join('');
+      if (mode === 'live' && totalScenarios === 0) {
+        tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>No events in active session yet. Run a scenario from the simulator or click '🌱 Seed' to see live policy comparison.</p></div></td></tr>`;
+      } else {
+        const rows = [
+          ['Evaluated Scenarios',        mode === 'live' ? `${totalScenarios} active events` : '60 dataset scenarios', mode === 'live' ? `${totalScenarios} active events` : '60 dataset scenarios', '—'],
+          ['Revenue at Stake',           fmtInr(b.total_at_stake),          fmtInr(a.total_at_stake),         '—'],
+          ['Revenue Recovered',          fmtInr(b.total_recovered),         fmtInr(a.total_recovered) + (a.total_recovered_std ? ` ± ${fmtInr(a.total_recovered_std)}` : ''), (d.revenue_recovered_uplift >= 0 ? '+' : '') + fmtInr(d.revenue_recovered_uplift) + (b.total_recovered > 0 ? ' (' + ((d.revenue_recovered_uplift / b.total_recovered) * 100).toFixed(0) + '%)' : '')],
+          ['Recovery Rate',              b.recovery_rate_pct + '%',         a.recovery_rate_pct + '%' + (a.recovery_rate_std ? ` ± ${a.recovery_rate_std}%` : ''), (d.recovery_rate_pts >= 0 ? '+' : '') + d.recovery_rate_pts + ' percentage points'],
+          ['Compliance Violations',      b.compliance_violations + ' (RBI/TRAI)', a.compliance_violations + ' ✅', '-' + d.violations_eliminated + ' violations eliminated'],
+          ['Wasted Retries',             b.retries + ' (blind flood)',      a.retries + ' (salary-targeted)', '-' + (b.retries - a.retries) + ' retries saved'],
+          ['Intervention Channel Costs', fmtInr(b.channel_costs),           fmtInr(a.channel_costs),          fmtInr(a.channel_costs - b.channel_costs)],
+          ['Net ROI (Recovered − Cost)', fmtInr(b.net_roi),                 fmtInr(a.net_roi),                (d.net_roi_uplift >= 0 ? '+' : '') + fmtInr(d.net_roi_uplift) + ' net uplift'],
+        ];
+        tbody.innerHTML = rows.map(([label, bval, aval, delta]) =>
+          `<tr>
+            <td><strong>${label}</strong></td>
+            <td style="color:var(--red)">${bval}</td>
+            <td style="color:var(--green)">${aval}</td>
+            <td style="color:var(--accent);font-weight:600">${delta}</td>
+          </tr>`
+        ).join('');
+      }
     }
-    if (btn) toast('📊 Monte Carlo benchmark refreshed (50 runs)', 'ok');
+    if (btn) toast(mode === 'live' ? '🔴 Live Session benchmark synced with dashboard' : '📊 60-Scenario Monte Carlo benchmark refreshed (50 runs)', 'ok');
   } catch (e) {
     console.error('Benchmark load failed:', e);
     if (chip) { chip.textContent = 'Error'; chip.className = 'stat-chip chip-red'; }

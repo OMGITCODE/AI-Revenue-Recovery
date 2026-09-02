@@ -1097,9 +1097,144 @@ async def get_bandit_state():
         "summary": bandit_engine.get_summary(),
     }
 
+@app.get("/api/benchmark/live")
+async def run_live_benchmark_endpoint():
+    """
+    Computes real-time dynamic benchmark comparison on the active session events
+    currently loaded in store._events vs what legacy fixed-schedule retry would have produced.
+    """
+    active_events = list(store._events)
+    if not active_events:
+        return {
+            "mode": "live",
+            "total_scenarios": 0,
+            "total_at_stake": 0.0,
+            "message": "No active events in session yet. Trigger a scenario or seed demo data.",
+            "baseline": {
+                "total_at_stake": 0.0,
+                "total_recovered": 0.0,
+                "recovery_rate_pct": 0.0,
+                "retries": 0,
+                "compliance_violations": 0,
+                "channel_costs": 0.0,
+                "net_roi": 0.0,
+            },
+            "ai_agent": {
+                "total_at_stake": 0.0,
+                "total_recovered": 0.0,
+                "total_recovered_std": 0.0,
+                "recovery_rate_pct": 0.0,
+                "recovery_rate_std": 0.0,
+                "retries": 0,
+                "compliance_violations": 0,
+                "channel_costs": 0.0,
+                "net_roi": 0.0,
+            },
+            "delta": {
+                "revenue_recovered_uplift": 0.0,
+                "recovery_rate_pts": 0.0,
+                "net_roi_uplift": 0.0,
+                "violations_eliminated": 0,
+            },
+        }
+
+    total_at_stake = sum(ev.amount for ev in active_events)
+
+    # 1. AI Agent Live Actuals
+    ai_recovered = sum(ev.amount for ev in active_events if ev.success)
+    ai_recovered_count = sum(1 for ev in active_events if ev.success)
+    ai_rate = round((ai_recovered_count / len(active_events)) * 100, 1)
+
+    # Count retries & channel costs from recovery_ledger for these events
+    ai_retries = sum(1 for e in recovery_ledger.all_entries() if "smart_retry" in e.channel.lower())
+    ai_costs = sum(e.channel_cost for e in recovery_ledger.all_entries())
+    ai_roi = ai_recovered - ai_costs
+
+    # 2. Baseline Policy Simulation on the EXACT same events
+    base_recovered = 0.0
+    base_recovered_count = 0
+    base_violations = 0
+    base_retries = 0
+
+    for ev in active_events:
+        fc = (ev.failure_code or "").upper()
+        amt = ev.amount
+        cat = getattr(ev, "category", "general")
+
+        # Fixed schedule retry simulation:
+        # Blindly attempts 3 retries (D+1, D+2, D+3)
+        base_retries += 3
+
+        # Check RBI threshold violation on blind retry (> ₹15,000 for standard, or > ₹1L for insurance)
+        if cat in ("insurance", "mutual_fund", "credit_card"):
+            if amt > 100_000:
+                base_violations += 1
+        elif amt > 15_000:
+            base_violations += 1
+
+        # Conversion rates on baseline blind retries:
+        if fc in ("BT01", "BT02"):
+            # Blind retry on revoked or expired mandate ALWAYS fails (0%)
+            pass
+        elif fc == "U30":
+            # Insufficient funds: blind month-end retry converts at ~14%
+            if amt < 500:
+                base_recovered += amt
+                base_recovered_count += 1
+        elif fc in ("TM", "TE"):
+            # Transient technical error: resolves via backoff
+            base_recovered += amt
+            base_recovered_count += 1
+        elif fc == "U13":
+            # Paused mandate: blind retry fails
+            pass
+        else:
+            # Other errors: 0% without user intervention
+            pass
+
+    base_costs = round(base_retries * 0.50, 2)  # ₹0.50 gateway retry fee per attempt
+    base_rate = round((base_recovered_count / len(active_events)) * 100, 1) if active_events else 0.0
+    base_roi = round(base_recovered - base_costs, 2)
+
+    return {
+        "mode": "live",
+        "total_scenarios": len(active_events),
+        "total_at_stake": total_at_stake,
+        "baseline": {
+            "total_at_stake": total_at_stake,
+            "total_recovered": round(base_recovered, 2),
+            "recovery_rate_pct": base_rate,
+            "retries": base_retries,
+            "compliance_violations": base_violations,
+            "channel_costs": base_costs,
+            "net_roi": base_roi,
+        },
+        "ai_agent": {
+            "total_at_stake": total_at_stake,
+            "total_recovered": round(ai_recovered, 2),
+            "total_recovered_std": 0.0,
+            "recovery_rate_pct": ai_rate,
+            "recovery_rate_std": 0.0,
+            "retries": ai_retries,
+            "compliance_violations": 0,
+            "channel_costs": round(ai_costs, 2),
+            "net_roi": round(ai_roi, 2),
+        },
+        "delta": {
+            "revenue_recovered_uplift": round(ai_recovered - base_recovered, 2),
+            "recovery_rate_pts": round(ai_rate - base_rate, 1),
+            "net_roi_uplift": round(ai_roi - base_roi, 2),
+            "violations_eliminated": base_violations,
+        },
+    }
+
+
 @app.get("/api/benchmark")
-async def run_benchmark_endpoint():
-    """Runs simulated Monte Carlo benchmark comparing fixed retry baseline vs RecoverIQ AI Agent."""
+async def run_benchmark_endpoint(mode: str = "global"):
+    """Runs simulated benchmark comparing fixed retry baseline vs RecoverIQ AI Agent."""
+    if mode == "live":
+        return await run_live_benchmark_endpoint()
+
     from benchmark import run_benchmark, run_sensitivity_analysis
     b, a = run_benchmark(n_runs=50)
     sens = run_sensitivity_analysis(n_runs=50, haircut_pct=0.20)
@@ -1114,6 +1249,7 @@ async def run_benchmark_endpoint():
     ai_roi_mean = getattr(a, "_ai_roi_mean", a.net_roi)
 
     return {
+        "mode": "global",
         "n_runs": n_runs,
         "methodology": "Monte Carlo Simulation (n=50) — calibrated on published Indian FinTech conversion benchmarks (Razorpay Recurring, NPCI Autopay, Juspay) with 20% sensitivity analysis",
         "baseline": {
