@@ -256,10 +256,11 @@ class LLMIntentClassifier:
         self,
         query: str,
         history: Optional[List[Dict[str, Any]]] = None,
+        event_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Answers questions about the RecoverIQ project, architecture, benchmarks, and features,
-        grounded strictly in the project's README.md documentation.
+        grounded strictly in the project's README.md documentation and real-time event context.
         """
         clean_query = query.strip()
         if not clean_query:
@@ -267,14 +268,24 @@ class LLMIntentClassifier:
 
         readme_text = get_cached_readme()
         
-        system_instruction = f"""You are RecoverIQ AI Assistant, an expert on the RecoverIQ project for judges and developers.
-Answer user questions accurately, factually, and concisely based strictly on the project documentation below.
+        system_instruction = f"""You are RecoverIQ AI Assistant, an expert on the RecoverIQ project for judges, operators, and developers.
+Answer user questions accurately, factually, and concisely based on the project documentation and real-time event context below.
 
 Rules:
-1. Ground all numbers and architectural facts in the README below (e.g. ₹1,55,751 recovered, 74.5% recovery rate, +59.5 pts uplift, 147 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
-2. If asked about something not covered in the project documentation, explicitly state: "This is not covered in the project documentation."
-3. Keep answers clear, structured, and easy to read with markdown bullet points or bold highlights. Limit answers to 2-3 focused paragraphs.
+1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, and 194 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
+2. If event context is provided in the CURRENT EVENT CONTEXT block below, answer using it directly and cite specific values (e.g. available balance, amount due, failure code, guardrail ID, chosen recovery action). Otherwise, fall back to the README documentation below.
+3. If asked about something not covered in the event context or project documentation, explicitly state: "This is not covered in the project documentation."
+4. Keep answers clear, structured, and easy to read with markdown bullet points or bold highlights. Limit answers to 2-3 focused paragraphs.
+"""
 
+        if event_context:
+            system_instruction += f"""
+=== CURRENT EVENT CONTEXT ===
+{json.dumps(event_context, indent=2)}
+=============================
+"""
+
+        system_instruction += f"""
 === RECOVERIQ PROJECT DOCUMENTATION (README.md) ===
 {readme_text}
 ===================================================
@@ -285,7 +296,7 @@ Rules:
         if not api_key or not provider or not model:
             # High quality grounded offline answer
             return {
-                "reply": self._generate_offline_qa_response(clean_query, readme_text),
+                "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context),
                 "provider": "offline_grounded",
             }
 
@@ -352,21 +363,39 @@ Rules:
             logger.warning("[PROJECT_CHAT] Exception during LLM query: %s (falling back to grounded search)", str(e))
 
         return {
-            "reply": self._generate_offline_qa_response(clean_query, readme_text),
+            "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context),
             "provider": "offline_grounded",
         }
 
-    def _generate_offline_qa_response(self, query: str, readme: str) -> str:
+    def _generate_offline_qa_response(self, query: str, readme: str, event_context: Optional[Dict[str, Any]] = None) -> str:
         """Deterministic offline fallback for project documentation questions."""
         q = query.lower()
         if "benchmark" in q or "results" in q or "uplift" in q or "roi" in q:
             return (
                 "**RecoverIQ Benchmark Results (vs. Razorpay Fixed-Schedule Baseline):**\n\n"
-                "Across 50 Monte Carlo simulation runs on our 40-scenario real-world failure dataset:\n"
-                "- **Total Recovered Revenue**: **₹1,55,751 ± ₹19,774** (vs. ₹19,547 baseline) → **+₹1,36,204 mean net uplift**\n"
-                "- **Recovery Rate**: **74.5% ± 5.6%** (vs. 15.0% baseline) → **+59.5 percentage points**\n"
-                "- **Wasted Retries Eliminated**: Reduced from 120 blind retries to **8 salary-targeted retries** (-112 wasted attempts)\n"
-                "- **Compliance Breaches**: 0 violations (100% compliant with RBI/TRAI guidelines)."
+                "Across 50 Monte Carlo simulation runs on our 60-scenario real-world failure dataset:\n"
+                "- **Total Recovered Revenue**: **₹4,47,296 ± ₹65,872** (vs. ₹44,849 baseline) → **+₹4,02,447 mean net uplift**\n"
+                "- **Recovery Rate**: **75.8% ± 4.9%** (vs. 11.7% baseline) → **+64.1 percentage points**\n"
+                "- **Retries Fired**: Reduced from 180 blind retries to **22 targeted retries** (saving 158 unnecessary bank attempts)\n"
+                "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
+                "- **Test Suite**: 194 automated unit & integration test cases passing."
+            )
+        elif "rahul" in q or ("u30" in q and ("retry" in q or "immediate" in q or "not" in q)):
+            bal = event_context.get("setu_aa_balance_check", {}).get("available_balance", 432.63) if event_context else 432.63
+            amt = event_context.get("mandate_amount", 999.0) if event_context else 999.0
+            return (
+                "**Why Rahul's U30 Payment Was Not Retried Immediately:**\n\n"
+                f"- **Failure Code & Mandate**: Rahul's ₹{amt:.0f} OTT subscription debit failed with **U30 (Insufficient Funds)**.\n"
+                f"- **Setu Account Aggregator Verification**: A pre-flight balance inquiry via Setu AA revealed only **₹{bal:.2f} available** in his account (a deficit of ₹{amt - bal:.2f}).\n"
+                "- **Deterministic Guardrail Triggered**: Under **GR1 (Liquidity Protection)**, an immediate retry was blocked to prevent unnecessary bank bounce charges and avoid bank-level cooldown locks.\n"
+                "- **Autonomous Recovery Action**: RecoverIQ rescheduled the debit for his predicted **salary-credit window on the 5th** at 10:00 AM IST, ensuring funds are present before executing."
+            )
+        elif "recommend" in q and ("recovery" in q or "action" in q or "rahul" in q):
+            return (
+                "**Recommended Recovery Action for Rahul:**\n\n"
+                "1. **Primary Action**: **Salary-Cycle Smart Retry** scheduled for the 5th at 10:00 AM IST (synchronized with his Setu AA verified liquidity window).\n"
+                "2. **Alternative Digital Fallback**: Dispatch an interactive **1-Click WhatsApp renewal link** with a dynamic NPCI UPI QR code if immediate settlement is desired.\n"
+                "3. **Compliance Hold**: Outbound voice and dunning calls remain suppressed under Guardrail 5 to preserve customer goodwill."
             )
         elif "u30" in q or "insufficient" in q or "salary" in q:
             return (

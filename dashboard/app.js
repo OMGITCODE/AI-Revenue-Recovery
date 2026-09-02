@@ -319,6 +319,7 @@ function makeRow(ev) {
 
 // ── Drawer ───────────────────────────────────────────────────────────────────
 function openDrawer(ev) {
+  window.currentSelectedEventContext = ev;
   const sev = esc((ev.severity || 'medium').toLowerCase());
   const ident = ev.customer_vpa || ev.customer_id || '';
 
@@ -2294,6 +2295,7 @@ async function submitProjectChat(e) {
       body: JSON.stringify({
         message: msg,
         history: projectChatHistory.slice(-6),
+        event_context: window.currentSelectedEventContext || null,
       }),
     });
     
