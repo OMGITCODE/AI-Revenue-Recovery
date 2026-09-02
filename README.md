@@ -828,6 +828,8 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 | `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, compliance holds, and event ledger |
 | `GET` | `/api/whatsapp/conversation/{identifier}` | Retrieves multi-turn conversational message history for a customer |
 | `POST`| `/api/project-chat` | Grounded Q&A chatbot answering architecture, benchmark, and design questions via Gemini |
+| `POST`| `/api/prompt-to-scenario` | Natural language scenario generator extracting structured parameters from freeform text via schema-constrained LLM |
+| `GET` | `/api/classifier/eval` | Cached evaluation benchmark returning Accuracy (93.3% regex vs 96.7% LLM), Precision, Recall, and F1 on 30 held-out items |
 | `GET` | `/api/pattern/history` | Retrieves statistical spend profile (mean, median, range, std dev) for a customer VPA/ID |
 | `POST`| `/api/pattern/analyze` | Evaluates a transaction amount against customer baseline for critical upward spikes (GR10) |
 | `GET` | `/api/scenarios` | Lists all 14 curated real-world failure scenario configurations |
