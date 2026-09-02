@@ -390,7 +390,7 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 ### 4. Genuinely Held-Out Evaluation Benchmark (`GET /api/classifier/eval`)
 - Evaluates a held-out dataset of **30 realistic Hinglish & English recovery messages** across all 5 canonical intents (`PROMISE`, `ALREADY_PAID`, `DISPUTE`, `HARDSHIP`, `WRONG_NUMBER`) containing diverse colloquial phrasing, indirect commitment idioms, and un-templated expressions.
 - **Zero Downstream LLM Calls on GET**: Metrics are precomputed and cached in-memory at startup for $O(1)$ instant response time.
-- **Transparent Dual-Path Reporting**: Reports both the deterministic regex baseline (~87%) and LLM contextual performance (~96.7%).
+- **Transparent Dual-Path Reporting**: Reports both the deterministic regex baseline (93.3% · 28/30) and LLM contextual performance (96.7% · 29/30 on colloquial idioms & conversational shifts).
 - **100% Guardrail Recall**: Guarantees 100% recall on vulnerable customer categories (`HARDSHIP` and `WRONG_NUMBER`), ensuring zero compliance violations under regulatory audits.
 
 
@@ -564,7 +564,8 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (189 passing tests across 12 files)
+└── tests/                       # Test Suite (194 passing tests across 13 files)
+    ├── test_upi_qr_api.py       # Dynamic vector SVG, NPCI schemes, domain idempotency & auth tests (5 tests)
     ├── test_voice_ai.py         # Voice AI scenarios, dual dialects, audio assets, security auth & IVR cost tests (8 tests)
     ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (4 tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
@@ -627,13 +628,13 @@ python -X utf8 demo.py
 # Explicit UTF-8 encoding flag prevents console character mangling on Windows
 python -X utf8 -m uvicorn api.main:app --port 8000 --reload
 ```
-Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, the **`📞 Voice AI Studio`**, and the **`🏦 Setu AA Simulator`** modal in the top navigation bar.
+Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, the **`📞 Voice AI Studio`**, the **`🏦 Setu AA Simulator`**, and the **`📲 UPI QR Pay`** modal in the top navigation bar.
 
 ### 5. Run the Automated Test Suite
 
 ```bash
 python -m pytest tests/ -v
-# 189 passed in ~88s
+# 194 passed in ~5-15s (or ~28s on Windows)
 ```
 
 ---
