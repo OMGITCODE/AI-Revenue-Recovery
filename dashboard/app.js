@@ -390,7 +390,21 @@ function openDrawer(ev) {
       ${row('Provider', 'Setu AA Sandbox (RBI-regulated)')}
       ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.aa_check)}</span>`)}
       ${row('Why', '"We don\'t guess when the customer can pay — we ask, with consent, and check."')}
-    </div>` : ''}`;
+      <div style="margin-top:10px;">
+        <button class="btn-ghost" style="width:100%;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+          🏦 Simulate Setu AA Verification Flow
+        </button>
+      </div>
+    </div>` : `
+    <div class="dl-section">
+      <div class="dl-section-title">🏦 Account Aggregator (Setu)</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">
+        ${ev.code === 'U30' ? 'U30 Insufficient Funds: Verify real bank balance via RBI Account Aggregator instead of blind guessing.' : 'Verify customer bank balance & liquidity signal via RBI Account Aggregator sandbox.'}
+      </div>
+      <button class="btn-ghost" style="width:100%;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+        🏦 Simulate Setu AA Verification Flow
+      </button>
+    </div>`}`;
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
@@ -618,7 +632,10 @@ function closeCreateModal() {
 
 // Close on Escape key
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeCreateModal();
+  if (e.key === 'Escape') {
+    closeCreateModal();
+    closeSetuAAModal();
+  }
 });
 
 function switchTab(tab) {
@@ -2229,5 +2246,233 @@ function removeProjectChatTyping(id) {
   const el = document.getElementById(id);
   if (el) el.remove();
 }
+
+// ── Setu Account Aggregator (AA) Consent Flow Simulator ─────────────────────
+
+function fillSetuPreset(vpa, amount, bank, code, btn) {
+  const vpaInput = document.getElementById('setu-input-vpa');
+  const amountInput = document.getElementById('setu-input-amount');
+  const bankInput = document.getElementById('setu-input-bank');
+  const codeSelect = document.getElementById('setu-input-code');
+
+  if (vpaInput) vpaInput.value = vpa;
+  if (amountInput) amountInput.value = amount;
+  if (bankInput) bankInput.value = bank;
+  if (codeSelect) {
+    _ensureSelectOption(codeSelect, code);
+    codeSelect.value = code;
+  }
+
+  // Highlight selected pill
+  document.querySelectorAll('.upi-preset-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function _ensureSelectOption(selectEl, code) {
+  if (!selectEl || !code) return;
+  const exists = Array.from(selectEl.options).some(opt => opt.value === code);
+  if (!exists) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = `${code} — Dataset Custom Failure`;
+    selectEl.appendChild(opt);
+  }
+}
+
+function openSetuAAModal(vpa, amount, bank, failureCode) {
+  const modal = document.getElementById('setu-modal');
+  const backdrop = document.getElementById('setu-backdrop');
+  if (!modal || !backdrop) return;
+
+  // Pre-fill inputs with either arguments or dataset-aligned defaults (Rahul Sharma, SBI, ₹999, U30)
+  const vpaInput = document.getElementById('setu-input-vpa');
+  const amountInput = document.getElementById('setu-input-amount');
+  const bankInput = document.getElementById('setu-input-bank');
+  const codeSelect = document.getElementById('setu-input-code');
+
+  const resolvedVpa = vpa || 'rahul@oksbi';
+  const resolvedAmount = (amount !== undefined && amount !== null) ? Number(amount) : 999;
+  const resolvedBank = bank || 'SBI';
+  const resolvedCode = failureCode || 'U30';
+
+  if (vpaInput) vpaInput.value = resolvedVpa;
+  if (amountInput) amountInput.value = resolvedAmount;
+  if (bankInput) bankInput.value = resolvedBank;
+  if (codeSelect) {
+    _ensureSelectOption(codeSelect, resolvedCode);
+    codeSelect.value = resolvedCode;
+  }
+
+  // Match preset pill active state
+  document.querySelectorAll('.upi-preset-pill').forEach(pill => {
+    const isRahul = resolvedVpa.includes('rahul') && pill.textContent.includes('Rahul');
+    const isPriya = resolvedVpa.includes('priya') && pill.textContent.includes('Priya');
+    const isArjun = resolvedVpa.includes('arjun') && pill.textContent.includes('Arjun');
+    const isKavita = resolvedVpa.includes('kavita') && pill.textContent.includes('Kavita');
+    const isVikram = resolvedVpa.includes('vikram') && pill.textContent.includes('Vikram');
+    if (isRahul || isPriya || isArjun || isKavita || isVikram) {
+      pill.classList.add('active');
+    } else {
+      pill.classList.remove('active');
+    }
+  });
+
+  resetSetuModalForm();
+
+  modal.classList.add('open');
+  backdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSetuAAModal() {
+  const modal = document.getElementById('setu-modal');
+  const backdrop = document.getElementById('setu-backdrop');
+  if (modal) modal.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function resetSetuModalForm() {
+  // Step indicators
+  const s1 = document.getElementById('setu-step-ind-1');
+  const s2 = document.getElementById('setu-step-ind-2');
+  const s3 = document.getElementById('setu-step-ind-3');
+  const l1 = document.getElementById('setu-step-line-1');
+  const l2 = document.getElementById('setu-step-line-2');
+
+  if (s1) s1.className = 'upi-step active';
+  if (s2) s2.className = 'upi-step';
+  if (s3) s3.className = 'upi-step';
+  if (l1) l1.className = 'upi-step-line';
+  if (l2) l2.className = 'upi-step-line';
+
+  // Panels
+  const p1 = document.getElementById('setu-panel-step1');
+  const p2 = document.getElementById('setu-panel-step2');
+  const p3 = document.getElementById('setu-panel-step3');
+  if (p1) p1.style.display = 'block';
+  if (p2) p2.style.display = 'none';
+  if (p3) p3.style.display = 'none';
+
+  const authBtn = document.getElementById('setu-auth-btn');
+  if (authBtn) {
+    authBtn.disabled = false;
+    authBtn.innerHTML = '<span>⚡ Tap to Authorize Consent</span>';
+  }
+}
+
+async function executeSetuConsentFlow() {
+  const vpaInput = document.getElementById('setu-input-vpa');
+  const amountInput = document.getElementById('setu-input-amount');
+  const bankInput = document.getElementById('setu-input-bank');
+  const codeSelect = document.getElementById('setu-input-code');
+
+  const vpa = (vpaInput ? vpaInput.value : '').trim();
+  const amount = amountInput ? parseFloat(amountInput.value) : 1000.0;
+  const bank = (bankInput ? bankInput.value : '').trim();
+  const failureCode = codeSelect ? codeSelect.value : 'U30';
+
+  if (!vpa || !vpa.includes('@')) {
+    toast('Please provide a valid UPI ID (e.g. rahul@oksbi)', 'warn');
+    if (vpaInput) vpaInput.focus();
+    return;
+  }
+
+  // Transition to Step 2 (Processing Bridge)
+  const p1 = document.getElementById('setu-panel-step1');
+  const p2 = document.getElementById('setu-panel-step2');
+  const p3 = document.getElementById('setu-panel-step3');
+  const s1 = document.getElementById('setu-step-ind-1');
+  const s2 = document.getElementById('setu-step-ind-2');
+  const l1 = document.getElementById('setu-step-line-1');
+
+  if (p1) p1.style.display = 'none';
+  if (p2) p2.style.display = 'flex';
+  if (s1) s1.className = 'upi-step done';
+  if (l1) l1.className = 'upi-step-line active';
+  if (s2) s2.className = 'upi-step active';
+
+  try {
+    const apiKey = localStorage.getItem('recoveriq_api_key') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['X-API-Key'] = apiKey;
+
+    const res = await fetch('/api/setu/check-balance', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        vpa: vpa,
+        amount_due: amount,
+        bank: bank,
+        failure_code: failureCode,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+      throw new Error(err.detail || 'Setu AA consent check failed');
+    }
+
+    const data = await res.json();
+
+    // Small delay to let user appreciate the bridge handoff animation
+    await new Promise(r => setTimeout(r, 650));
+
+    // Update Step 3 (Result) with strict esc() sanitization
+    const s3 = document.getElementById('setu-step-ind-3');
+    const l2 = document.getElementById('setu-step-line-2');
+    if (s2) s2.className = 'upi-step done';
+    if (l2) l2.className = 'upi-step-line active';
+    if (s3) s3.className = 'upi-step active';
+
+    // Populate data
+    const balEl = document.getElementById('setu-res-balance');
+    const amtEl = document.getElementById('setu-res-amount-due');
+    const statusEl = document.getElementById('setu-res-funds-status');
+    const noteEl = document.getElementById('setu-res-note');
+    const consentEl = document.getElementById('setu-res-consent-id');
+    const resVpaEl = document.getElementById('setu-res-vpa');
+    const resBankEl = document.getElementById('setu-res-bank');
+    const badgeEl = document.getElementById('setu-result-badge');
+    const calloutEl = document.getElementById('setu-decision-callout');
+
+    if (balEl) balEl.textContent = `₹${Number(data.balance).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (amtEl) amtEl.textContent = `₹${Number(data.amount_due).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    if (statusEl) {
+      statusEl.innerHTML = data.funds_available
+        ? `<span style="color:var(--green);font-weight:700;">✅ Funds Ready</span>`
+        : `<span style="color:var(--amber);font-weight:700;">⚠️ Still Short</span>`;
+    }
+
+    if (badgeEl) {
+      badgeEl.className = data.funds_available ? 'upi-result-badge' : 'upi-result-badge warn';
+      const badgeText = document.getElementById('setu-badge-text');
+      if (badgeText) {
+        badgeText.textContent = data.funds_available
+          ? 'Account Aggregator Verified — Funds Available'
+          : 'Account Aggregator Verified — Low Balance';
+      }
+    }
+
+    if (calloutEl) {
+      calloutEl.className = data.funds_available ? 'upi-decision-callout' : 'upi-decision-callout warn';
+    }
+
+    if (noteEl) noteEl.textContent = data.note || '';
+    if (consentEl) consentEl.textContent = data.consent_id || '';
+    if (resVpaEl) resVpaEl.textContent = data.vpa || '';
+    if (resBankEl) resBankEl.textContent = data.bank || 'Auto-detected Bank';
+
+    if (p2) p2.style.display = 'none';
+    if (p3) p3.style.display = 'block';
+
+    toast(`Setu AA verified balance: ₹${Number(data.balance).toLocaleString('en-IN')}`, 'ok');
+  } catch (err) {
+    toast(`Setu AA Error: ${err.message}`, 'err');
+    resetSetuModalForm();
+  }
+}
+
 
 

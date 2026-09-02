@@ -1446,8 +1446,61 @@ async def register_mandate(req: RegisterMandateRequest):
         "mandate": m.to_dict(),
     }
 
+# ── Setu Account Aggregator (AA) Endpoint ─────────────────────────────────────
 
+class SetuCheckBalanceRequest(BaseModel):
+    vpa: str = Field(..., min_length=3, description="Customer UPI VPA (e.g. rahul@okhdfcbank)")
+    amount_due: float = Field(default=1000.0, ge=1.0, description="Amount due for recurring debit")
+    bank: str = Field(default="", description="Customer bank name")
+    failure_code: str = Field(default="U30", description="UPI failure code (default U30 - Insufficient Funds)")
 
+class SetuCheckBalanceResponse(BaseModel):
+    consent_id: str
+    consent_url: str
+    vpa: str
+    bank: str
+    balance: float
+    funds_available: bool
+    amount_due: float
+    source: str
+    note: str
+    timestamp: str
+
+@app.post("/api/setu/check-balance", response_model=SetuCheckBalanceResponse)
+async def setu_check_balance(payload: SetuCheckBalanceRequest):
+    """
+    Triggers Setu Account Aggregator digital consent & real-time balance check.
+    Replaces blind retry guessing (U30) with explicit, RBI-regulated digital consent verification.
+    """
+    vpa = payload.vpa.strip()
+    if not vpa or "@" not in vpa:
+        raise HTTPException(status_code=422, detail="Invalid VPA format. Expected user@bank.")
+
+    try:
+        consent = setu_aa.request_consent(vpa=vpa, purpose="Recurring payment recovery balance check")
+        result = setu_aa.fetch_balance(
+            consent=consent,
+            amount_due=float(payload.amount_due),
+            bank=payload.bank.strip(),
+            failure_code=payload.failure_code.strip() or "U30",
+        )
+        from datetime import datetime, timezone
+        return SetuCheckBalanceResponse(
+            consent_id=result.consent_id,
+            consent_url=consent.consent_url,
+            vpa=result.vpa,
+            bank=result.bank or "Auto-detected Bank",
+            balance=result.balance,
+            funds_available=result.funds_available,
+            amount_due=result.amount_due,
+            source=result.source,
+            note=result.note,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Setu AA check failed: {str(exc)}")
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────────────

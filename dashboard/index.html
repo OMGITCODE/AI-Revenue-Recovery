@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="/static/logo_mark.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260831-4" />
+  <link rel="stylesheet" href="/static/style.css?v=20260902-v3" />
 </head>
 <body>
 
@@ -42,6 +42,9 @@
     </button>
     <button class="btn-ghost auto-demo-btn" id="auto-demo-btn" onclick="toggleAutoDemo()" title="Auto-fire scenarios for live demo">
       ▶ Auto Demo
+    </button>
+    <button class="btn-nav" id="setu-sim-nav-btn" onclick="openSetuAAModal()" title="Simulate RBI Account Aggregator (Setu) digital consent &amp; real-time balance check" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(16,185,129,0.45);color:var(--green);font-weight:600;">
+      🏦 Setu AA Simulator
     </button>
     <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics" style="display:inline-flex;align-items:center;gap:4px;">
       ↻ Refresh All
@@ -1140,6 +1143,198 @@
   </div>
 </div>
 
+<!-- ── Setu AA Consent Simulator Modal ────────────────────────────────────── -->
+<div class="modal-backdrop" id="setu-backdrop" onclick="closeSetuAAModal()"></div>
+<div class="modal setu-phone-modal" id="setu-modal" role="dialog" aria-modal="true" aria-labelledby="setu-modal-heading">
+  <div class="modal-head" style="border-bottom:1px solid var(--border);padding:14px 18px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg, rgba(16,185,129,0.2), rgba(59,130,246,0.2));display:flex;align-items:center;justify-content:center;font-size:18px;">🏦</div>
+      <div>
+        <div class="modal-title" id="setu-modal-heading">Setu Account Aggregator Simulator</div>
+        <div class="modal-sub">RBI-regulated digital consent &amp; real-time balance verification</div>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="closeSetuAAModal()" aria-label="Close" style="padding:4px 8px;font-size:14px;">&#x2715;</button>
+  </div>
+
+  <div class="setu-modal-content">
+    <!-- Simulated Mobile Viewport Frame -->
+    <div class="upi-phone-frame">
+      
+      <!-- Phone Top Status Bar -->
+      <div class="upi-screen-bar">
+        <span class="upi-time-pill">9:41</span>
+        <div class="upi-network-icons">
+          <span class="upi-chip-tag">RBI AA Sandbox</span>
+          <span class="upi-lock-icon">🔒 256-bit Encrypted</span>
+        </div>
+      </div>
+
+      <!-- 3-Step Flow Indicator -->
+      <div class="upi-stepper">
+        <div class="upi-step active" id="setu-step-ind-1">1. Consent Prompt</div>
+        <div class="upi-step-line" id="setu-step-line-1"></div>
+        <div class="upi-step" id="setu-step-ind-2">2. Bank Authorization</div>
+        <div class="upi-step-line" id="setu-step-line-2"></div>
+        <div class="upi-step" id="setu-step-ind-3">3. Balance Revealed</div>
+      </div>
+
+      <!-- Step 1: Consent Request Screen -->
+      <div class="setu-step-panel" id="setu-panel-step1">
+        <div class="upi-consent-card">
+          <div class="upi-fiu-header">
+            <div class="upi-fiu-logo">RQ</div>
+            <div>
+              <div class="upi-fiu-name">RecoverIQ Platform</div>
+              <div class="upi-fiu-type">Financial Information User (FIU-AA)</div>
+            </div>
+          </div>
+
+          <div class="upi-consent-desc">
+            <strong>RecoverIQ</strong> requests 1-time digital consent to check your current bank balance to verify fund availability before retrying your subscription autopay.
+          </div>
+
+          <!-- Dataset Scenario Quick-Fill Chips -->
+          <div class="upi-form-group">
+            <label class="upi-label">Dataset Persona (Quick Fill)</label>
+            <div class="upi-preset-pills">
+              <button type="button" class="upi-preset-pill active" onclick="fillSetuPreset('rahul@oksbi', 999, 'SBI', 'U30', this)" title="Scenario from upi_failures_dataset.json">
+                Rahul · U30 (₹999)
+              </button>
+              <button type="button" class="upi-preset-pill" onclick="fillSetuPreset('priya@okhdfcbank', 1499, 'HDFC', 'BT01', this)" title="Scenario from upi_failures_dataset.json">
+                Priya · BT01 (₹1,499)
+              </button>
+              <button type="button" class="upi-preset-pill" onclick="fillSetuPreset('arjun@okicici', 4500, 'ICICI', 'TM', this)" title="Scenario from upi_failures_dataset.json">
+                Arjun · TM (₹4,500)
+              </button>
+              <button type="button" class="upi-preset-pill" onclick="fillSetuPreset('kavita@okkotak', 3499, 'Kotak Mahindra Bank', 'U29', this)" title="Scenario from upi_failures_dataset.json">
+                Kavita · U29 (₹3,499)
+              </button>
+              <button type="button" class="upi-preset-pill" onclick="fillSetuPreset('vikram@ybl', 2999, 'Yes Bank', 'BT02', this)" title="Scenario from expiring_mandates_dataset.json">
+                Vikram · BT02 (₹2,999)
+              </button>
+            </div>
+          </div>
+
+          <div class="upi-form-group">
+            <label class="upi-label" for="setu-input-vpa">Customer UPI ID / VPA</label>
+            <input type="text" id="setu-input-vpa" class="form-input upi-input" placeholder="customer@oksbi" value="rahul@oksbi" autocomplete="off" />
+          </div>
+
+          <div class="upi-form-row">
+            <div class="upi-form-group" style="flex:1">
+              <label class="upi-label" for="setu-input-amount">Amount Due</label>
+              <div style="position:relative;">
+                <span style="position:absolute;left:10px;top:8px;font-weight:600;color:var(--text-2);font-size:13px;">₹</span>
+                <input type="number" id="setu-input-amount" class="form-input upi-input" style="padding-left:24px;" value="999" />
+              </div>
+            </div>
+            <div class="upi-form-group" style="flex:1.2">
+              <label class="upi-label" for="setu-input-bank">Customer Bank</label>
+              <input type="text" id="setu-input-bank" class="form-input upi-input" placeholder="SBI" value="SBI" />
+            </div>
+          </div>
+
+          <div class="upi-form-group">
+            <label class="upi-label" for="setu-input-code">Failure Reason Code</label>
+            <select id="setu-input-code" class="form-input upi-input">
+              <option value="U30" selected>U30 — Insufficient Funds (Simulate Salary Window Check)</option>
+              <option value="TM">TM — Technical Glitch / Timeout (Immediate Retry Window)</option>
+              <option value="U29">U29 — Mandate Amount Cap Exceeded</option>
+              <option value="BT01">BT01 — Mandate Revoked by Customer</option>
+              <option value="BT02">BT02 — Mandate Expired</option>
+              <option value="U69">U69 — Daily Transaction Limit Exceeded</option>
+              <option value="U13">U13 — Mandate Paused by Customer</option>
+              <option value="BA">BA — Account Closed / KYC Frozen</option>
+              <option value="RB">RB — Bank Generic Decline</option>
+            </select>
+          </div>
+
+          <div class="upi-disclaimer">
+            🛡️ <strong>Zero Risk / Consent-Native:</strong> Regulated under RBI Account Aggregator Master Directions. No passwords, MPINs, or debit cards are ever accessed or shared.
+          </div>
+        </div>
+
+        <div class="upi-action-footer">
+          <button class="btn-ghost" onclick="closeSetuAAModal()" style="padding:10px 16px;">Cancel</button>
+          <button class="btn-upi-primary" id="setu-auth-btn" onclick="executeSetuConsentFlow()">
+            <span>⚡ Tap to Authorize Consent</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Processing Bridge Animation -->
+      <div class="setu-step-panel" id="setu-panel-step2" style="display:none;">
+        <div class="upi-loading-box">
+          <div class="upi-spinner"></div>
+          <div class="upi-loading-title">Connecting to Setu AA Bridge</div>
+          <div class="upi-loading-sub" id="setu-loading-text">
+            Generating digital consent session &amp; requesting verified bank balance via RBI Account Aggregator sandbox...
+          </div>
+          <div class="upi-pulse-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Verified Balance & Action Screen -->
+      <div class="setu-step-panel" id="setu-panel-step3" style="display:none;">
+        <div class="upi-result-card">
+          <div class="upi-result-badge" id="setu-result-badge">
+            <span id="setu-badge-icon">✓</span>
+            <span id="setu-badge-text">Account Aggregator Verified</span>
+          </div>
+
+          <div class="upi-balance-label">Verified Account Balance</div>
+          <div class="upi-balance-amount" id="setu-res-balance">₹0.00</div>
+
+          <div class="upi-comparison-strip">
+            <div class="upi-comp-col">
+              <span class="upi-comp-label">Amount Due</span>
+              <span class="upi-comp-val" id="setu-res-amount-due">₹0.00</span>
+            </div>
+            <div class="upi-comp-divider"></div>
+            <div class="upi-comp-col">
+              <span class="upi-comp-label">Recovery Signal</span>
+              <span class="upi-comp-val" id="setu-res-funds-status">—</span>
+            </div>
+          </div>
+
+          <div class="upi-decision-callout" id="setu-decision-callout">
+            <div class="upi-callout-title">🤖 RecoverIQ Decision Engine Recommendation:</div>
+            <div class="upi-callout-body" id="setu-res-note"></div>
+          </div>
+
+          <div class="upi-audit-meta">
+            <div class="upi-audit-row">
+              <span class="upi-meta-k">Consent ID:</span>
+              <span class="code-tag" id="setu-res-consent-id"></span>
+            </div>
+            <div class="upi-audit-row">
+              <span class="upi-meta-k">Customer VPA:</span>
+              <span id="setu-res-vpa" style="font-weight:600;"></span>
+            </div>
+            <div class="upi-audit-row">
+              <span class="upi-meta-k">Bank:</span>
+              <span id="setu-res-bank"></span>
+            </div>
+            <div class="upi-audit-row">
+              <span class="upi-meta-k">Source Rail:</span>
+              <span class="tag-aa">Setu AA Sandbox (RBI-compliant)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="upi-action-footer">
+          <button class="btn-ghost" onclick="resetSetuModalForm()" style="padding:10px 16px;">↻ Test Another</button>
+          <button class="btn-upi-primary" onclick="closeSetuAAModal()">Done</button>
+        </div>
+      </div>
+
+    </div><!-- /upi-phone-frame -->
+  </div><!-- /setu-modal-content -->
+</div>
+
 <!-- ── Project AI Assistant Chatbot (Powered by Gemini) ────────────────── -->
 <div class="ai-chat-drawer hidden" id="project-chat-drawer">
   <div class="ai-chat-header">
@@ -1193,6 +1388,6 @@
 <!-- Toast root -->
 <div id="toast-root"></div>
 
-<script src="/static/app.js?v=20260902-v2"></script>
+<script src="/static/app.js?v=20260902-v3"></script>
 </body>
 </html>

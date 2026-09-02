@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-177%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-181%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -151,7 +151,25 @@ Enterprise invoices require specialized handling distinct from consumer micro-tr
 - **Out-of-the-Box Initialization**: Pre-loads 5 enterprise invoice archetypes (Infosys BPO, TechCorp, StartupXYZ, Mega Retail, CloudSoft) totaling ₹5,88,836 across all 4 aging buckets.
 - **Interactive Live Actions**: Supports 1-click dunning dispatch (`POST /api/b2b/chase/{id}` with 60s duplicate throttle) and cash settlement (`POST /api/b2b/settle/{id}`).
 
-### 7. Two-Part Recovery ROI & Unit Economics Engine
+### 7. Setu Account Aggregator (AA) Digital Consent & Real-Time Balance Simulator
+Every traditional autopay retry for insufficient funds (`U30`) is a *statistical guess* about whether the customer's salary has arrived. 
+
+RecoverIQ eliminates this guesswork by introducing **consent-native pre-flight verification** using India's **RBI Account Aggregator (AA)** regulatory rail via Setu:
+- **Consent-Native Under RBI Master Directions**: Acting as a Financial Information User (FIU-AA), RecoverIQ requests a single-use digital consent session (`CON-XXXXXXXX`) linked to the customer's UPI VPA. Zero passwords, MPINs, or debit card credentials are ever accessed or shared.
+- **Verified Liquidity Signal**: Replaces blind retry guessing with an authoritative `funds_available: true/false` signal:
+  - **U30 Insufficient Funds**: Simulates real-time salary window credits (e.g. ₹433 balance vs ₹999 due). If low, retries are automatically rescheduled to the customer's 1st–7th salary window, preventing NPCI decline penalty fees.
+  - **Non-U30 Errors (TM, U29, BT01, BT02)**: Verifies that liquid funds were actually available (e.g. ₹10,484 balance for Arjun vs ₹4,500 due), isolating the failure cause to network switches or mandate limits rather than lack of money.
+- **Payer Trust Score Feedback**: Verified liquidity dynamically updates the customer's CRED-style trust score (`+0.20` reward on verified funds, `-0.10` penalty on low balance) and tunes the Thompson Sampling bandit posterior.
+- **Full Cross-Dataset Consistency**: 100% harmonized across [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json) and [`data/expiring_mandates_dataset.json`](data/expiring_mandates_dataset.json) with 1-click interactive Quick-Fill chips for canonical personas:
+  - 🔘 **Rahul Sharma** (`rahul@oksbi` · SBI · ₹999 · `U30`)
+  - 🔘 **Priya Mehta** (`priya@okhdfcbank` · HDFC · ₹1,499 · `BT01`)
+  - 🔘 **Arjun Nair** (`arjun@okicici` · ICICI · ₹4,500 · `TM`)
+  - 🔘 **Kavita Joshi** (`kavita@okkotak` · Kotak · ₹3,499 · `U29`)
+  - 🔘 **Vikram Patel** (`vikram@ybl` · Yes Bank · ₹2,999 · `BT02`)
+- **Interactive Mobile Device Frame**: Accessible via the top navbar **`🏦 Setu AA Simulator`** or directly from any event in the Event Stream Drawer, featuring simulated 256-bit encryption headers, animated Setu AA bridge handoff, and verified balance revelation.
+- **Local CLI Verification**: Run `python setu_demo.py` to simulate all 5 dataset personas or test custom VPAs directly from the terminal.
+
+### 8. Two-Part Recovery ROI & Unit Economics Engine
 Provides merchants with honest, audit-grade financial reporting by strictly distinguishing between post-failure recoveries and pre-failure churn prevention:
 - **Two-Part Impact Separation**:
   - **⚡ Reactive Recovered**: Revenue rescued after a debit failure occurred (Smart Retries, UPI Collect, B2B Settlement, Drop-off cart recovery).
@@ -194,7 +212,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 |---|---|---|
 | **Live Twilio WhatsApp & SMS** | `src/integrations/messaging.py` | Twilio REST client with lazy initialization, DLT template registration compliance, sandbox routing, and transparent mock fallback for testing without credentials. |
 | **Razorpay UPI Gateway** | `src/integrations/razorpay_upi.py` | Razorpay Autopay webhook parsing, mandate verification, and collect request dispatch. |
-| **Setu Account Aggregator (AA)** | `src/integrations/setu_aa.py` | Pre-flight balance check stub verifying salary credit and liquidity via Account Aggregator prior to firing retry debits. |
+| **Setu Account Aggregator (AA)** | `src/integrations/setu_aa.py` | Full RBI-regulated Account Aggregator sandbox integration & balance verification engine. Manages 1-tap digital consent flows (`request_consent`), deterministic sandbox balance checks (`fetch_balance`), trust score adjustments, and decision note generation. |
 
 ---
 
@@ -408,6 +426,7 @@ ai-revenue-recovery-agent/
 │   ├── upi_failures_dataset.json# 60 real-world failure scenarios
 │   └── expiring_mandates_dataset.json # 20 proactive expiring mandate scenarios
 │
+├── setu_demo.py                 # Setu Account Aggregator (AA) standalone CLI demo
 ├── src/                         # Core Agent Engine
 │   ├── config.py                # Pydantic environment configuration (Gemini & OpenAI support)
 │   │
@@ -432,7 +451,7 @@ ai-revenue-recovery-agent/
 │   │   ├── llm_classifier.py    # Fail-safe Google Gemini & OpenAI LLM intent classifier (with regex fallback)
 │   │   ├── messaging.py         # Twilio WhatsApp & SMS client (live API & mock fallback)
 │   │   ├── razorpay_upi.py      # Razorpay Webhook & API client
-│   │   └── setu_aa.py           # Setu Account Aggregator balance stub
+│   │   └── setu_aa.py           # Setu Account Aggregator digital consent & balance verification client
 │   │
 │   ├── models/                  # Domain & Risk Models
 │   │   ├── upi_models.py        # NPCI error codes, mandate states
@@ -444,7 +463,8 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (177 passing tests across 10 files)
+└── tests/                       # Test Suite (181 passing tests across 11 files)
+    ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (4 tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
     ├── test_rbi_category_guardrail.py # Category-aware RBI limits & GR7 circuit breaker (27 tests)
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
@@ -485,6 +505,9 @@ python -X utf8 benchmark.py
 ### 3. Run the Demos
 
 ```bash
+# Setu Account Aggregator (AA) Consent & Balance Verification Demo (5 dataset scenarios)
+python -X utf8 setu_demo.py
+
 # UPI Autopay Recovery & Proactive Expiry Demo (5 live scenarios)
 python -X utf8 upi_demo.py
 
@@ -498,13 +521,13 @@ python -X utf8 demo.py
 # Explicit UTF-8 encoding flag prevents console character mangling on Windows
 python -X utf8 -m uvicorn api.main:app --port 8000 --reload
 ```
-Open **`http://localhost:8000`** in your browser to view the live interactive dashboard and conversational simulator.
+Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, and the **`🏦 Setu AA Simulator`** modal in the top navigation bar.
 
 ### 5. Run the Automated Test Suite
 
 ```bash
 python -m pytest tests/ -v
-# 177 passed in ~40s
+# 181 passed in ~50s
 ```
 
 ---

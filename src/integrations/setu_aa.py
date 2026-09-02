@@ -97,24 +97,13 @@ class SetuAAClient:
         Mock: returns a pre-approved consent instantly (sandbox behaviour).
         """
         import uuid
+        clean_vpa   = vpa.strip().lower()
         consent_id  = f"CON-{uuid.uuid4().hex[:8].upper()}"
-        consent_url = f"{self.SANDBOX_BASE}/consent/{consent_id}?vpa={vpa}"
-
-        # ── [SANDBOX] In production this would be an HTTP POST ────────────────
-        # response = httpx.post(f"{self.SANDBOX_BASE}/consents", json={
-        #     "consentDuration": {"unit": "MONTH", "value": 1},
-        #     "fetchType": "BALANCE",
-        #     "fiTypes": ["DEPOSIT"],
-        #     "Purpose": {"code": "13", "text": purpose},
-        #     "vua": vpa,
-        # }, headers=self._auth_headers())
-        # consent_id  = response.json()["id"]
-        # consent_url = response.json()["url"]
-        # ─────────────────────────────────────────────────────────────────────
+        consent_url = f"{self.SANDBOX_BASE}/consent/{consent_id}?vpa={clean_vpa}"
 
         return AAConsentRequest(
             consent_id  = consent_id,
-            vpa         = vpa,
+            vpa         = clean_vpa,
             consent_url = consent_url,
             status      = "approved",   # sandbox: auto-approved
             purpose     = purpose,
@@ -133,19 +122,14 @@ class SetuAAClient:
         Live: GET {SANDBOX_BASE}/accounts/{fip_id}/balance
         Mock: deterministic sandbox balance based on VPA seed.
         """
-        # ── [SANDBOX] In production this would be an HTTP GET ─────────────────
-        # response = httpx.get(
-        #     f"{self.SANDBOX_BASE}/accounts/{fip_id}/balance",
-        #     headers={**self._auth_headers(), "x-consent-id": consent.consent_id},
-        # )
-        # balance = response.json()["fiObjects"][0]["data"][0]["summary"]["currentBalance"]
-        # ─────────────────────────────────────────────────────────────────────
-
-        # Sandbox mock: seed RNG from VPA so results are stable per customer
-        seed = sum(ord(c) for c in consent.vpa)
+        # Sandbox mock: seed RNG from normalized VPA so results are stable per customer
+        clean_vpa = consent.vpa.strip().lower()
+        seed = sum(ord(c) for c in clean_vpa)
         rng  = random.Random(seed)
 
-        if failure_code == "U30":
+        code_upper = failure_code.strip().upper() if failure_code else "U30"
+
+        if code_upper == "U30":
             # U30 = insufficient funds. 30% chance salary has since credited.
             salary_credited = rng.random() < 0.30
             balance = (
@@ -154,19 +138,28 @@ class SetuAAClient:
                 else rng.uniform(0, amount_due * 0.6)             # still short
             )
         else:
-            # Other codes: assume funds fine, issue was elsewhere
+            # Other codes (technical, limits, mandate): assume funds fine, issue was elsewhere
             balance = rng.uniform(amount_due * 1.2, amount_due * 3.0)
 
         funds_available = balance >= amount_due
 
-        note = (
-            f"AA sandbox: ₹{balance:,.0f} available vs ₹{amount_due:,.0f} due. "
-            + ("Salary credit detected — retry immediately." if funds_available
-               else "Balance insufficient — schedule retry for salary window.")
-        )
+        if code_upper == "U30":
+            decision_text = (
+                "Salary credit detected — retry immediately."
+                if funds_available
+                else "Balance insufficient — schedule retry for salary window."
+            )
+        else:
+            decision_text = (
+                "Sufficient balance verified — debit failure was not due to low funds."
+                if funds_available
+                else "Balance insufficient — verify secondary payment method."
+            )
+
+        note = f"AA sandbox: ₹{balance:,.0f} available vs ₹{amount_due:,.0f} due. {decision_text}"
 
         return AABalanceResult(
-            vpa             = consent.vpa,
+            vpa             = clean_vpa,
             bank            = bank,
             balance         = round(balance, 2),
             funds_available = funds_available,
