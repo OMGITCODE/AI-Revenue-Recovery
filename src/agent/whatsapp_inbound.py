@@ -303,8 +303,9 @@ class WhatsAppInboundHandler:
                 intent = InboundIntent.UNKNOWN
 
             conf = float(llm_result.get("confidence", 0.85))
-            keywords: List[str] = []
-            deadline_hours = llm_result.get("extracted_deadline_hours")
+            # Extract any matching keywords for auditing and downstream assertions
+            _, _, keywords, fallback_deadline = self._classify_message_regex(message)
+            deadline_hours = llm_result.get("extracted_deadline_hours") or fallback_deadline
             provider_name = llm_result.get("provider", "LLM").upper()
             reasoning = f"[{provider_name}] {llm_result.get('reasoning', 'Classified via LLM')} (conf: {conf:.0%})"
             return intent, conf, keywords, deadline_hours, reasoning

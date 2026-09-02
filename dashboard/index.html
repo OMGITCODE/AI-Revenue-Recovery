@@ -49,6 +49,9 @@
     <button class="btn-nav" id="voice-sim-nav-btn" onclick="openVoiceModal()" title="Outbound Voice AI Outreach Studio (MSMED Act Section 16 &amp; Hinglish IVR)" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(139,92,246,0.45);color:#8b5cf6;font-weight:600;">
       📞 Voice AI Studio
     </button>
+    <button class="btn-nav" id="upi-qr-nav-btn" onclick="openUPIQRModal()" title="Dynamic UPI QR Code &amp; Intent Deep Links (PhonePe / GPay / Paytm)" style="display:inline-flex;align-items:center;gap:5px;border-color:rgba(59,130,246,0.45);color:#60a5fa;font-weight:600;">
+      📲 UPI QR Pay
+    </button>
     <button class="btn-nav" id="global-refresh-btn" onclick="refreshAllDashboard(this)" title="Refresh all dashboard panels, live ledger, and metrics" style="display:inline-flex;align-items:center;gap:4px;">
       ↻ Refresh All
     </button>
@@ -1455,6 +1458,116 @@
 
     </div><!-- /voice-phone-frame -->
   </div><!-- /voice-modal-content -->
+</div>
+
+<!-- ── Dynamic UPI QR Code & Intent Deep Links Modal ────────────────────── -->
+<div class="modal-backdrop" id="upi-qr-backdrop" onclick="closeUPIQRModal()"></div>
+<div class="modal upi-qr-phone-modal" id="upi-qr-modal" role="dialog" aria-modal="true" aria-labelledby="upi-qr-modal-heading">
+  <div class="modal-header">
+    <div class="modal-header-left">
+      <span class="modal-dot green"></span>
+      <div>
+        <div class="modal-title" id="upi-qr-modal-heading">Instant UPI QR Pay</div>
+        <div class="modal-subtitle">Dynamic NPCI Vector QR · Universal Intent · Verified Recovery</div>
+      </div>
+    </div>
+    <button class="btn-ghost modal-close-btn" onclick="closeUPIQRModal()" aria-label="Close UPI QR modal">✕</button>
+  </div>
+
+  <div class="upi-qr-modal-content">
+    <div class="upi-qr-phone-frame">
+      
+      <!-- Top Gateway Trust Header -->
+      <div class="upi-qr-gateway-header">
+        <div class="upi-qr-brand-badge">
+          <span class="upi-qr-shield">🛡️</span>
+          <span>RecoverIQ Merchant Gateway · NPCI Verified</span>
+        </div>
+        <div class="upi-qr-ssl-badge">🔒 256-Bit SSL</div>
+      </div>
+
+      <!-- Honest Sandbox Disclosure Badge -->
+      <div class="upi-qr-disclaimer-pill">
+        <span class="disclaimer-icon">ℹ️</span>
+        <span>NPCI Standards-Compliant Sandbox URI · Scannable Payload Demo · Not Connected to Live Banking Switch</span>
+      </div>
+
+      <!-- Quick-Fill Scenario Chips (Exact match with upi_failures_dataset.json & b2b_chaser.py) -->
+      <div class="upi-preset-pills" id="upi-qr-presets">
+        <button class="upi-preset-pill active" onclick="fillUPIQRPreset('rahul@oksbi', 'Rahul Sharma', 999, 'OTT VIP Subscription Renewal (U30 Recovery)', 'mand_sbi_exp_001', this)" title="Dataset: Rahul SBI · U30 Salary Crunch · mand_sbi_exp_001">
+          Rahul · U30 (₹999)
+        </button>
+        <button class="upi-preset-pill" onclick="fillUPIQRPreset('priya@okhdfcbank', 'Priya Mehta', 1499, 'SaaS Pro Mandate Renewal (BT01 Recovery)', 'mand_hdfc_exp_002', this)" title="Dataset: Priya HDFC · BT01 Revoked · mand_hdfc_exp_002">
+          Priya · BT01 (₹1,499)
+        </button>
+        <button class="upi-preset-pill" onclick="fillUPIQRPreset('arjun@okicici', 'Arjun Nair', 4500, 'Cloud Infrastructure Renewal (TM Recovery)', 'mand_icici_exp_004', this)" title="Dataset: Arjun ICICI · TM Timeout · mand_icici_exp_004">
+          Arjun · TM (₹4,500)
+        </button>
+        <button class="upi-preset-pill" onclick="fillUPIQRPreset('startup@okaxis', 'StartupXYZ', 12500, 'Invoice Settlement INV-2026-003', 'INV-2026-003', this)" title="Dataset: StartupXYZ · B2B Overdue 63d · INV-2026-003">
+          StartupXYZ · B2B (₹12,500)
+        </button>
+      </div>
+
+      <!-- QR Code Scannable Card -->
+      <div class="upi-qr-card">
+        <div class="upi-qr-card-header">
+          <div class="upi-qr-scan-hint">Scan with any UPI App (GPay, PhonePe, Paytm, BHIM)</div>
+        </div>
+        
+        <div class="upi-qr-svg-wrapper">
+          <div class="upi-qr-corner top-left"></div>
+          <div class="upi-qr-corner top-right"></div>
+          <div class="upi-qr-corner bottom-left"></div>
+          <div class="upi-qr-corner bottom-right"></div>
+          <div id="upi-qr-svg-container" class="upi-qr-svg-container">
+            <!-- Injected dynamically via fetchAndRenderUPIQR -->
+            <div class="upi-qr-loading-spinner"></div>
+          </div>
+        </div>
+
+        <div class="upi-qr-amount-hero" id="upi-qr-amount-hero">₹999.00</div>
+        
+        <div class="upi-qr-tx-details" id="upi-qr-tx-details">
+          <!-- Text rendered strictly via esc() -->
+        </div>
+      </div>
+
+      <!-- Mobile Intent Actions -->
+      <div class="upi-qr-intent-section">
+        <div class="upi-qr-intent-label">1-Tap Mobile Intent (Native UPI App)</div>
+        <div class="upi-qr-intent-buttons">
+          <a id="upi-intent-universal" href="#" class="btn btn-primary upi-intent-btn universal" target="_blank" rel="noopener">
+            📱 Open in UPI App (Universal Intent)
+          </a>
+          <div class="upi-intent-row">
+            <a id="upi-intent-gpay" href="#" class="btn btn-ghost upi-intent-btn gpay" target="_blank" rel="noopener">
+              <span class="intent-icon">🔵</span> GPay
+            </a>
+            <a id="upi-intent-phonepe" href="#" class="btn btn-ghost upi-intent-btn phonepe" target="_blank" rel="noopener">
+              <span class="intent-icon">🟣</span> PhonePe
+            </a>
+            <a id="upi-intent-paytm" href="#" class="btn btn-ghost upi-intent-btn paytm" target="_blank" rel="noopener">
+              <span class="intent-icon">🟦</span> Paytm
+            </a>
+          </div>
+          <button class="btn btn-ghost btn-copy-link" id="upi-copy-link-btn" onclick="copyUPILink()">
+            📋 Copy UPI Link
+          </button>
+        </div>
+      </div>
+
+      <!-- Settle Simulation Action -->
+      <div class="upi-qr-settle-bar">
+        <button id="btn-simulate-qr-settle" class="btn btn-primary upi-settle-btn" onclick="simulateQRPayment(this)">
+          ✅ Simulate Customer Scanned &amp; Paid
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="closeUPIQRModal()" style="margin-top:6px;width:100%;color:var(--text-muted);">
+          Close Preview
+        </button>
+      </div>
+
+    </div><!-- /upi-qr-phone-frame -->
+  </div><!-- /upi-qr-modal-content -->
 </div>
 
 <!-- ── Project AI Assistant Chatbot (Powered by Gemini) ────────────────── -->

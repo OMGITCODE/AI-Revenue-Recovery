@@ -23,5 +23,7 @@ structlog>=24.0
 pytest>=8.0
 pytest-asyncio>=0.23.0
 
-# Utilities
+# Utilities & Audio/QR Generation
 tenacity>=8.0
+edge-tts>=7.0.0
+qrcode>=8.0.0

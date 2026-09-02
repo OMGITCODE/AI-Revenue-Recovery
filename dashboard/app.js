@@ -390,20 +390,28 @@ function openDrawer(ev) {
       ${row('Provider', 'Setu AA Sandbox (RBI-regulated)')}
       ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.aa_check)}</span>`)}
       ${row('Why', '"We don\'t guess when the customer can pay — we ask, with consent, and check."')}
-      <div style="margin-top:10px;">
-        <button class="btn-ghost" style="width:100%;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
-          🏦 Simulate Setu AA Verification Flow
+      <div style="margin-top:10px;display:flex;gap:6px;">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+          🏦 Setu AA Check
+        </button>
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.vpa)}', '${esc(ev.customer_id||ev.vpa)}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.code||'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
+          📲 Instant QR Pay
         </button>
       </div>
     </div>` : `
     <div class="dl-section">
-      <div class="dl-section-title">🏦 Account Aggregator (Setu)</div>
+      <div class="dl-section-title">🏦 Recovery Actions (Setu AA &amp; UPI QR)</div>
       <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">
-        ${ev.code === 'U30' ? 'U30 Insufficient Funds: Verify real bank balance via RBI Account Aggregator instead of blind guessing.' : 'Verify customer bank balance & liquidity signal via RBI Account Aggregator sandbox.'}
+        ${ev.code === 'U30' ? 'U30 Insufficient Funds: Verify real bank balance via Setu AA, or dispatch an instant dynamic UPI QR payment link.' : 'Verify customer balance via Setu AA or offer instant scan-to-pay via dynamic UPI QR code.'}
       </div>
-      <button class="btn-ghost" style="width:100%;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
-        🏦 Simulate Setu AA Verification Flow
-      </button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+          🏦 Setu AA Check
+        </button>
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.vpa)}', '${esc(ev.customer_id||ev.vpa)}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.code||'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
+          📲 Instant QR Pay
+        </button>
+      </div>
     </div>`}`;
 
   document.getElementById('drawer').classList.add('open');
@@ -1508,12 +1516,22 @@ function renderB2BTable(receivables) {
         openVoiceModal(scenarioId);
       };
 
+      const qrBtn = document.createElement('button');
+      qrBtn.className = 'btn-act';
+      qrBtn.style.cssText = 'border-color:rgba(59,130,246,0.45);color:#60a5fa;background:rgba(59,130,246,0.08);font-weight:600;';
+      qrBtn.innerHTML = '📲 QR';
+      qrBtn.title = 'Open Dynamic UPI QR Code & Intent Deep Links';
+      qrBtn.onclick = function() {
+        openUPIQRModal(r.debtor_vpa || 'startup@okaxis', r.debtor_name, r.amount, 'Settlement ' + r.invoice_number, r.receivable_id);
+      };
+
       const settleBtn = document.createElement('button');
       settleBtn.className = 'btn-act btn-green';
       settleBtn.textContent = '₹ Settle';
       settleBtn.onclick = function() { b2bSettle(r.receivable_id, r.debtor_name, r.amount, this); };
       actDiv.appendChild(chaseBtn);
       actDiv.appendChild(voiceBtn);
+      actDiv.appendChild(qrBtn);
       actDiv.appendChild(settleBtn);
       actionTd.appendChild(actDiv);
     } else {
@@ -2881,6 +2899,172 @@ async function dispatchBackendVoiceCall(scenario) {
     }
   } catch (err) {
     console.warn('Voice call dispatch error:', err);
+  }
+}
+
+// ── Dynamic UPI QR Code & Intent Deep Links ──────────────────────────────────
+let currentUPIQRData = null;
+
+async function fetchAndRenderUPIQR(vpa, name, amount, note, refId) {
+  const container = document.getElementById('upi-qr-svg-container');
+  const detailsEl = document.getElementById('upi-qr-tx-details');
+  const amountHero = document.getElementById('upi-qr-amount-hero');
+  const universalBtn = document.getElementById('upi-intent-universal');
+  const gpayBtn = document.getElementById('upi-intent-gpay');
+  const phonepeBtn = document.getElementById('upi-intent-phonepe');
+  const paytmBtn = document.getElementById('upi-intent-paytm');
+
+  if (container) container.innerHTML = '<div class="upi-qr-loading-spinner"></div>';
+
+  try {
+    const params = new URLSearchParams({
+      amount: amount || 999,
+      vpa: vpa || 'recoveriq@npci',
+      name: name || 'RecoverIQ Technologies',
+      note: note || 'Instant Recovery',
+      ref_id: refId || 'REC-DEMO'
+    });
+    const res = await fetch(`/api/upi/qr?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to load QR code');
+    const data = await res.json();
+    currentUPIQRData = data;
+
+    // 1. Inject SVG directly (pure vector generated server-side)
+    if (container) container.innerHTML = data.qr_svg;
+
+    // 2. Format Amount Hero
+    if (amountHero) amountHero.textContent = data.formatted_amount || `₹${Number(data.amount).toLocaleString('en-IN')}`;
+
+    // 3. Inject Transaction Summary strictly through esc() for OWASP security
+    if (detailsEl) {
+      detailsEl.innerHTML = `
+        <div class="upi-qr-detail-row"><span class="label">Payee VPA:</span><span class="val mono">${esc(data.vpa)}</span></div>
+        <div class="upi-qr-detail-row"><span class="label">Merchant:</span><span class="val">${esc(data.name)}</span></div>
+        <div class="upi-qr-detail-row"><span class="label">Reference ID:</span><span class="val mono">${esc(data.ref_id)}</span></div>
+        <div class="upi-qr-detail-row"><span class="label">Note:</span><span class="val">${esc(data.note)}</span></div>
+      `;
+    }
+
+    // 4. Update Deep Link URLs
+    if (universalBtn) universalBtn.href = data.deep_links.universal;
+    if (gpayBtn) gpayBtn.href = data.deep_links.gpay;
+    if (phonepeBtn) phonepeBtn.href = data.deep_links.phonepe;
+    if (paytmBtn) paytmBtn.href = data.deep_links.paytm;
+
+    // Reset settle button state
+    const settleBtn = document.getElementById('btn-simulate-qr-settle');
+    if (settleBtn) {
+      settleBtn.disabled = false;
+      settleBtn.innerHTML = '✅ Simulate Customer Scanned &amp; Paid';
+    }
+  } catch (err) {
+    if (container) container.innerHTML = `<div class="status-err" style="padding:20px;text-align:center;">Failed to render QR code: ${esc(err.message)}</div>`;
+  }
+}
+
+function openUPIQRModal(vpa, name, amount, note, refId) {
+  const modal = document.getElementById('upi-qr-modal');
+  const backdrop = document.getElementById('upi-qr-backdrop');
+  if (!modal || !backdrop) return;
+
+  modal.classList.add('open');
+  backdrop.classList.add('open');
+
+  const resolvedVpa = vpa || 'rahul@oksbi';
+  const resolvedName = name || 'Rahul Sharma';
+  const resolvedAmt = (amount !== undefined && amount !== null) ? Number(amount) : 999;
+  const resolvedNote = note || 'OTT VIP Subscription Renewal (U30 Recovery)';
+  const resolvedRef = refId || 'mand_sbi_exp_001';
+
+  // Highlight active preset chip if matching
+  document.querySelectorAll('#upi-qr-presets .upi-preset-pill').forEach(pill => {
+    const isRahul = resolvedVpa.includes('rahul') && pill.textContent.includes('Rahul');
+    const isPriya = resolvedVpa.includes('priya') && pill.textContent.includes('Priya');
+    const isArjun = resolvedVpa.includes('arjun') && pill.textContent.includes('Arjun');
+    const isStartup = (resolvedVpa.includes('startup') || resolvedName.includes('Startup')) && pill.textContent.includes('Startup');
+    pill.classList.toggle('active', !!(isRahul || isPriya || isArjun || isStartup));
+  });
+
+  fetchAndRenderUPIQR(resolvedVpa, resolvedName, resolvedAmt, resolvedNote, resolvedRef);
+}
+
+function closeUPIQRModal() {
+  const modal = document.getElementById('upi-qr-modal');
+  const backdrop = document.getElementById('upi-qr-backdrop');
+  if (modal) modal.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+}
+
+function fillUPIQRPreset(vpa, name, amount, note, refId, btn) {
+  document.querySelectorAll('#upi-qr-presets .upi-preset-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  fetchAndRenderUPIQR(vpa, name, amount, note, refId);
+}
+
+function copyUPILink() {
+  if (!currentUPIQRData || !currentUPIQRData.upi_uri) {
+    toast('No UPI link available', 'err');
+    return;
+  }
+  navigator.clipboard.writeText(currentUPIQRData.upi_uri).then(() => {
+    toast('📋 UPI payment URI copied to clipboard!', 'ok');
+  }).catch(() => {
+    toast('Failed to copy URI', 'err');
+  });
+}
+
+async function simulateQRPayment(btn) {
+  if (!currentUPIQRData) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin">⏳</span> Verifying on UPI switch…';
+  }
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (typeof g_apiKey !== 'undefined' && g_apiKey) headers['X-API-Key'] = g_apiKey;
+
+    const res = await fetch('/api/upi/simulate-payment', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ref_id: currentUPIQRData.ref_id,
+        amount: currentUPIQRData.amount,
+        debtor_name: currentUPIQRData.name,
+        vpa: currentUPIQRData.vpa,
+        note: currentUPIQRData.note
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Payment simulation failed');
+
+    if (data.already_settled) {
+      toast(`ℹ️ ${esc(data.message)} (Zero double-counting)`, 'info');
+      if (btn) btn.innerHTML = '✓ Already Settled';
+      return;
+    }
+
+    toast(`🎉 Payment of ${esc(currentUPIQRData.formatted_amount || ('₹' + currentUPIQRData.amount))} confirmed via UPI QR!`, 'ok');
+    if (btn) btn.innerHTML = '✓ Payment Settled';
+
+    // Refresh ledger, B2B dashboard, and stats to reflect live recovery
+    if (typeof loadLedger === 'function') loadLedger();
+    if (typeof loadB2B === 'function') loadB2B();
+    if (typeof loadStats === 'function') loadStats();
+    if (typeof loadROI === 'function') loadROI();
+
+    // Close modal after brief celebratory pause
+    setTimeout(() => {
+      closeUPIQRModal();
+    }, 1200);
+
+  } catch (err) {
+    toast('Payment settlement failed: ' + err.message, 'err');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '✅ Simulate Customer Scanned &amp; Paid';
+    }
   }
 }
 

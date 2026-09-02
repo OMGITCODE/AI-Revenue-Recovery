@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-189%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -346,10 +346,11 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 189 Tests across 12 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 194 Tests across 13 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
+| **Dynamic UPI QR & Deep Links** | `tests/test_upi_qr_api.py` | **5 tests** | Vector SVG generation, canonical NPCI URI parameters, domain-state settlement idempotency, B2B receivable integration, and API key auth gating. |
 | **Outbound Voice AI Outreach** | `tests/test_voice_ai.py` | **8 tests** | Public scenarios catalog, dual-dialect audio validation, physical asset existence, security middleware auth enforcement, ₹1.50 ledger accounting, and mock/live Twilio Voice dispatch. |
 | **Setu Account Aggregator (AA)** | `tests/test_setu_aa_api.py` | **4 tests** | Digital consent creation, sandbox balance verification, API key auth, and trust score feedback. |
 | **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI rules, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
@@ -362,7 +363,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **189 passing** | **100% test pass rate in ~88s** |
+| **Total Test Suite** | `pytest tests/` | **194 passing** | **100% test pass rate in ~36s** |
 
 ---
 
@@ -498,6 +499,8 @@ ai-revenue-recovery-agent/
 ├── benchmark.py                 # Monte Carlo policy benchmark (Baseline vs RecoverIQ)
 ├── demo.py                      # Generic payment recovery demo
 ├── upi_demo.py                  # UPI Autopay 5-scenario live pipeline & proactive expiry demo
+├── setu_demo.py                 # Setu Account Aggregator (AA) standalone CLI demo
+├── qr_demo.py                   # Dynamic UPI QR & Intent Deep Links standalone CLI runner
 ├── test_inbound_demo.py         # 2-way conversational WhatsApp inbound live test runner
 ├── requirements.txt
 ├── .env.example
@@ -746,6 +749,64 @@ LLM_PROVIDER=gemini
 
 ---
 
+## 📲 Dynamic UPI QR Code & Intent Deep Links Engine (NPCI Standards Compliant)
+
+RecoverIQ includes an enterprise-grade **Dynamic UPI QR Code and Mobile Intent Engine** to enable instantaneous, friction-free payment recovery across consumer subscription drop-offs, revoked mandates (`BT01`), and overdue B2B invoices.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                           RecoverIQ Merchant Gateway                             │
+│       🛡️ NPCI Standards-Compliant URI  ·  🔒 256-Bit SSL  ·  ⚡ Vector SVG       │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│     [  ██████████  ]   Universal Intent: upi://pay?pa=recoveriq@npci&...         │
+│     [  ██  ██  ██  ]   Google Pay Intent: gpay://upi/pay?pa=...                  │
+│     [  ██████████  ]   PhonePe Intent   : phonepe://pay?pa=...                   │
+│                        Paytm Intent     : paytmmp://pay?pa=...                   │
+│                                                                                  │
+│     ✓ Domain-State Settlement Idempotency (Zero Double-Counting)                 │
+│     ✓ 100% 1-to-1 Aligned with upi_failures_dataset.json & b2b_chaser.py         │
+│     ✓ Strict OWASP XSS DOM Sanitization via esc() Entity Encoding                │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Architectural Principles & Specifications
+
+- **NPCI UPI Linking Specification v1.6**: Generates canonical query strings containing payee VPA (`pa`), merchant/payee name (`pn`), transaction amount (`am`), currency (`cu=INR`), transaction note (`tn`), and immutable reference/order ID (`tr`).
+- **High-Contrast Pure Vector SVG**: Renders crisp, camera-scannable SVG paths server-side using Python `qrcode.image.svg.SvgPathImage` with zero external raster dependencies.
+- **1-Click Mobile App Switchers**: Deep links launch directly into native Indian UPI applications:
+  - **Universal / OS Intent**: `upi://pay?...` (Primary CTA for Android/iOS native camera or app picker)
+  - **Google Pay**: `gpay://upi/pay?...`
+  - **PhonePe**: `phonepe://pay?...`
+  - **Paytm**: `paytmmp://pay?...`
+- **Authoritative Domain-State Settlement Idempotency**:
+  - Replaces fragile time-limited rolling caches (e.g. 300s TTL) with **domain-model state checks**.
+  - When simulating payment via `POST /api/upi/simulate-payment`:
+    - For B2B receivables: Checks `b2b_chaser.receivable.status == "settled"`. If already settled, returns `{"status": "already_settled", ...}` without double-counting revenue or writing duplicate ledger entries.
+    - For generic/cart items: Checks the immutable audit ledger entries and persistent session set. Even if judges rotate through 15 minutes later, an invoice cannot be paid twice.
+- **Strict OWASP XSS Sanitization**: All rendered text elements (`vpa`, `name`, `amount`, `note`, `ref_id`) pass through `esc()` HTML encoding before DOM injection in `dashboard/app.js`.
+
+### 2. Dataset Persona Parity (1-to-1 Canonical Matching)
+
+The modal includes quick-fill scenario presets matching RecoverIQ's primary datasets:
+- **Rahul Sharma · U30 (₹999.00)**: Scenario #1 from `data/upi_failures_dataset.json` (`mand_sbi_exp_001` · OTT VIP Subscription).
+- **Priya Mehta · BT01 (₹1,499.00)**: Scenario #2 from `data/upi_failures_dataset.json` (`mand_hdfc_exp_002` · SaaS Pro Mandate Renewal).
+- **Arjun Nair · TM (₹4,500.00)**: Scenario #3 from `data/upi_failures_dataset.json` (`mand_icici_exp_004` · Cloud Infrastructure Server Tier-2).
+- **StartupXYZ · B2B (₹12,500.00)**: Archetype #3 from `src/agent/b2b_chaser.py` (`INV-2026-003` · 63 days overdue invoice).
+
+### 3. Standalone CLI Runner
+
+You can generate scannable ASCII terminal QR codes and inspect NPCI URIs without opening a browser:
+```bash
+# Run all 4 canonical dataset personas:
+python qr_demo.py
+
+# Run a custom debtor amount:
+python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
+```
+
+---
+
 ## 📡 REST API & Audit Export Endpoints
 
 | Method | Endpoint | Description |
@@ -783,6 +844,8 @@ LLM_PROVIDER=gemini
 | `POST`| `/api/decide` | Evaluates guardrails and Thompson Sampling for a custom failure event |
 | `POST`| `/api/promises` | Records a customer Promise-to-Pay commitment |
 | `POST`| `/api/checkout/drop` | Captures checkout drop-off and triggers Hinglish recovery |
+| `GET` | `/api/upi/qr` | Generates standard NPCI-compliant URI and vector SVG QR code with universal & app-specific deep links (public exact path) |
+| `POST`| `/api/upi/simulate-payment` | Simulates customer scanning and completing UPI payment with authoritative domain-state settlement idempotency (protected route) |
 | `GET` | `/api/voice/scenarios` | Returns catalog of pre-rendered voice scenarios with dual-dialect audio URLs and synchronized karaoke subtitle cues (public exact path) |
 | `POST`| `/api/voice/call/{receivable_id}` | Initiates outbound voice AI IVR call, triggers Twilio/mock dispatch, streams `b2b.ivr.dispatched` event, and logs ₹1.50 IVR cost in audit ledger (protected route) |
 | `POST`| `/api/setu/consent/create` | Creates digital consent session (`CON-XXXXXXXX`) under RBI Account Aggregator framework |
@@ -808,13 +871,15 @@ To provide a **frictionless evaluation experience** for hackathon judges, local 
 
 ## 🔭 What's Next (Architecture Roadmap)
 
-1. **Redis-Backed Distributed Locks & Webhook Idempotency**:
-   - Production clustering with Redis distributed locking per `customer_vpa`/`invoice_id` and idempotency keys to handle duplicate or out-of-order gateway webhook delivery.
+1. **Dynamic UPI QR Code & Intent Deep Links Engine** — ✅ *Shipped in v2.5*:
+   - NPCI-compliant vector SVG generator, 1-click app switchers (`gpay://`, `phonepe://`, `paytmmp://`, `upi://`), authoritative domain-state settlement idempotency (zero revenue inflation), and multi-surface triggers.
 2. **Autonomous Voice AI Recovery (IVR / Twilio + Localized TTS)** — ✅ *Shipped in v2.4*:
    - Multi-dialect Microsoft Edge Neural speech engine (Hinglish `hi-IN-MadhurNeural`/`hi-IN-SwaraNeural` and Indian English `en-IN-PrabhatNeural`/`en-IN-NeerjaNeural`) with sub-second synchronized karaoke cues, authentic Indian standard dual-frequency telecom ringback (400Hz + 425Hz), MSMED Act Section 16 compounding penal interest notice, and Twilio Voice IVR integration.
 3. **Setu Account Aggregator (AA) Pre-Flight Verification** — ✅ *Shipped in v2.3*:
    - RBI-regulated consent-native sandbox integration with single-use digital consent sessions (`CON-XXXXXXXX`), 5 dataset persona presets, and dynamic Payer Trust Score feedback.
-4. **Cross-Merchant Federated Thompson Sampling**:
+4. **Redis-Backed Distributed Locks & Webhook Idempotency**:
+   - Production clustering with Redis distributed locking per `customer_vpa`/`invoice_id` and idempotency keys to handle duplicate or out-of-order gateway webhook delivery.
+5. **Cross-Merchant Federated Thompson Sampling**:
    - Privacy-preserving federated bandit learning across merchant networks to share optimal failure recovery priors without exposing customer PII.
 
 ---

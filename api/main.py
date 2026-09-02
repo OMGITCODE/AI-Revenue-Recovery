@@ -10,9 +10,12 @@ import json
 import sys
 import os
 import uuid
+import urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+import qrcode
+import qrcode.image.svg
 
 from fastapi import FastAPI, HTTPException, Request, Form
 from pydantic import BaseModel, Field
@@ -165,6 +168,7 @@ PUBLIC_EXACT_PATHS = {
     "/api/mandates/all",
     "/api/mandates/stats",
     "/api/voice/scenarios",
+    "/api/upi/qr",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -1724,6 +1728,181 @@ async def trigger_voice_call_preview(receivable_id: str, payload: Optional[Voice
         "channel": "ivr",
         "channel_cost": 1.50,
         "ledger_id": ledger_entry.ledger_id,
+        "overall_roi": recovery_ledger.overall_roi(),
+    }
+
+
+# ── Dynamic UPI QR & Intent Deep Links ────────────────────────────────────────
+
+_settled_qr_refs: set[str] = set()
+
+
+class UPISimulatePaymentRequest(BaseModel):
+    ref_id: str
+    amount: float
+    debtor_name: Optional[str] = "Customer"
+    vpa: Optional[str] = "customer@upi"
+    note: Optional[str] = "UPI QR Settlement"
+
+
+@app.get("/api/upi/qr")
+async def generate_upi_qr(
+    amount: float = 999.0,
+    vpa: str = "recoveriq@npci",
+    name: str = "RecoverIQ Technologies",
+    note: str = "Instant Revenue Recovery",
+    ref_id: str = "REC-DEMO",
+):
+    """
+    Generates standard NPCI-compliant UPI URI and scannable vector SVG QR code.
+    Stateless public generator (exempt from API key auth).
+    """
+    clean_vpa = vpa.strip() or "recoveriq@npci"
+    clean_name = name.strip() or "RecoverIQ Technologies"
+    clean_note = note.strip() or "Instant Revenue Recovery"
+    clean_ref = ref_id.strip() or "REC-DEMO"
+    clean_amt = max(1.0, float(amount))
+
+    # Standard NPCI UPI URI Scheme
+    params = {
+        "pa": clean_vpa,
+        "pn": clean_name,
+        "am": f"{clean_amt:.2f}",
+        "cu": "INR",
+        "tn": clean_note,
+        "tr": clean_ref,
+    }
+    encoded_query = urllib.parse.urlencode(params)
+    upi_uri = f"upi://pay?{encoded_query}"
+
+    # App-specific intent schemes
+    deep_links = {
+        "universal": upi_uri,
+        "gpay": f"gpay://upi/pay?{encoded_query}",
+        "phonepe": f"phonepe://pay?{encoded_query}",
+        "paytm": f"paytmmp://pay?{encoded_query}",
+    }
+
+    # Vector SVG generation via qrcode library (zero external dependencies)
+    factory = qrcode.image.svg.SvgPathImage
+    qr_img = qrcode.make(upi_uri, image_factory=factory, box_size=10, border=2)
+    svg_bytes = qr_img.to_string()
+    svg_str = svg_bytes.decode("utf-8") if isinstance(svg_bytes, bytes) else str(svg_bytes)
+
+    return {
+        "status": "success",
+        "upi_uri": upi_uri,
+        "deep_links": deep_links,
+        "qr_svg": svg_str,
+        "amount": clean_amt,
+        "formatted_amount": f"₹{clean_amt:,.2f}",
+        "vpa": clean_vpa,
+        "name": clean_name,
+        "note": clean_note,
+        "ref_id": clean_ref,
+    }
+
+
+@app.post("/api/upi/simulate-payment")
+async def simulate_upi_payment(req: UPISimulatePaymentRequest):
+    """
+    Simulates customer scanning and completing the dynamic UPI QR payment.
+    Protected under SecurityAndAuthMiddleware (requires API key if configured).
+    Enforces domain-state idempotency:
+      - For B2B invoices: checks if receivable is already 'settled'.
+      - For generic/cart refs: checks _settled_qr_refs and permanent recovery_ledger entries.
+    Deduplicates without double-counting recovered revenue or ledger metrics.
+    """
+    clean_ref = req.ref_id.strip()
+    clean_amt = max(1.0, float(req.amount))
+    clean_vpa = req.vpa.strip() if req.vpa else "customer@upi"
+    clean_name = req.debtor_name.strip() if req.debtor_name else "Customer"
+
+    # 1. Authoritative Domain-State Check for B2B Receivables
+    r_obj = next(
+        (r for r in b2b_chaser.all_receivables() if r.receivable_id == clean_ref or r.invoice_number == clean_ref),
+        None,
+    )
+    if r_obj:
+        if r_obj.status.lower() == "settled":
+            return {
+                "status": "already_settled",
+                "message": f"Invoice {r_obj.invoice_number} ({r_obj.debtor_name}) has already been settled.",
+                "ref_id": clean_ref,
+                "amount": r_obj.amount,
+                "already_settled": True,
+                "overall_roi": recovery_ledger.overall_roi(),
+            }
+        # Settle the B2B receivable via domain method
+        b2b_chaser.settle(r_obj.receivable_id, clean_amt or r_obj.amount)
+
+    # 2. Generic / Cart Reference Check: In-memory set + permanent ledger entries
+    ledger_duplicate = any(
+        e.outcome == "success" and clean_ref in e.reasoning for e in recovery_ledger._entries
+    )
+    if clean_ref in _settled_qr_refs or ledger_duplicate:
+        return {
+            "status": "already_settled",
+            "message": f"Payment for reference {clean_ref} was already verified & settled.",
+            "ref_id": clean_ref,
+            "amount": clean_amt,
+            "already_settled": True,
+            "overall_roi": recovery_ledger.overall_roi(),
+        }
+
+    _settled_qr_refs.add(clean_ref)
+
+    # 3. Log recovery to immutable audit ledger
+    reasoning = f"Dynamic UPI QR payment verified & settled for {clean_ref} ({clean_name})."
+    ledger_entry = recovery_ledger.log(
+        event_type="recover",
+        vpa=clean_vpa,
+        amount=clean_amt,
+        reasoning=reasoning,
+        confidence=0.99,
+        channel="upi_collect",
+        outcome="success",
+        recovery_type="reactive",
+    )
+    recovery_ledger.mark_outcome(ledger_entry.ledger_id, "success", clean_amt)
+
+    # 4. Bayesian Posterior Update for Contextual Bandit
+    ckey = get_context_key("upi_collect", "consumer_tier", "med")
+    bandit_engine.update(context_key=ckey, arm="upi_collect", success=True, amount_recovered=clean_amt)
+
+    # 5. Push live event to dashboard stream
+    from api.store import RecoveryEvent, IST
+    now_ist = datetime.now(IST).strftime("%H:%M:%S")
+    ev = RecoveryEvent(
+        id=f"EVT-QR-{uuid.uuid4().hex[:6].upper()}",
+        timestamp=now_ist,
+        event_type="upi.qr.settled",
+        failure_code="QR_SETTLED",
+        failure_reason=reasoning,
+        customer_id=clean_name,
+        customer_vpa=clean_vpa,
+        bank="NPCI UPI Switch",
+        amount=clean_amt,
+        severity="low",
+        interventions=["upi_qr_collect"],
+        intervention_msgs=[f"Dynamic UPI QR scanned & settled for ₹{clean_amt:,.2f} by {clean_name}"],
+        scheduled_at=None,
+        action_url=None,
+        success=True,
+        status="recovered",
+        amount_recovered=clean_amt,
+        scenario_name=f"UPI QR Recovery: {clean_name}",
+        trust_score=0.95,
+    )
+    await store.add_event(ev)
+
+    return {
+        "status": "success",
+        "message": f"Payment of ₹{clean_amt:,.2f} verified via UPI QR.",
+        "ref_id": clean_ref,
+        "amount": clean_amt,
+        "ledger_id": ledger_entry.ledger_id,
+        "already_settled": False,
         "overall_roi": recovery_ledger.overall_roi(),
     }
 

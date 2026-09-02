@@ -3354,5 +3354,288 @@ body {
   background: #B91C1C;
 }
 
+/* ── Dynamic UPI QR Code & Intent Deep Links Modal ────────────────────── */
+.upi-qr-phone-modal {
+  width: 92%;
+  max-width: 480px;
+  max-height: 92vh;
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid rgba(59,130,246,0.25);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(59,130,246,0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+.upi-qr-modal-content {
+  overflow-y: auto;
+  padding: 16px 20px 22px;
+}
+
+.upi-qr-phone-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.upi-qr-gateway-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(59,130,246,0.08);
+  border: 1px solid rgba(59,130,246,0.2);
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.upi-qr-brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.upi-qr-ssl-badge {
+  color: var(--green);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+
+.upi-qr-disclaimer-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.upi-qr-card {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+.upi-qr-card-header {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.upi-qr-scan-hint {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.upi-qr-svg-wrapper {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+
+.upi-qr-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #2563eb;
+  border-style: solid;
+  border-width: 0;
+}
+.upi-qr-corner.top-left { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; }
+.upi-qr-corner.top-right { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; }
+.upi-qr-corner.bottom-left { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; }
+.upi-qr-corner.bottom-right { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; }
+
+.upi-qr-svg-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upi-qr-svg-container svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.upi-qr-amount-hero {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 12px;
+  letter-spacing: -0.5px;
+}
+
+.upi-qr-tx-details {
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.upi-qr-detail-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.upi-qr-detail-row .label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.upi-qr-detail-row .val {
+  font-weight: 600;
+}
+
+.upi-qr-intent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upi-qr-intent-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.upi-qr-intent-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upi-intent-btn.universal {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  text-align: center;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+}
+
+.upi-intent-btn.universal:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+}
+
+.upi-intent-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.upi-intent-btn {
+  padding: 8px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.upi-intent-btn.gpay {
+  border-color: rgba(59,130,246,0.4);
+  color: #60a5fa;
+  background: rgba(59,130,246,0.06);
+}
+
+.upi-intent-btn.phonepe {
+  border-color: rgba(168,85,247,0.4);
+  color: #c084fc;
+  background: rgba(168,85,247,0.06);
+}
+
+.upi-intent-btn.paytm {
+  border-color: rgba(6,182,212,0.4);
+  color: #22d3ee;
+  background: rgba(6,182,212,0.06);
+}
+
+.btn-copy-link {
+  font-size: 11px;
+  padding: 6px 10px;
+  width: 100%;
+}
+
+.upi-qr-settle-bar {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.upi-settle-btn {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(16,185,129,0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upi-settle-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.upi-settle-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  background: rgba(16,185,129,0.3);
+}
+
+.upi-qr-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(37,99,235,0.2);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 
 
