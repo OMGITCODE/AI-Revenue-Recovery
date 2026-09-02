@@ -341,6 +341,10 @@ class WhatsAppInboundHandler:
         Processes the inbound WhatsApp message, executes system state transitions,
         and returns an empathetic Hinglish/English auto-response.
         """
+        if from_phone and "@" in from_phone and not customer_vpa:
+            customer_vpa = from_phone
+            from_phone = ""
+
         if from_phone or customer_vpa or customer_id:
             customer_identity_registry.resolve_canonical_id(customer_vpa, from_phone, customer_id)
 

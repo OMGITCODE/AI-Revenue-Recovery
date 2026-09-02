@@ -2081,6 +2081,14 @@ async function sendInboundMessage(fromPhone, message, amount) {
   const btn = document.getElementById('wa-send-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
   
+  const isVpa = fromPhone.includes('@');
+  const payload = {
+    from_phone: isVpa ? '' : fromPhone,
+    customer_vpa: isVpa ? fromPhone : '',
+    message: message,
+    amount: amount,
+  };
+
   // Append user bubble to chat window
   appendChatBubble('user', message, {
     from: fromPhone,
@@ -2091,12 +2099,7 @@ async function sendInboundMessage(fromPhone, message, amount) {
     const res = await fetch('/api/webhook/whatsapp/inbound', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from_phone: fromPhone,
-        customer_vpa: '',
-        message: message,
-        amount: amount,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -2111,6 +2114,9 @@ async function sendInboundMessage(fromPhone, message, amount) {
 
     toast(`💬 Intent classified: ${data.intent.toUpperCase()} (${Math.round(data.confidence * 100)}%)`, 'ok');
     await loadModules();
+    await loadP2P();
+    await loadLedger();
+    if (typeof loadStats === 'function') await loadStats();
   } catch (err) {
     toast(`Inbound error: ${err.message}`, 'err');
   } finally {
