@@ -127,46 +127,61 @@ The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the cus
 ### 3. Unified Customer Identity Graph & Customer 360 Architecture
 Payment failures do not happen in a vacuum — a single customer frequently transacts across multiple payment methods, secondary VPAs, and bank accounts. RecoverIQ solves fragmented customer tracking through the **Canonical Customer Identity Graph** ([`customer_identity.py`](file:///src/agent/customer_identity.py)), uniting all decision modules, financial rails, and recovery channels around the same canonical entity:
 
-```
-                       ┌────────────────────────────────────────────────────────┐
-                       │          Canonical Customer Identity Graph             │
-                       │             ID: cust:rahul@oksbi                       │
-                       │  Aliases: rahul@oksbi · rahul.sharma@okaxis            │
-                       │           +919800000001 · CUST-SBI-001                │
-                       └──────────────────────────┬─────────────────────────────┘
-                                                  │
-         ┌───────────────────┬────────────────────┼───────────────────┬────────────────────┐
-         ▼                   ▼                    ▼                   ▼                    ▼
-┌─────────────────┐ ┌─────────────────┐  ┌─────────────────┐ ┌─────────────────┐  ┌─────────────────┐
-│ Spend Pattern   │ │ Setu Account    │  │ Salary-Cycle    │ │ Payer Trust     │  │ 2-Way WhatsApp  │
-│ Anomaly Engine  │ │ Aggregator (AA) │  │ Retry Scheduler │ │ & P2P Tracker   │  │ Conversational  │
-│ Mean: ₹991      │ │ Balance: ₹433   │  │ Rescheduled to: │ │ Score: 0.40     │  │ "Bhai kal pay   │
-│ Range: ₹899-₹1k │ │ Signal: Low     │  │ 1st Oct, 10 AM  │ │ Suppresses DND  │  │  kar dunga"     │
-│ Anti-Depletion  │ │ No Blind Retry  │  │ (Salary Window) │ │ Active Promise  │  │ NLP: PROMISE    │
-└────────┬────────┘ └────────┬────────┘  └────────┬────────┘ └────────┬────────┘  └────────┬────────┘
-         │                   │                    │                   │                    │
-         └───────────────────┴────────────────────┼───────────────────┴────────────────────┘
-                                                  ▼
-                       ┌────────────────────────────────────────────────────────┐
-                       │           Thompson Sampling Contextual Bandit          │
-                       │ Context: [U30 : Silver : LowTrust] ⟹ Action: IVR / Nudge│
-                       └──────────────────────────┬─────────────────────────────┘
-                                                  │
-                 ┌────────────────────────────────┴────────────────────────────────┐
-                 ▼                                                                 ▼
-┌───────────────────────────────────────────────┐                 ┌───────────────────────────────────┐
-│     Proactive Mandate Expiry Interceptor      │                 │  Outbound Voice AI Outreach Studio │
-│ Mandate: mand_sbi_exp_001 (₹999 OTT Pass)     │                 │ Persona: Rahul Sharma (₹999 Cart) │
-│ Scanned at T-36h ⟹ 1-Click WhatsApp Renewal   │                 │ hi-IN-SwaraNeural · ₹1.50 IVR Cost │
-└───────────────────────┬───────────────────────┘                 └─────────────────┬─────────────────┘
-                        │                                                           │
-                        └─────────────────────────────┬─────────────────────────────┘
-                                                      ▼
-                       ┌────────────────────────────────────────────────────────┐
-                       │          Immutable Regulatory Recovery Ledger          │
-                       │  Logs reasoning, confidence, and ₹ channel unit costs   │
-                       │  Separates Reactive Recovered vs Proactive Protected   │
-                       └────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph ID_GRAPH["👤 Canonical Customer Identity Graph"]
+        CUST["<b>cust:rahul@oksbi</b><br/>Aliases: rahul@oksbi · rahul.sharma@okaxis · +919800000001 · CUST-SBI-001"]
+    end
+
+    subgraph SIGNALS["🔍 Multi-Vector Intelligence Signals"]
+        SPEND["📊 Spend Anomaly Engine<br/>Mean: ₹991 (₹899–₹1,099)<br/><b>Anti-Depletion (GR10)</b>"]
+        SETU["🏦 Setu Account Aggregator<br/>Balance: ₹433.50 vs ₹999 Due<br/><b>Signal: Low (No Blind Retry)</b>"]
+        SALARY["📅 Salary-Cycle Scheduler<br/>Rescheduled: 1st Oct, 10:00 AM<br/><b>(Salary Credit Window)</b>"]
+        TRUST["⭐ Payer Trust & P2P Tracker<br/>Trust Score: 0.40 · Active Promise<br/><b>Suppresses Outbound Dunning</b>"]
+        NLP["💬 2-Way WhatsApp NLP<br/>'Bhai kal pay kar dunga'<br/><b>Intent: PROMISE</b>"]
+    end
+
+    subgraph DECISION["🎯 Contextual Decision Engine"]
+        BANDIT["🎰 Thompson Sampling Bandit (Beta Priors)<br/>Context: [U30 : Silver : LowTrust]<br/><b>Utility = argmax (θ × Amount - Cost)</b>"]
+    end
+
+    subgraph RAILS["⚡ Multi-Channel Execution Rails"]
+        MANDATE["🛡️ Proactive Mandate Interceptor<br/>mand_sbi_exp_001 (₹999 OTT Pass)<br/><b>T-36h 1-Click WhatsApp Renewal</b>"]
+        VOICE["📞 Outbound Voice AI Studio<br/>Rahul Sharma (₹999 Cart Drop-off)<br/><b>hi-IN-SwaraNeural · ₹1.50 IVR Cost</b>"]
+    end
+
+    subgraph AUDIT["⚖️ Regulatory Audit Rail"]
+        LEDGER["📋 Immutable Regulatory Recovery Ledger<br/>1-line reasoning · confidence · channel costs<br/><b>Reactive Recoveries vs Proactive Protected</b>"]
+    end
+
+    CUST --> SPEND
+    CUST --> SETU
+    CUST --> SALARY
+    CUST --> TRUST
+    CUST --> NLP
+
+    SPEND --> BANDIT
+    SETU --> BANDIT
+    SALARY --> BANDIT
+    TRUST --> BANDIT
+    NLP --> BANDIT
+
+    BANDIT --> MANDATE
+    BANDIT --> VOICE
+
+    MANDATE --> LEDGER
+    VOICE --> LEDGER
+
+    classDef primary fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#ffffff;
+    classDef nodeStyle fill:#0f172a,stroke:#334155,stroke-width:1px,color:#f8fafc;
+    classDef highlight fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff;
+    classDef ledger fill:#172554,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
+
+    class CUST primary;
+    class SPEND,SETU,SALARY,TRUST,NLP nodeStyle;
+    class BANDIT primary;
+    class MANDATE,VOICE highlight;
+    class LEDGER ledger;
 ```
 
 - **Alias Merging**: Resolves fragmented identifiers (`vpa`, `phone`, `email`, `customer_id`) into a single canonical profile (`cust:rahul@oksbi`).
