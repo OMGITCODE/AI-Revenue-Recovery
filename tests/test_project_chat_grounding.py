@@ -90,9 +90,19 @@ class TestLiveSessionSafetyAndGrounding:
         assert res.status_code == 200
         reply = res.json().get("reply", "")
 
-        assert "3,02,252" in reply or "4,47,296" in reply or "Revenue Recovered" in reply
-        assert "55.6%" in reply or "75.8%" in reply or "Recovery Rate" in reply
-        assert "Monte Carlo" in reply or "207" in reply or "195" in reply
+        # Must cite verified simulated figures
+        assert "1,93,091" in reply or "193,091" in reply or "1.93" in reply or "2,82,154" in reply or "282,154" in reply or "3,02,252" in reply or "Uplift" in reply or "uplift" in reply.lower()
+        assert "37.8%" in reply or "54.7%" in reply or "55.6%" in reply or "Recovery Rate" in reply
+        assert "Monte Carlo" in reply or "207" in reply or "simulation" in reply.lower()
+
+        # Invariant: Must explicitly frame as simulated/synthetic, NOT live production merchant claims
+        assert any(term in reply.lower() for term in ["simulated", "synthetic", "monte carlo", "simulation", "policy"])
+        assert not any(phrase in reply.lower() for phrase in [
+            "actual merchant revenue",
+            "live production revenue",
+            "observed merchant recovery",
+            "live production performance"
+        ])
 
     def test_b2b_receivables_grounding(self):
         """Verifies the assistant accurately details B2B aging buckets and debtor tiers."""

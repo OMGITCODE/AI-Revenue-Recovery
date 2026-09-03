@@ -5,7 +5,7 @@
 # 🔄 RecoverIQ — AI Revenue Recovery Agent
 
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
-> Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.  
+> `+₹1.93L mean simulated recovery uplift across 60 curated synthetic UPI failure scenarios (50 Monte Carlo runs), with compliance violations reduced from 7 to 0.`  
 > *(Note: All benchmark recovery figures reported are derived from controlled Monte Carlo simulation models calibrated against published Indian FinTech conversion benchmarks, not live production claims.)*
 
 [![Tests](https://img.shields.io/badge/tests-207%20passed-brightgreen.svg)]()
@@ -16,7 +16,10 @@
 
 ---
 
-## 📊 The Bar: Simulated Benchmark (Monte Carlo Policy Comparison vs. Razorpay Default)
+## 📊 Synthetic Benchmark — Not Production Performance (Monte Carlo Policy Comparison vs. Razorpay Default)
+
+> [!NOTE]
+> **Synthetic Benchmark Disclosure**: All evaluation metrics below are derived from 50 Monte Carlo simulation runs across our 60 curated synthetic failure archetypes, calibrated from published Indian FinTech research (Razorpay, NPCI, Juspay conversion benchmarks). These figures represent controlled policy comparisons against fixed-schedule retries, not live production merchant claims.
 
 To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event curated synthetic UPI Autopay failure dataset (modeled on Indian FinTech failure archetypes).
 
@@ -27,13 +30,30 @@ Outcomes are **probabilistic**, modeled from published Indian FinTech and paymen
 | Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
 | **Total Revenue at Stake** | ₹5,90,171 | ₹5,90,171 | — |
-| **Revenue Recovered** *(mean, n=50)* | **₹91,577 ± ₹41,408** | **₹3,02,252 ± ₹88,534** | **+₹2,10,675 mean uplift** |
-| **Recovery Rate** *(mean ± std, n=50)* | 17.3% ± 3.9% | **55.6% ± 4.4%** | **+38.2% pts mean** |
-| **BT01/BT02 Mandate Renewal** | 0% (blind retry) | **~68%** (WhatsApp magic link) | +68 pts |
+| **Revenue Recovered** *(mean, n=50)* | **₹89,063 ± ₹43,728** | **₹2,82,154 ± ₹77,144** | **+₹193,091 mean uplift** |
+| **Recovery Rate** *(mean ± std, n=50)* | 16.9% ± 3.8% | **54.7% ± 6.6%** | **+37.8% pts mean** |
+| **BT01/BT02 Mandate Renewal** | 0% (blind retry fails) | **~68%** (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
 | **Compliance Violations (RBI/DND)** | 7 (silent retries + DND breaches) | **0 (100% compliant)** | **-7 eliminated** |
 | **Total Retries Fired** | 180 (blind flood) | **20 (salary-targeted)** | **-160 wasted retries** |
-| **Net ROI** *(mean ± std, n=50)* | **₹91,487 ± ₹41,408** | **₹3,01,864 ± ₹88,539** | **+₹2,10,378 mean uplift** |
+| **Net ROI** *(mean ± std, n=50)* | **₹88,973 ± ₹43,728** | **₹281,768 ± ₹77,164** | **+₹192,795 mean uplift** |
+
+### 📈 Statistical Uplift Rigor & Empirical Distribution (50 Paired Simulation Trials)
+
+To ensure scientific reproducibility and verify that the uplift is not an artifact of random sampling, `benchmark.py` evaluates paired trials across identical seeds and computes sample standard error with Student's $t$-distribution ($df=49$):
+
+- **Mean Simulated Net Uplift**: **+₹193,091 ± ₹78,177**
+- **95% Confidence Interval ($t=49$)**: **[+₹170,873, +₹215,309]**
+- **Mean Recovery Rate Uplift**: **+37.8% pts ± 6.8% pts** (95% CI: `[+35.9%, +39.7%]`)
+- **Empirical Win Rate**: **100.0%** (50/50 paired trials with positive uplift)
+
+| Distribution Metric (50 Paired Trials) | Simulated Net Revenue Uplift |
+|---|---|
+| **Minimum observed simulated uplift** | **+₹62,637** |
+| **25th percentile (Q1)** | **+₹131,359** |
+| **50th percentile (Median)** | **+₹179,464** |
+| **75th percentile (Q3)** | **+₹251,096** |
+| **Maximum observed simulated uplift** | **+₹369,539** |
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 
@@ -734,7 +754,7 @@ A dedicated copilot assistant accessible via the dashboard navbar (`✨ 🤖 Ask
 - **Zero-Division & Empty-State Resilience**: All aggregations are defensively wrapped with individual `try/except` fallbacks and zero-guarded divisions (`if len(...) else 0`). Even on a fresh server instance with 0 records, `/api/project-chat` is guaranteed never to crash or throw division-by-zero errors.
 - **🛡️ Anti-Hallucination Invariant (Live Session vs. Benchmark Proof)**:
   - **Live Active Session Queries** (*"How much have we recovered in this session?"*): Reports strictly what has occurred in the active runtime instance. On a fresh clone, it reports **₹0 recovered** across 0 transactions and invites the user to run a scenario.
-  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹3,02,252 recovered, 55.6% recovery rate vs. 17.3% baseline**).
+  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹2,82,154 recovered, 54.7% recovery rate vs. 16.9% baseline $\implies$ +₹1,93,091 mean simulated uplift, 95% CI: [+₹1,70,873, +₹2,15,309]**).
   - The model and deterministic fallback are strictly prohibited from substituting or blurring benchmark proof numbers into active session responses.
 - **Universal Multi-Scenario Context Binding**:
   - Automatically correlates queries against active or recently simulated scenarios in `store._events` (matching VPA, Customer ID, scenario title, or error code).
@@ -847,7 +867,7 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 
 RecoverIQ provides a dual-layer evaluative architecture directly inside the dashboard with an interactive segmented toggle:
 - **`🔴 Live Session Actuals` (Default)**: Dynamically evaluates the exact events currently active on the dashboard. Compares live recoveries, costs, and 0 compliance violations against what legacy fixed-schedule retry ($D+1, D+2, D+3$ blind retry) *would have done on those exact same events*. Auto-syncs in real time via SSE upon new event generation.
-- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **55.6% ± 4.4%** recovery vs. **17.3%** baseline (+38.2 pts uplift) with automated 20% sensitivity haircut analysis.
+- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **54.7% ± 6.6%** recovery vs. **16.9%** baseline (+37.8 pts uplift) with automated 20% sensitivity haircut analysis.
 
 ---
 

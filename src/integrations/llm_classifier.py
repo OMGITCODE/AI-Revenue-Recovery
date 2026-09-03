@@ -369,11 +369,11 @@ Answer user questions accurately, factually, and concisely based on the project 
 CRITICAL DISTINCTION INVARIANT (NEVER BLUR BENCHMARK VS. LIVE SESSION):
 1. LIVE SESSION METRICS vs. PUBLISHED BENCHMARK PROOF are two completely distinct, separate datasets:
    - "LIVE ACTIVE SESSION STATE": Reflects what has executed in the current runtime session so far (detailed in the CURRENT LIVE SESSION METRICS block below). On a fresh server clone or before any scenarios are run, this will be ₹0 recovered across 0 transactions. If the user asks "how much have we recovered in this session", "current session stats", "live recovered amount", or "session recovery rate", YOU MUST REPORT THE EXACT REAL-TIME NUMBERS FROM THE LIVE SESSION STATE BLOCK. If it is ₹0, state clearly: "In this active session, ₹0 has been recovered so far across 0 transactions. Run a scenario or test simulation in the dashboard above to see live recovery in action."
-   - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo evaluation runs over the 60-scenario dataset documented in the README (₹3,02,252 ± ₹88,534 recovered, 55.6% ± 4.4% recovery rate vs 17.3% baseline, 20 retries vs 180 blind retries, 207 test cases). YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
-   - NEVER substitute, quote, or blur the benchmark figures (₹3,02,252 / 55.6%) when answering questions about the current live session!
+   - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo simulation runs over the 60 curated synthetic failure scenarios documented in the README (RecoverIQ: ₹2,82,154 ± ₹77,144 vs. Baseline: ₹89,063 ± ₹43,728 → Mean Simulated Net Uplift: +₹1,93,091 ± ₹78,177 with 95% CI: [+₹1,70,873, +₹2,15,309], 54.7% ± 6.6% recovery rate vs 16.9% ± 3.8% baseline, 20 retries vs 180 blind retries, 207 test cases). This is a controlled synthetic simulation benchmark, NOT observed live merchant production performance. YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
+   - NEVER substitute, quote, or blur the benchmark figures (+₹1.93L / 54.7%) when answering questions about the current live session!
 
 Rules:
-1. Ground all numbers and architectural facts in the README below (e.g. ₹3,02,252 ± ₹88,534 recovered (vs. ₹91,577 baseline) → +₹2,10,675 mean net uplift, 55.6% ± 4.4% (vs. 17.3% baseline) → +38.2 percentage points, 207 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
+1. Ground all numbers and architectural facts in the README below (e.g. +₹1,93,091 ± ₹78,177 mean simulated net uplift [95% CI: +₹1,70,873 to +₹2,15,309], 54.7% ± 6.6% (vs. 16.9% baseline) → +37.8 percentage points, 207 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k). Always clearly state that this is a simulated benchmark comparison, not live merchant production claims.
 2. Deep Platform Architecture:
    - B2B Receivables Chaser: Aging buckets 0-30d (gentle WhatsApp/email), 31-60d (firm notice + AR escalation), 61-90d (formal demand + 18% p.a. interest charge notice), 90d+ (collections/legal referral). Debtor Tiers: Tier A (>₹2L, dedicated manager), Tier B (₹25k-₹2L, AR specialist), Tier C (<₹25k, automated IVR).
    - Checkout Drop-off Recovery: Captures drop-off reasons (payment_page_exit, otp_timeout, bank_error_exit, upi_intent_abandoned, address_form_exit), fires smart re-engagement links with pre-filled carts at T+10m, T+1h, T+24h.
@@ -523,20 +523,25 @@ Rules:
                 f"- **Reactive Recovered**: ₹{reactive:,.2f} | **Proactive Protected**: ₹{proactive:,.2f}\n"
                 f"- **Active Compliance Holds**: {holds} | **Suppressed Contacts**: {suppressed}\n"
                 f"- **Active Promises-to-Pay**: {promises} pending\n\n"
-                "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline benchmark evaluation of ₹3,02,252 across 50 Monte Carlo runs.)*"
+                "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline simulated benchmark evaluation of +₹1.93L mean uplift across 50 Monte Carlo runs.)*"
             )
 
         # ── 2. Published Offline Benchmark Results ──────────────────────────────
         if "benchmark" in q or "results" in q or "uplift" in q or "monte carlo" in q:
             return (
-                "**RecoverIQ Published Benchmark Results (50 Monte Carlo Runs vs. Razorpay Baseline):**\n\n"
-                "Across 50 Monte Carlo simulation runs on our 60-scenario curated synthetic failure dataset:\n"
-                "- **Total Recovered Revenue**: **₹3,02,252 ± ₹88,534** (vs. ₹91,577 baseline) → **+₹2,10,675 mean net uplift**\n"
-                "- **Recovery Rate**: **55.6% ± 4.4%** (vs. 17.3% baseline) → **+38.2 percentage points**\n"
-                "- **Retries Fired**: Reduced from 180 blind retries to **20 targeted retries** (saving 160 unnecessary bank attempts)\n"
-                "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
+                "**RecoverIQ Published Synthetic Benchmark Results (50 Monte Carlo Simulation Runs vs. Razorpay Baseline):**\n\n"
+                "*(Note: All figures represent a controlled synthetic simulation comparison across 60 curated failure archetypes calibrated on published Indian FinTech conversion models, not observed live merchant production revenue.)*\n\n"
+                "- **Mean Simulated Net Uplift**: **+₹1,93,091 ± ₹78,177**\n"
+                "  - RecoverIQ AI Agent: ₹2,82,154 ± ₹77,144\n"
+                "  - Baseline Fixed Retry: ₹89,063 ± ₹43,728\n"
+                "- **95% Confidence Interval (t=49)**: **[+₹1,70,873, +₹2,15,309]**\n"
+                "- **Mean Recovery Rate Uplift**: **+37.8% pts ± 6.8% pts** (RecoverIQ: **54.7% ± 6.6%** vs. Baseline: 16.9% ± 3.8%)\n"
+                "- **95% CI Recovery Rate**: **[+35.9%, +39.7%]**\n"
+                "- **Empirical Win Rate**: **100.0%** (50/50 paired simulation trials with positive uplift)\n"
+                "- **Compliance Breaches**: **0 violations** (vs. 7 baseline violations in benchmark suite)\n"
+                "- **Wasted Retries**: Reduced from 180 blind flood retries to **20 targeted retries** (-160 retries)\n"
                 "- **Test Suite**: 207 automated unit & integration test cases passing across 14 files.\n\n"
-                "*(Note: These figures represent the published 50-run evaluation over the 60-scenario dataset, distinct from the active live session state.)*"
+                "*(These figures represent the published 50-run synthetic evaluation over the 60-scenario dataset, distinct from the active live session state.)*"
             )
 
         # ── 3. B2B Receivables Chaser ───────────────────────────────────────────

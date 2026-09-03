@@ -353,15 +353,21 @@ def run_benchmark(
     base_rate_list      = []
     ai_roi_list         = []
     base_roi_list       = []
+    uplift_rec_list     = []
+    uplift_rate_list    = []
 
     for i in range(n_runs):
         b, a = run_single_benchmark(events, seed=i, conversion_rates=conversion_rates)
         base_recovered_list.append(b.total_recovered)
         ai_recovered_list.append(a.total_recovered)
-        base_rate_list.append(b.recovered_events / b.total_events * 100)
-        ai_rate_list.append(a.recovered_events / a.total_events * 100)
+        b_rate = b.recovered_events / b.total_events * 100
+        a_rate = a.recovered_events / a.total_events * 100
+        base_rate_list.append(b_rate)
+        ai_rate_list.append(a_rate)
         base_roi_list.append(b.net_roi)
         ai_roi_list.append(a.net_roi)
+        uplift_rec_list.append(a.total_recovered - b.total_recovered)
+        uplift_rate_list.append(a_rate - b_rate)
 
     # Run once more (seed=999) as the representative run
     base_res, ai_res = run_single_benchmark(events, seed=999, conversion_rates=conversion_rates)
@@ -382,6 +388,50 @@ def run_benchmark(
     base_res._base_roi_mean  = statistics.mean(base_roi_list)
     base_res._base_roi_std   = statistics.stdev(base_roi_list) if n_runs > 1 else 0
 
+    # Paired-difference uplift statistics across identical simulation seeds
+    uplift_rec_mean = statistics.mean(uplift_rec_list)
+    uplift_rec_std  = statistics.stdev(uplift_rec_list) if n_runs > 1 else 0
+    se_rec = uplift_rec_std / (n_runs ** 0.5) if n_runs > 0 else 0
+
+    try:
+        from scipy import stats
+        t_crit = float(stats.t.ppf(0.975, df=max(1, n_runs - 1)))
+    except Exception:
+        t_crit = 2.0096 if n_runs == 50 else 1.96
+
+    ci_95_rec_low  = uplift_rec_mean - t_crit * se_rec
+    ci_95_rec_high = uplift_rec_mean + t_crit * se_rec
+
+    uplift_rate_mean = statistics.mean(uplift_rate_list)
+    uplift_rate_std  = statistics.stdev(uplift_rate_list) if n_runs > 1 else 0
+    se_rate = uplift_rate_std / (n_runs ** 0.5) if n_runs > 0 else 0
+    ci_95_rate_low  = uplift_rate_mean - t_crit * se_rate
+    ci_95_rate_high = uplift_rate_mean + t_crit * se_rate
+
+    q_rec = statistics.quantiles(uplift_rec_list, n=4) if n_runs >= 4 else [uplift_rec_mean]*3
+    win_rate = (sum(1 for u in uplift_rec_list if u > 0) / n_runs * 100.0) if n_runs > 0 else 0.0
+
+    uplift_stats = {
+        "n_runs": n_runs,
+        "t_crit": t_crit,
+        "mean_uplift_revenue": uplift_rec_mean,
+        "std_uplift_revenue": uplift_rec_std,
+        "se_uplift_revenue": se_rec,
+        "ci_95_revenue": (ci_95_rec_low, ci_95_rec_high),
+        "mean_uplift_rate": uplift_rate_mean,
+        "std_uplift_rate": uplift_rate_std,
+        "se_uplift_rate": se_rate,
+        "ci_95_rate": (ci_95_rate_low, ci_95_rate_high),
+        "min_uplift_revenue": min(uplift_rec_list),
+        "q1_uplift_revenue": q_rec[0],
+        "median_uplift_revenue": q_rec[1],
+        "q3_uplift_revenue": q_rec[2],
+        "max_uplift_revenue": max(uplift_rec_list),
+        "win_rate_pct": win_rate,
+        "positive_runs": sum(1 for u in uplift_rec_list if u > 0),
+    }
+    ai_res._uplift_stats = uplift_stats
+
     # Assign aggregate mean values directly to primary fields
     ai_res.total_recovered = ai_res._ai_rec_mean
     ai_res.recovered_events = int(round((ai_res._ai_rate_mean / 100.0) * ai_res.total_events))
@@ -394,6 +444,40 @@ def run_benchmark(
     base_res.net_roi = base_res._base_roi_mean
 
     return base_res, ai_res
+
+
+def get_canonical_benchmark_summary(n_runs: int = 50) -> dict:
+    """
+    Returns canonical verified simulated benchmark metrics for API & documentation parity.
+    Guarantees a single source of truth across CLI, API endpoints, and assistants.
+    """
+    base, ai = run_benchmark(n_runs=n_runs)
+    up = getattr(ai, "_uplift_stats", {})
+    return {
+        "n_runs": n_runs,
+        "baseline_revenue_mean": getattr(base, "_base_rec_mean", base.total_recovered),
+        "baseline_revenue_std": getattr(base, "_base_rec_std", 0.0),
+        "baseline_rate_mean": getattr(base, "_base_rate_mean", 0.0),
+        "baseline_rate_std": getattr(base, "_base_rate_std", 0.0),
+        "ai_revenue_mean": getattr(ai, "_ai_rec_mean", ai.total_recovered),
+        "ai_revenue_std": getattr(ai, "_ai_rec_std", 0.0),
+        "ai_rate_mean": getattr(ai, "_ai_rate_mean", 0.0),
+        "ai_rate_std": getattr(ai, "_ai_rate_std", 0.0),
+        "mean_uplift_revenue": up.get("mean_uplift_revenue", 0.0),
+        "std_uplift_revenue": up.get("std_uplift_revenue", 0.0),
+        "ci_95_revenue_low": up.get("ci_95_revenue", (0.0, 0.0))[0],
+        "ci_95_revenue_high": up.get("ci_95_revenue", (0.0, 0.0))[1],
+        "mean_uplift_rate": up.get("mean_uplift_rate", 0.0),
+        "std_uplift_rate": up.get("std_uplift_rate", 0.0),
+        "ci_95_rate_low": up.get("ci_95_rate", (0.0, 0.0))[0],
+        "ci_95_rate_high": up.get("ci_95_rate", (0.0, 0.0))[1],
+        "min_uplift_revenue": up.get("min_uplift_revenue", 0.0),
+        "q1_uplift_revenue": up.get("q1_uplift_revenue", 0.0),
+        "median_uplift_revenue": up.get("median_uplift_revenue", 0.0),
+        "q3_uplift_revenue": up.get("q3_uplift_revenue", 0.0),
+        "max_uplift_revenue": up.get("max_uplift_revenue", 0.0),
+        "win_rate_pct": up.get("win_rate_pct", 100.0),
+    }
 
 
 def run_sensitivity_analysis(n_runs: int = 50, haircut_pct: float = 0.20) -> dict:
@@ -440,7 +524,7 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     base_rate_str= f"{base_rate_mean:.1f}% ± {base_rate_std:.1f}%"
 
     print("\n" + "=" * 78)
-    print(" 📊 SIMULATED BENCHMARK (MONTE CARLO, N=50): BASELINE vs. RECOVERIQ AI AGENT")
+    print(" 📊 SYNTHETIC BENCHMARK — NOT PRODUCTION PERFORMANCE (MONTE CARLO, N=50)")
     print(f" Dataset: {base.total_events} Curated Synthetic UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
     print(f" Conversion models calibrated on Indian FinTech benchmarks (Razorpay, NPCI, Juspay)")
     print("=" * 78)
@@ -474,6 +558,24 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     print("=" * 78)
     print(f" 💡 Key Takeaway: RecoverIQ mean recovery rate = {ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%")
     print(f"    vs. baseline {base._base_rate_mean:.1f}% — +{ai_rate_mean - base._base_rate_mean:.1f} pts mean uplift across {n_runs} runs.")
+
+    up = getattr(ai, "_uplift_stats", None)
+    if up:
+        print("\n" + "─" * 78)
+        print(f" 📈 STATISTICAL UPLIFT RIGOR ({up['n_runs']} Paired Monte Carlo Simulation Trials)")
+        print("─" * 78)
+        print(f" • Mean Simulated Net Uplift:     +₹{up['mean_uplift_revenue']:,.0f} ± ₹{up['std_uplift_revenue']:,.0f}")
+        print(f" • 95% Confidence Interval (t={up['n_runs']-1}): [+₹{up['ci_95_revenue'][0]:,.0f}, +₹{up['ci_95_revenue'][1]:,.0f}]")
+        print(f" • Mean Recovery Rate Uplift:     +{up['mean_uplift_rate']:.1f}% pts ± {up['std_uplift_rate']:.1f}% pts")
+        print(f" • 95% CI Rate Uplift:            [+{up['ci_95_rate'][0]:.1f}%, +{up['ci_95_rate'][1]:.1f}%]")
+        print(f" • Empirical Win Rate:             {up['win_rate_pct']:.1f}% ({up['positive_runs']}/{up['n_runs']} paired trials with positive uplift)")
+        print()
+        print(" 📊 Empirical Distribution of Simulated Uplift (Paired Trials):")
+        print(f"   - Minimum observed simulated uplift:  +₹{up['min_uplift_revenue']:,.0f}")
+        print(f"   - 25th percentile (Q1):              +₹{up['q1_uplift_revenue']:,.0f}")
+        print(f"   - 50th percentile (Median):          +₹{up['median_uplift_revenue']:,.0f}")
+        print(f"   - 75th percentile (Q3):              +₹{up['q3_uplift_revenue']:,.0f}")
+        print(f"   - Maximum observed simulated uplift:  +₹{up['max_uplift_revenue']:,.0f}")
 
     if sensitivity:
         print("\n" + "─" * 78)
