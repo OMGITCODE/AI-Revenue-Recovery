@@ -100,7 +100,7 @@ CONVERSION = {
     "smart_retry_tech":  0.92,
     "upi_collect":       0.65,
     "whatsapp_nudge":    0.72,
-    "escalation":        0.85,
+    "escalation":        0.0,    # Support queue handoff — not instant automated recovery
 }
 
 
@@ -122,8 +122,8 @@ class PolicyResult:
 def simulate_baseline_on_event(event: dict, rng: random.Random) -> dict:
     """
     Simulates Razorpay's default fixed-schedule policy (D+1, D+2, D+3 blind retries).
-    All outcomes are deterministic given the failure type — no probabilistic elements
-    in the baseline, since fixed-schedule retry has no intelligence.
+    Outcomes are drawn stochastically from published Indian FinTech conversion benchmarks
+    (NPCI switch recovery, month-end salary timing, and bank limit failure rates).
     """
     code = event.get("failure_code", "UNKNOWN")
     amount = float(event.get("amount", 0))
@@ -145,25 +145,28 @@ def simulate_baseline_on_event(event: dict, rng: random.Random) -> dict:
     if dnd_time:
         violations += 1  # TRAI DND night violation
 
-    # Recovery simulation for baseline (deterministic rules, no AI)
+    # Recovery simulation for baseline: probabilistic sampling using empirical industry rates
     if mandate_state in ("revoked", "expired"):
         # Mandate is dead; blind retry fails 100% of the time
         recovered = False
     elif code in ("TM", "TE"):
-        # Temporary tech glitch; D+1 retry has ~75% chance of passing
-        recovered = True
-        recovered_amount = amount
+        # Temporary tech glitch; D+1/D+2 blind retry succeeds ~75% of the time once switch clears
+        recovered = rng.random() < 0.75
+        if recovered:
+            recovered_amount = amount
     elif code == "U30":
-        # If failure occurred between 20th and 31st, D+1/D+2/D+3 all fall BEFORE
-        # salary credit. Standard industry conversion for blind month-end retry: ~14%
-        if 20 <= day_of_month <= 31:
-            recovered = False
-        else:
-            recovered = True
+        # Blind retry on U30:
+        # Month-end (20th-31st) blind retries convert at ~14% (before salary credit)
+        # Off-cycle U30 retries convert at ~40%
+        u30_rate = 0.14 if (20 <= day_of_month <= 31) else 0.40
+        recovered = rng.random() < u30_rate
+        if recovered:
             recovered_amount = amount
     elif code in ("U69", "U29"):
-        # Blind retry without customer increasing limit fails ~80% of the time
-        recovered = False
+        # Blind retry without customer increasing limit converts at only ~20%
+        recovered = rng.random() < 0.20
+        if recovered:
+            recovered_amount = amount
     else:
         recovered = False
 
@@ -268,10 +271,9 @@ def simulate_ai_agent_on_event(
 
     elif top_action == "escalation":
         cost += 25.0  # Human agent touch
-        # Human escalation converts at ~85%
-        recovered = rng.random() < conv["escalation"]
-        if recovered:
-            recovered_amount = amount
+        # Support queue handoff — not instant automated recovery
+        recovered = False
+        recovered_amount = 0.0
 
     return {
         "recovered": recovered,
@@ -374,7 +376,9 @@ def run_benchmark(
     ai_res._n_runs         = n_runs
 
     base_res._base_rate_mean = statistics.mean(base_rate_list)
+    base_res._base_rate_std  = statistics.stdev(base_rate_list) if n_runs > 1 else 0
     base_res._base_rec_mean  = statistics.mean(base_recovered_list)
+    base_res._base_rec_std   = statistics.stdev(base_recovered_list) if n_runs > 1 else 0
     base_res._base_roi_mean  = statistics.mean(base_roi_list)
     base_res._base_roi_std   = statistics.stdev(base_roi_list) if n_runs > 1 else 0
 
@@ -425,12 +429,19 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     ai_rate_mean = getattr(ai, "_ai_rate_mean", ai_rate)
     ai_rate_std  = getattr(ai, "_ai_rate_std", 0)
 
-    ai_rec_str  = f"₹{ai_rec_mean:,.0f} ± ₹{ai_rec_std:,.0f}"
-    ai_rate_str = f"{ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%"
+    base_rec_mean = getattr(base, "_base_rec_mean", base.total_recovered)
+    base_rec_std  = getattr(base, "_base_rec_std", 0)
+    base_rate_mean = getattr(base, "_base_rate_mean", base_rate)
+    base_rate_std  = getattr(base, "_base_rate_std", 0)
+
+    ai_rec_str   = f"₹{ai_rec_mean:,.0f} ± ₹{ai_rec_std:,.0f}"
+    ai_rate_str  = f"{ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%"
+    base_rec_str = f"₹{base_rec_mean:,.0f} ± ₹{base_rec_std:,.0f}"
+    base_rate_str= f"{base_rate_mean:.1f}% ± {base_rate_std:.1f}%"
 
     print("\n" + "=" * 78)
     print(" 📊 SIMULATED BENCHMARK (MONTE CARLO, N=50): BASELINE vs. RECOVERIQ AI AGENT")
-    print(f" Dataset: {base.total_events} Real-World UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
+    print(f" Dataset: {base.total_events} Curated Synthetic UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
     print(f" Conversion models calibrated on Indian FinTech benchmarks (Razorpay, NPCI, Juspay)")
     print("=" * 78)
 
@@ -441,18 +452,20 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     ai_roi_mean = getattr(ai, "_ai_roi_mean", ai.net_roi)
     ai_roi_std  = getattr(ai, "_ai_roi_std", 0)
     base_roi_mean = getattr(base, "_base_roi_mean", base.net_roi)
+    base_roi_std  = getattr(base, "_base_roi_std", 0)
     ai_roi_str  = f"₹{ai_roi_mean:,.0f} ± ₹{ai_roi_std:,.0f}"
+    base_roi_str = f"₹{base_roi_mean:,.0f} ± ₹{base_roi_std:,.0f}"
     delta_roi_mean = ai_roi_mean - base_roi_mean
 
     metrics = [
         ("Total Scenarios Evaluated",     f"{base.total_events}",                   f"{ai.total_events}",    "—"),
         ("Total Revenue at Stake",        f"₹{base.total_at_stake:,.0f}",           f"₹{ai.total_at_stake:,.0f}", "—"),
-        (f"Revenue Recovered (n={n_runs})", f"₹{base._base_rec_mean:,.0f} (fixed)", ai_rec_str,             f"+₹{ai_rec_mean - base._base_rec_mean:,.0f} mean"),
-        (f"Recovery Rate (n={n_runs})",   f"{base._base_rate_mean:.1f}% (fixed)",   ai_rate_str,            f"+{ai_rate_mean - base._base_rate_mean:.1f}% pts mean"),
+        (f"Revenue Recovered (n={n_runs})", base_rec_str,                           ai_rec_str,             f"+₹{ai_rec_mean - base_rec_mean:,.0f} mean"),
+        (f"Recovery Rate (n={n_runs})",   base_rate_str,                          ai_rate_str,            f"+{ai_rate_mean - base_rate_mean:.1f}% pts mean"),
         ("Compliance Violations",         f"{base.compliance_violations}",           f"{ai.compliance_violations}", f"-{base.compliance_violations} (100% compliant)"),
         ("Total Retries Attempted",       f"{base.retries_fired} (blind)",           f"{ai.retries_fired}",  f"-{base.retries_fired - ai.retries_fired} (efficient)"),
         ("Intervention Channel Costs",    f"₹{base.channel_costs:,.2f}",            f"₹{ai.channel_costs:,.2f}", f"₹{ai.channel_costs - base.channel_costs:+,.2f}"),
-        (f"Net ROI (n={n_runs})",         f"₹{base_roi_mean:,.0f} (fixed)",         ai_roi_str,             f"+₹{delta_roi_mean:,.0f} mean uplift"),
+        (f"Net ROI (n={n_runs})",         base_roi_str,                           ai_roi_str,             f"+₹{delta_roi_mean:,.0f} mean uplift"),
     ]
 
     for label, b_val, a_val, d_val in metrics:

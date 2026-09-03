@@ -5,9 +5,10 @@
 # 🔄 RecoverIQ — AI Revenue Recovery Agent
 
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
-> Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
+> Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.  
+> *(Note: All benchmark recovery figures reported are derived from controlled Monte Carlo simulation models calibrated against published Indian FinTech conversion benchmarks, not live production claims.)*
 
-[![Tests](https://img.shields.io/badge/tests-204%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-207%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -17,7 +18,7 @@
 
 ## 📊 The Bar: Simulated Benchmark (Monte Carlo Policy Comparison vs. Razorpay Default)
 
-To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event real-world UPI Autopay failure dataset.
+To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event curated synthetic UPI Autopay failure dataset (modeled on Indian FinTech failure archetypes).
 
 Outcomes are **probabilistic**, modeled from published Indian FinTech and payment gateway conversion benchmarks. The benchmark executes **$N=50$ Monte Carlo simulation runs** and reports mean ± standard deviation, ensuring all metrics are reproducible and verifiable via `benchmark.py`.
 
@@ -26,13 +27,13 @@ Outcomes are **probabilistic**, modeled from published Indian FinTech and paymen
 | Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ AI Agent (Thompson Sampling + Guardrails) | Delta / Uplift |
 |---|---|---|---|
 | **Total Revenue at Stake** | ₹5,90,171 | ₹5,90,171 | — |
-| **Revenue Recovered** *(mean, n=50)* | **₹44,849** (fixed) | **₹4,47,296 ± ₹65,872** | **+₹4,02,447 mean uplift** |
-| **Recovery Rate** *(mean ± std, n=50)* | 11.7% (7/60) | **75.8% ± 4.9%** | **+64.1 pts mean** |
+| **Revenue Recovered** *(mean, n=50)* | **₹91,577 ± ₹41,408** | **₹3,02,252 ± ₹88,534** | **+₹2,10,675 mean uplift** |
+| **Recovery Rate** *(mean ± std, n=50)* | 17.3% ± 3.9% | **55.6% ± 4.4%** | **+38.2% pts mean** |
 | **BT01/BT02 Mandate Renewal** | 0% (blind retry) | **~68%** (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
 | **Compliance Violations (RBI/DND)** | 7 (silent retries + DND breaches) | **0 (100% compliant)** | **-7 eliminated** |
-| **Total Retries Fired** | 180 (blind flood) | **22 (salary-targeted)** | **-158 wasted retries** |
-| **Net ROI** *(mean ± std, n=50)* | **₹44,759** (fixed) | **₹4,46,937 ± ₹65,855** | **+₹4,02,178 mean uplift** |
+| **Total Retries Fired** | 180 (blind flood) | **20 (salary-targeted)** | **-160 wasted retries** |
+| **Net ROI** *(mean ± std, n=50)* | **₹91,487 ± ₹41,408** | **₹3,01,864 ± ₹88,539** | **+₹2,10,378 mean uplift** |
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 
@@ -340,7 +341,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 | File | Type | Description |
 |---|---|---|
-| `data/upi_failures_dataset.json` | Dataset (JSON) | **60 curated real-world failure scenarios** spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹199 to ₹1,45,000, varied DND states, and historical commitment records. |
+| `data/upi_failures_dataset.json` | Dataset (JSON) | **60 curated synthetic failure scenarios** spanning 14 NPCI error codes, 3 customer tiers, amounts from ₹199 to ₹1,45,000, varied DND states, and historical commitment records. |
 | `data/expiring_mandates_dataset.json` | Dataset (JSON) | **20 diverse recurring mandate archetypes** nearing validity expiration across 13 Indian banks (SBI, HDFC, ICICI, Axis, Kotak, Yes Bank, BoB, IndusInd, PNB, Canara, Union, Federal, RBL) and categories (SaaS, Cloud, OTT, Fitness, Insurance). |
 | `data/batch_run.py` | Script | Headless batch runner iterating over datasets to evaluate recovery pipeline throughput and success metrics. |
 | `benchmark.py` | Benchmark Engine | Probabilistic Monte Carlo simulator running N=50 iterations comparing RecoverIQ vs. fixed-schedule retries, generating mean ± std statistics and 20% pessimistic sensitivity haircut analysis. |
@@ -348,7 +349,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 204 Tests across 14 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 207 Tests across 14 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -360,13 +361,13 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Customer Identity Graph** | `tests/test_customer_identity.py` | **9 tests** | Canonical alias resolution, multi-identifier merging, cross-alias touch caps, shared spend baselines, and REST profile API. |
 | **Spend Pattern & Spike Anomalies** | `tests/test_spend_pattern.py` | **14 tests** | Rolling statistical profiles, micro-ticket 9x+ spike detection, repeat-user guardrail isolation, trust score stability, and REST API. |
 | **Hinglish Inbound NLP & Memory** | `tests/test_inbound_whatsapp.py` | **23 tests** | 2-way intent classification (`PROMISE`, `DISPUTE`, `HARDSHIP`), multi-turn memory, trust score adjustments, compliance holds. |
-| **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **13 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, benchmark determinism, sensitivity haircut. |
+| **Thompson Sampling & Benchmark** | `tests/test_bandit_and_benchmark.py` | **16 tests** | Beta-Bernoulli MAB math, exploitation vs exploration, online Bayesian updates, downstream single-arm execution integrity, model reconciliation, and stochastic baseline sampling. |
 | **Idempotency & Concurrency** | `tests/test_idempotency.py` | **12 tests** | Atomic key reservation, webhook deduplication cache, per-VPA async mutex locks, race-condition safety, and state transition idempotency. |
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
 | **Ask RecoverIQ Chat Grounding** | `tests/test_project_chat_grounding.py` | **8 tests** | Live session awareness, ₹0 fresh-session safety, zero-division invariance, empirical benchmark citation, and module domain grounding (B2B, Drop-off, Identity, Mandates). |
-| **Total Test Suite** | `pytest tests/` | **204 passing** | **100% test pass rate in ~36s** |
+| **Total Test Suite** | `pytest tests/` | **207 passing** | **100% test pass rate in ~36s** |
 
 ---
 
@@ -535,7 +536,7 @@ ai-revenue-recovery-agent/
 │
 ├── data/                        # Datasets & Batch Tools
 │   ├── batch_run.py             # Dataset runner script
-│   ├── upi_failures_dataset.json# 60 real-world failure scenarios
+│   ├── upi_failures_dataset.json# 60 curated synthetic failure scenarios
 │   └── expiring_mandates_dataset.json # 20 proactive expiring mandate scenarios
 │
 ├── src/                         # Core Agent Engine
@@ -575,7 +576,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (204 passing tests across 14 files)
+└── tests/                       # Test Suite (207 passing tests across 14 files)
     ├── test_upi_qr_api.py       # Dynamic vector SVG, NPCI schemes, domain idempotency, store recovery & auth tests (6 tests)
     ├── test_voice_ai.py         # Voice AI scenarios, dual dialects, audio assets, security auth & IVR cost tests (8 tests)
     ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (5 tests)
@@ -584,7 +585,7 @@ ai-revenue-recovery-agent/
     ├── test_customer_identity.py# Canonical alias resolution & touch limit tests (9 tests)
     ├── test_spend_pattern.py    # Historical profile & critical spike anomaly tests (14 tests)
     ├── test_inbound_whatsapp.py # 2-way Hinglish inbound classifier, fail-safe Gemini/OpenAI & compliance holds (23 tests)
-    ├── test_bandit_and_benchmark.py # Thompson Sampling, online learning & Monte Carlo benchmark tests (13 tests)
+    ├── test_bandit_and_benchmark.py # Thompson Sampling, single-arm execution, reconciliation & Monte Carlo benchmark tests (16 tests)
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
     ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, proactive lapse bridge, rate limiter & eval benchmark tests (13 tests)
@@ -649,7 +650,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 204 passed in ~5-15s (or ~30s on Windows)
+# 207 passed in ~5-15s (or ~30s on Windows)
 ```
 
 ---
@@ -839,7 +840,7 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 
 ### 4. Full 60-Scenario Dataset Explorer & Customer 360° Drawer
 
-- **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 real-world failure scenarios** directly from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json) with 1 click.
+- **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 curated synthetic failure scenarios** directly from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json) with 1 click.
 - **Customer 360° Drawer**: Clicking on any customer handle or event row opens a unified behavioral drawer showing their **canonical profile**, **linked aliases** across all 3 financial rails (Autopay, B2B, Carts), **rolling spend baseline**, **P2P promises**, and **compliance holds**.
 
 ### 5. Dual-Mode Benchmark (Live Session Actuals ⟷ Global 60-Scenario Macro)
@@ -862,7 +863,7 @@ RecoverIQ provides a dual-layer evaluative architecture directly inside the dash
 | `GET` | `/api/classifier/eval` | Cached evaluation benchmark returning Accuracy (93.3% regex vs 96.7% LLM), Precision, Recall, and F1 on 30 held-out items |
 | `GET` | `/api/pattern/history` | Retrieves statistical spend profile (mean, median, range, std dev) for a customer VPA/ID |
 | `POST`| `/api/pattern/analyze` | Evaluates a transaction amount against customer baseline for critical upward spikes (GR10) |
-| `GET` | `/api/scenarios` | Lists all 18 curated real-world failure scenario configurations |
+| `GET` | `/api/scenarios` | Lists all 18 curated synthetic failure scenario configurations |
 | `GET` | `/api/scenarios/dataset` | Returns all 60 failure scenarios from upi_failures_dataset.json for direct UI execution |
 | `POST`| `/api/simulate/{scenario_key}` | Executes a named scenario (or `ds_{index}` from dataset) through the complete detection, guardrail, bandit, and intervention pipeline |
 | `GET` | `/api/stats` | Returns real-time aggregated recovery metrics, active event counts, and recovery rate |

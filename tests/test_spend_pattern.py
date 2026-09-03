@@ -341,7 +341,6 @@ class TestRepeatUserPipelineIntegration:
         # A high pattern spike should be visible, but not harsh enough to block retry.
         assert ev_spike.pattern_spike_ratio > 4.0
         assert "smart_retry" in ev_spike.interventions
-        assert "upi_collect" in ev_spike.interventions
 
         # 2. Normal Transaction (₹99 on ₹100 base)
         ev_normal = await run_custom_scenario({

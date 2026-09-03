@@ -32,6 +32,7 @@ from src.models.upi_models import (
     UPIFailureCode,
     UPIMandate,
 )
+from src.agent.decision_engine import DecisionEngine
 from src.agent.upi_detector import UPIAutopayDetector
 from src.agent.upi_interventions import (
     SmartRetryIntervention,
@@ -154,13 +155,13 @@ def _make_event(
 
 
 # ── Intervention pipeline ─────────────────────────────────────────────────────
-INTERVENTIONS = [
-    SmartRetryIntervention(),
-    UPICollectIntervention(),
-    MandateRenewalIntervention(),
-    WhatsAppNudgeIntervention(),
-    EscalationIntervention(),
-]
+INTERVENTION_MAP = {
+    "smart_retry":     SmartRetryIntervention(),
+    "upi_collect":     UPICollectIntervention(),
+    "mandate_renewal": MandateRenewalIntervention(),
+    "whatsapp_nudge":  WhatsAppNudgeIntervention(),
+    "escalation":      EscalationIntervention(),
+}
 
 
 async def run_pipeline(event: UPIAutopayEvent) -> list[UPIInterventionResult]:
@@ -172,13 +173,29 @@ async def run_pipeline(event: UPIAutopayEvent) -> list[UPIInterventionResult]:
 
     _print_risk(risk)
 
+    decision_engine = DecisionEngine()
+    decision = decision_engine.evaluate(
+        failure_code=event.failure_code.value,
+        mandate_state=event.mandate.state.value if hasattr(event.mandate.state, "value") else str(event.mandate.state),
+        amount=event.debit_amount,
+        retry_count=event.retry_attempt,
+        has_promise=False,
+        customer_vpa=event.customer_vpa,
+        customer_id=event.mandate.customer_id,
+    )
+    print(f"\n  🎯  Bandit Optimal Arm : {decision.allowed_actions[0] if decision.allowed_actions else 'none'}")
+    print(f"      Guardrail Approved : {decision.approved}")
+    print(f"      Allowed Actions    : {decision.allowed_actions}")
+
     results = []
     print()
-    for iv in INTERVENTIONS:
-        if iv.can_handle(risk):
+    for action_key in decision.allowed_actions:
+        iv = INTERVENTION_MAP.get(action_key)
+        if iv and iv.can_handle(risk):
             result = await iv.execute(risk)
             _print_result(result)
             results.append(result)
+            break  # Strictly single-arm execution: only the bandit's chosen intervention runs!
 
     return results
 
@@ -276,11 +293,11 @@ async def main():
     print(f"\n{DSEP}")
     print("   📊  Demo Complete — All 5 UPI Autopay scenarios processed.")
     print()
-    print("   Recovery strategies applied:")
-    print("   • Scenario 1 → Smart Retry (salary window) + UPI Collect")
-    print("   • Scenario 2 → Mandate Renewal Link + WhatsApp Nudge")
-    print("   • Scenario 3 → Escalation to Support (max retries hit)")
-    print("   • Scenario 4 → Next-day Retry + WhatsApp Nudge")
+    print("   Recovery strategies applied (Single-Arm Execution):")
+    print("   • Scenario 1 → Smart Retry (salary window)")
+    print("   • Scenario 2 → Mandate Renewal Link")
+    print("   • Scenario 3 → UPI Collect Direct Fallback")
+    print("   • Scenario 4 → Smart Retry (after midnight limit reset)")
     print("   • Scenario 5 → Proactive Mandate Renewal (T-72h pre-failure prevention)")
     print()
     print("   Plug in your RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET in .env")

@@ -329,34 +329,37 @@ def _make_upi_event(cfg: dict) -> UPIAutopayEvent:
 
 # ── Empirical channel conversion rates ─────────────────────────────────────────
 CHANNEL_CONVERSION_RATES = {
-    "mandate_renewal": 0.68,   # NPCI WhatsApp magic links
-    "smart_retry":     0.88,   # U30 during salary window (1st-7th)
-    "upi_collect":     0.65,   # Instant collect approval
-    "whatsapp_nudge":  0.72,   # Conversational payment link
-    "escalation":      0.0,    # Support queue — not instant auto-recovery
+    "mandate_renewal":   0.68,   # NPCI WhatsApp magic links
+    "smart_retry":       0.88,   # U30 during salary window (1st-7th)
+    "smart_retry_tech":  0.92,   # TM/TE 15-min exponential backoff
+    "upi_collect":       0.65,   # Instant collect approval
+    "whatsapp_nudge":    0.72,   # Conversational payment link
+    "escalation":        0.0,    # Support queue — not instant auto-recovery
 }
 
-def evaluate_recovery_outcome(interventions: list[str], amount: float) -> tuple[bool, str, float]:
+def evaluate_recovery_outcome(interventions: list[str], amount: float, failure_code: str = "") -> tuple[bool, str, float]:
     """
-    Evaluates realistic recovery outcome based on empirical conversion rates.
+    Evaluates realistic recovery outcome for the executed intervention arm.
     Returns (success: bool, status: str, amount_recovered: float).
+    Strictly single-arm evaluation without parallel compounding.
     """
     if not interventions:
         return False, "failed", 0.0
 
-    if "escalation" in interventions and len(interventions) <= 2:
+    if "escalation" in interventions:
         return False, "escalated", 0.0
 
-    fail_prob = 1.0
-    for iv in interventions:
+    iv = interventions[0]
+    if iv == "smart_retry" and failure_code in ("TM", "TE"):
+        rate = CHANNEL_CONVERSION_RATES.get("smart_retry_tech", 0.92)
+    else:
         rate = CHANNEL_CONVERSION_RATES.get(iv, 0.50)
-        fail_prob *= (1.0 - rate)
 
-    success_prob = 1.0 - fail_prob
-    if random.random() < success_prob:
+    if random.random() < rate:
         return True, "recovered", float(amount)
     else:
         return False, "failed", 0.0
+
 
 
 async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> RecoveryEvent | None:
@@ -478,10 +481,12 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
         channel    = first_channel,
     )
 
-    # 3) INTERVENE Stage: ONLY execute guardrail-allowed actions!
+    # 3) INTERVENE Stage: Execute ONLY the top guardrail-approved & bandit-selected action!
     iv_types, iv_msgs, scheduled_at, action_url = [], [], None, None
-    for action_key, iv in INTERVENTION_MAP:
-        if action_key in decision.allowed_actions and iv.can_handle(risk):
+    intervention_by_key = dict(INTERVENTION_MAP)
+    for action_key in decision.allowed_actions:
+        iv = intervention_by_key.get(action_key)
+        if iv and iv.can_handle(risk):
             result = await iv.execute(risk)
             iv_types.append(result.intervention_type.value)
             iv_msgs.append(result.message)
@@ -489,6 +494,7 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
                 scheduled_at = result.scheduled_at.strftime("%d %b %Y, %I:%M %p IST")
             if result.action_url and not action_url:
                 action_url = result.action_url
+            break  # Strictly single-arm execution: only the bandit's chosen intervention runs!
 
     # 4) Evaluate Recovery Outcome
     if upi_event.failure_code == UPIFailureCode.U30 and aa_funds_available is False:
@@ -497,7 +503,9 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
         # Smart retry is queued for the salary window (or recoverable via Instant UPI QR).
         success, status, amount_rec = False, "failed", 0.0
     else:
-        success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+        success, status, amount_rec = evaluate_recovery_outcome(
+            iv_types, risk.amount, failure_code=upi_event.failure_code.value
+        )
 
     # If successfully recovered, auto-fulfill any active P2P promise for this user
     if success:

@@ -251,8 +251,8 @@ class WhatsAppNudgeIntervention(BaseUPIIntervention):
     """
 
     def can_handle(self, risk: RevenueRisk) -> bool:
-        # Always fire as a parallel nudge (combined with retry or renewal)
-        # but only if the failure code is not a pure technical glitch
+        # Eligible as a recovery intervention arm for non-technical failures
+        # (technical glitches like TM/TE require automated exponential backoff retry)
         meta = risk.metadata or {}
         code = meta.get("failure_code", UPIFailureCode.UNKNOWN)
         return code not in {UPIFailureCode.TM, UPIFailureCode.TE}

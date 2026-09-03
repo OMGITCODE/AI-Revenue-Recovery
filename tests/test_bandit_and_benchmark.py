@@ -202,3 +202,84 @@ class TestLiveBanditLearningInAPI:
         assert arm_state.total_pulls == initial_pulls + 1
         assert arm_state.total_revenue_recovered >= 50000.0
 
+
+class TestDownstreamExecutionIntegrity:
+    """Validates that downstream execution strictly runs a single selected arm without parallel compounding."""
+
+    @pytest.mark.asyncio
+    async def test_single_arm_pipeline_execution(self):
+        from api.simulator import _execute_event_pipeline, evaluate_recovery_outcome, CHANNEL_CONVERSION_RATES
+        from benchmark import CONVERSION
+        from src.models.upi_models import UPIAutopayEvent, UPIMandate, UPIFailureCode, MandateState, MandateFrequency
+        from datetime import datetime, timezone, timedelta
+
+        IST = timezone(timedelta(hours=5, minutes=30))
+        mandate = UPIMandate(
+            mandate_id="MND-EXEC-001",
+            customer_id="CUST-EXEC-001",
+            customer_vpa="rahul@oksbi",
+            amount=999.0,
+            bank_name="SBI",
+            bank_ifsc="SBIN0000001",
+            frequency=MandateFrequency.MONTHLY,
+            created_at=datetime.now(IST),
+            expiry_date=datetime.now(IST) + timedelta(days=180),
+            state=MandateState.ACTIVE,
+        )
+        event = UPIAutopayEvent(
+            event_id="EVT-EXEC-001",
+            event_type="mandate.execution.failed",
+            payment_id="pay_exec_001",
+            mandate=mandate,
+            failure_code=UPIFailureCode.U30,
+            failure_message="Insufficient funds in account",
+            debit_amount=999.0,
+            occurred_at=datetime.now(IST),
+            retry_attempt=0,
+        )
+
+        rec_event = await _execute_event_pipeline(event, {"mandate_state": "active"})
+        assert rec_event is not None
+        # Must execute strictly ONE intervention arm (no parallel compounding)
+        assert len(rec_event.interventions) == 1
+        assert rec_event.interventions[0] in ("smart_retry", "upi_collect", "mandate_renewal", "whatsapp_nudge", "escalation")
+
+    def test_reconciled_conversion_models(self):
+        """Validates that simulator.py and benchmark.py use identical conversion models."""
+        from api.simulator import CHANNEL_CONVERSION_RATES
+        from benchmark import CONVERSION
+
+        # Both must treat escalation as 0.0 (routing to human queue, not instant auto-recovery)
+        assert CHANNEL_CONVERSION_RATES["escalation"] == 0.0
+        assert CONVERSION["escalation"] == 0.0
+
+        # Core rates match
+        assert CHANNEL_CONVERSION_RATES["mandate_renewal"] == CONVERSION["mandate_renewal"]
+        assert CHANNEL_CONVERSION_RATES["smart_retry"] == CONVERSION["smart_retry_u30"]
+        assert CHANNEL_CONVERSION_RATES["smart_retry_tech"] == CONVERSION["smart_retry_tech"]
+        assert CHANNEL_CONVERSION_RATES["upi_collect"] == CONVERSION["upi_collect"]
+        assert CHANNEL_CONVERSION_RATES["whatsapp_nudge"] == CONVERSION["whatsapp_nudge"]
+
+    def test_probabilistic_baseline_sampling(self):
+        """Verifies that baseline uses stochastic sampling rather than a deterministic strawman."""
+        import random
+        from benchmark import simulate_baseline_on_event
+
+        event_tech = {
+            "failure_code": "TM",
+            "amount": 1000.0,
+            "mandate_state": "active",
+            "day_of_month": 15,
+            "is_night_event": False,
+        }
+
+        # Run 200 trials; tech error should convert at approximately ~75% (+/- 10%)
+        tech_recoveries = 0
+        for seed in range(200):
+            res = simulate_baseline_on_event(event_tech, random.Random(seed))
+            if res["recovered"]:
+                tech_recoveries += 1
+        rate = tech_recoveries / 200.0
+        assert 0.65 <= rate <= 0.85
+
+
