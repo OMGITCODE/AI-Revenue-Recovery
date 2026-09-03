@@ -104,3 +104,20 @@ def test_setu_check_balance_api_key_gating(client, monkeypatch):
     )
     assert res_valid_key.status_code == 200
     assert res_valid_key.json()["vpa"] == "arun@okaxis"
+
+
+def test_setu_create_consent_endpoint(client):
+    """Verify digital consent creation endpoint under Setu AA framework."""
+    payload = {
+        "vpa": "kavita.reddy@okkotak",
+        "purpose": "Mandate limit uplift consent check",
+    }
+    res = client.post("/api/setu/consent/create", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["consent_id"].startswith("CON-")
+    assert "bridge.setu.co/aa-sandbox/consent" in data["consent_url"]
+    assert data["vpa"] == "kavita.reddy@okkotak"
+    assert data["status"].lower() == "approved"
+    assert "timestamp" in data
+

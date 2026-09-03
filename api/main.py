@@ -988,6 +988,7 @@ async def add_receivable(req: ReceivableRequest):
     )
     return r.to_dict()
 
+@app.post("/api/b2b/chase/{receivable_id}")
 @app.post("/api/b2b/receivables/{receivable_id}/chase")
 async def chase_receivable(receivable_id: str):
     action = b2b_chaser.chase(receivable_id)
@@ -1006,6 +1007,7 @@ async def chase_receivable(receivable_id: str):
         )
     return action.to_dict()
 
+@app.post("/api/b2b/settle/{receivable_id}")
 @app.post("/api/b2b/receivables/{receivable_id}/settle")
 async def settle_receivable(receivable_id: str, amount_received: float = 0):
     r = b2b_chaser.settle(receivable_id, amount_received)
@@ -1852,6 +1854,35 @@ class SetuCheckBalanceResponse(BaseModel):
     source: str
     note: str
     timestamp: str
+
+class SetuCreateConsentRequest(BaseModel):
+    vpa: str = Field(..., description="Customer VPA (e.g. rahul@oksbi)")
+    purpose: str = Field(default="Recurring payment recovery balance check", description="Purpose of consent")
+
+class SetuCreateConsentResponse(BaseModel):
+    consent_id: str
+    consent_url: str
+    vpa: str
+    status: str
+    timestamp: str
+
+@app.post("/api/setu/consent/create", response_model=SetuCreateConsentResponse)
+async def setu_create_consent(payload: SetuCreateConsentRequest):
+    """
+    Creates 1-tap RBI digital consent session under Account Aggregator framework.
+    """
+    vpa = payload.vpa.strip()
+    if not vpa or "@" not in vpa:
+        raise HTTPException(status_code=422, detail="Invalid VPA format. Expected user@bank.")
+    consent = setu_aa.request_consent(vpa=vpa, purpose=payload.purpose)
+    from datetime import datetime, timezone
+    return SetuCreateConsentResponse(
+        consent_id=consent.consent_id,
+        consent_url=consent.consent_url,
+        vpa=consent.vpa,
+        status=consent.status,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
 
 @app.post("/api/setu/check-balance", response_model=SetuCheckBalanceResponse)
 async def setu_check_balance(payload: SetuCheckBalanceRequest):
