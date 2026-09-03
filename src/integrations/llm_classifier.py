@@ -369,11 +369,11 @@ Answer user questions accurately, factually, and concisely based on the project 
 CRITICAL DISTINCTION INVARIANT (NEVER BLUR BENCHMARK VS. LIVE SESSION):
 1. LIVE SESSION METRICS vs. PUBLISHED BENCHMARK PROOF are two completely distinct, separate datasets:
    - "LIVE ACTIVE SESSION STATE": Reflects what has executed in the current runtime session so far (detailed in the CURRENT LIVE SESSION METRICS block below). On a fresh server clone or before any scenarios are run, this will be ₹0 recovered across 0 transactions. If the user asks "how much have we recovered in this session", "current session stats", "live recovered amount", or "session recovery rate", YOU MUST REPORT THE EXACT REAL-TIME NUMBERS FROM THE LIVE SESSION STATE BLOCK. If it is ₹0, state clearly: "In this active session, ₹0 has been recovered so far across 0 transactions. Run a scenario or test simulation in the dashboard above to see live recovery in action."
-   - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo evaluation runs over the 60-scenario dataset documented in the README (₹4,47,296 ± ₹65,872 recovered, 75.8% recovery rate vs 11.7% baseline, 22 retries vs 180 blind retries, 195 test cases). YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
-   - NEVER substitute, quote, or blur the benchmark figures (₹4,47,296 / 75.8%) when answering questions about the current live session!
+   - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo evaluation runs over the 60-scenario dataset documented in the README (₹3,02,252 ± ₹88,534 recovered, 55.6% ± 4.4% recovery rate vs 17.3% baseline, 20 retries vs 180 blind retries, 207 test cases). YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
+   - NEVER substitute, quote, or blur the benchmark figures (₹3,02,252 / 55.6%) when answering questions about the current live session!
 
 Rules:
-1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, 195 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
+1. Ground all numbers and architectural facts in the README below (e.g. ₹3,02,252 ± ₹88,534 recovered (vs. ₹91,577 baseline) → +₹2,10,675 mean net uplift, 55.6% ± 4.4% (vs. 17.3% baseline) → +38.2 percentage points, 207 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
 2. Deep Platform Architecture:
    - B2B Receivables Chaser: Aging buckets 0-30d (gentle WhatsApp/email), 31-60d (firm notice + AR escalation), 61-90d (formal demand + 18% p.a. interest charge notice), 90d+ (collections/legal referral). Debtor Tiers: Tier A (>₹2L, dedicated manager), Tier B (₹25k-₹2L, AR specialist), Tier C (<₹25k, automated IVR).
    - Checkout Drop-off Recovery: Captures drop-off reasons (payment_page_exit, otp_timeout, bank_error_exit, upi_intent_abandoned, address_form_exit), fires smart re-engagement links with pre-filled carts at T+10m, T+1h, T+24h.
@@ -523,19 +523,19 @@ Rules:
                 f"- **Reactive Recovered**: ₹{reactive:,.2f} | **Proactive Protected**: ₹{proactive:,.2f}\n"
                 f"- **Active Compliance Holds**: {holds} | **Suppressed Contacts**: {suppressed}\n"
                 f"- **Active Promises-to-Pay**: {promises} pending\n\n"
-                "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline benchmark evaluation of ₹4,47,296 across 50 Monte Carlo runs.)*"
+                "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline benchmark evaluation of ₹3,02,252 across 50 Monte Carlo runs.)*"
             )
 
         # ── 2. Published Offline Benchmark Results ──────────────────────────────
         if "benchmark" in q or "results" in q or "uplift" in q or "monte carlo" in q:
             return (
                 "**RecoverIQ Published Benchmark Results (50 Monte Carlo Runs vs. Razorpay Baseline):**\n\n"
-                "Across 50 Monte Carlo simulation runs on our 60-scenario real-world failure dataset:\n"
-                "- **Total Recovered Revenue**: **₹4,47,296 ± ₹65,872** (vs. ₹44,849 baseline) → **+₹4,02,447 mean net uplift**\n"
-                "- **Recovery Rate**: **75.8% ± 4.9%** (vs. 11.7% baseline) → **+64.1 percentage points**\n"
-                "- **Retries Fired**: Reduced from 180 blind retries to **22 targeted retries** (saving 158 unnecessary bank attempts)\n"
+                "Across 50 Monte Carlo simulation runs on our 60-scenario curated synthetic failure dataset:\n"
+                "- **Total Recovered Revenue**: **₹3,02,252 ± ₹88,534** (vs. ₹91,577 baseline) → **+₹2,10,675 mean net uplift**\n"
+                "- **Recovery Rate**: **55.6% ± 4.4%** (vs. 17.3% baseline) → **+38.2 percentage points**\n"
+                "- **Retries Fired**: Reduced from 180 blind retries to **20 targeted retries** (saving 160 unnecessary bank attempts)\n"
                 "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
-                "- **Test Suite**: 195 automated unit & integration test cases passing.\n\n"
+                "- **Test Suite**: 207 automated unit & integration test cases passing across 14 files.\n\n"
                 "*(Note: These figures represent the published 50-run evaluation over the 60-scenario dataset, distinct from the active live session state.)*"
             )
 

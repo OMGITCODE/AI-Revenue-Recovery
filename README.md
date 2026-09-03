@@ -734,7 +734,7 @@ A dedicated copilot assistant accessible via the dashboard navbar (`✨ 🤖 Ask
 - **Zero-Division & Empty-State Resilience**: All aggregations are defensively wrapped with individual `try/except` fallbacks and zero-guarded divisions (`if len(...) else 0`). Even on a fresh server instance with 0 records, `/api/project-chat` is guaranteed never to crash or throw division-by-zero errors.
 - **🛡️ Anti-Hallucination Invariant (Live Session vs. Benchmark Proof)**:
   - **Live Active Session Queries** (*"How much have we recovered in this session?"*): Reports strictly what has occurred in the active runtime instance. On a fresh clone, it reports **₹0 recovered** across 0 transactions and invites the user to run a scenario.
-  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹4,47,296 recovered, 75.8% recovery rate vs. 11.7% baseline**).
+  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹3,02,252 recovered, 55.6% recovery rate vs. 17.3% baseline**).
   - The model and deterministic fallback are strictly prohibited from substituting or blurring benchmark proof numbers into active session responses.
 - **Universal Multi-Scenario Context Binding**:
   - Automatically correlates queries against active or recently simulated scenarios in `store._events` (matching VPA, Customer ID, scenario title, or error code).
@@ -847,7 +847,7 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 
 RecoverIQ provides a dual-layer evaluative architecture directly inside the dashboard with an interactive segmented toggle:
 - **`🔴 Live Session Actuals` (Default)**: Dynamically evaluates the exact events currently active on the dashboard. Compares live recoveries, costs, and 0 compliance violations against what legacy fixed-schedule retry ($D+1, D+2, D+3$ blind retry) *would have done on those exact same events*. Auto-syncs in real time via SSE upon new event generation.
-- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **75.6%–75.8% ± 5.1%** recovery vs. **11.7%** baseline (+64.0 pts uplift) with automated 20% sensitivity haircut analysis.
+- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **55.6% ± 4.4%** recovery vs. **17.3%** baseline (+38.2 pts uplift) with automated 20% sensitivity haircut analysis.
 
 ---
 
