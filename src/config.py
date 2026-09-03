@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
     llm_provider: str = "auto"  # auto | gemini | openai
     llm_rate_limit_per_minute: int = 30
     llm_aggregate_rate_limit_per_minute: int = 120

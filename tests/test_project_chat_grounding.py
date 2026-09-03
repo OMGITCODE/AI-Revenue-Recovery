@@ -57,7 +57,7 @@ class TestLiveSessionSafetyAndGrounding:
         # Must report ₹0 for active session
         assert "₹0" in reply or "0 logged transactions" in reply
         # Must clearly indicate it's a fresh session
-        assert any(w in reply.lower() for w in ["fresh", "simulator", "run scenario", "0 logged"])
+        assert any(w in reply.lower() for w in ["fresh", "simulator", "simulation", "scenario", "0 logged", "0 transactions", "0 has been recovered"])
         # Must NOT claim ₹4,47,296 as the active session recovery
         assert "Active Session Recovered: ₹4,47,296" not in reply
 

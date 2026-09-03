@@ -183,13 +183,13 @@ class LLMIntentClassifier:
 
         # Explicit preference
         if provider_pref == "gemini" and gemini_key:
-            return "gemini", gemini_key, settings.gemini_model or "gemini-3.6-flash"
+            return "gemini", gemini_key, settings.gemini_model or "gemini-flash-lite-latest"
         if provider_pref == "openai" and openai_key:
             return "openai", openai_key, settings.openai_model or "gpt-4o-mini"
 
         # Auto selection: Gemini first if configured, else OpenAI
         if gemini_key:
-            return "gemini", gemini_key, settings.gemini_model or "gemini-3.6-flash"
+            return "gemini", gemini_key, settings.gemini_model or "gemini-flash-lite-latest"
         if openai_key:
             return "openai", openai_key, settings.openai_model or "gpt-4o-mini"
 
