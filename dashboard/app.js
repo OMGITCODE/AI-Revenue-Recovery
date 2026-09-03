@@ -87,6 +87,9 @@ function connectSSE() {
       if (existingRow) {
         existingRow.replaceWith(makeRow(ev));
       }
+      if (window.currentSelectedEventContext && window.currentSelectedEventContext.id === ev.id) {
+        openDrawer(ev);
+      }
       return;
     }
     events.unshift(ev);
@@ -303,7 +306,9 @@ function makeRow(ev) {
       ? '<span class="status-esc">🚨 Escalated</span>'
       : ev.success
       ? '<span class="status-ok">✓ Recovered</span>'
-      : '<span class="status-err">✗ Failed</span>'}</td>`;
+      : (ev.scheduled_at
+         ? `<span class="status-pend" title="Smart retry scheduled for ${esc(ev.scheduled_at)}">⏳ Scheduled</span>`
+         : '<span class="status-err">✗ Failed</span>')}</td>`;
 
   const vpaCell = tr.querySelector('.vpa-filter-cell');
   if (vpaCell) {
@@ -662,6 +667,7 @@ function ivName(iv) {
   return {
     smart_retry:      'Retry',
     upi_collect:      'UPI Collect',
+    upi_qr_collect:   'UPI QR Pay',
     mandate_renewal:  'Renewal',
     whatsapp_nudge:   'WhatsApp',
     escalation:       'Escalated',
@@ -3233,11 +3239,12 @@ async function simulateQRPayment(btn) {
     toast(`🎉 Payment of ${esc(currentUPIQRData.formatted_amount || ('₹' + currentUPIQRData.amount))} confirmed via UPI QR!`, 'ok');
     if (btn) btn.innerHTML = '✓ Payment Settled';
 
-    // Refresh ledger, B2B dashboard, and stats to reflect live recovery
+    // Refresh ledger, B2B dashboard, events table, and stats to reflect live recovery
     if (typeof loadLedger === 'function') loadLedger();
     if (typeof loadB2B === 'function') loadB2B();
     if (typeof loadStats === 'function') loadStats();
     if (typeof loadROI === 'function') loadROI();
+    if (typeof loadEvents === 'function') loadEvents();
 
     // Close modal after brief celebratory pause
     setTimeout(() => {

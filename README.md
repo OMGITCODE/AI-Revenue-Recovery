@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-195%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -347,11 +347,11 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 194 Tests across 13 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 195 Tests across 13 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
-| **Dynamic UPI QR & Deep Links** | `tests/test_upi_qr_api.py` | **5 tests** | Vector SVG generation, canonical NPCI URI parameters, domain-state settlement idempotency, B2B receivable integration, and API key auth gating. |
+| **Dynamic UPI QR & Deep Links** | `tests/test_upi_qr_api.py` | **6 tests** | Vector SVG generation, canonical NPCI URI parameters, domain-state settlement idempotency, in-store event recovery, B2B receivable integration, and API key auth gating. |
 | **Outbound Voice AI Outreach** | `tests/test_voice_ai.py` | **8 tests** | Public scenarios catalog, dual-dialect audio validation, physical asset existence, security middleware auth enforcement, ₹1.50 ledger accounting, and mock/live Twilio Voice dispatch. |
 | **Setu Account Aggregator (AA)** | `tests/test_setu_aa_api.py` | **4 tests** | Digital consent creation, sandbox balance verification, API key auth, and trust score feedback. |
 | **UPI Recovery & Guardrails** | `tests/test_upi_recovery.py` | **37 tests** | 14 NPCI error codes, calendar-aware `U30` scheduler, RBI rules, TRAI DND windows, simulator ledger audit trail, and full pipeline. |
@@ -364,7 +364,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **194 passing** | **100% test pass rate in ~36s** |
+| **Total Test Suite** | `pytest tests/` | **195 passing** | **100% test pass rate in ~36s** |
 
 ---
 
@@ -573,8 +573,8 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (194 passing tests across 13 files)
-    ├── test_upi_qr_api.py       # Dynamic vector SVG, NPCI schemes, domain idempotency & auth tests (5 tests)
+└── tests/                       # Test Suite (195 passing tests across 13 files)
+    ├── test_upi_qr_api.py       # Dynamic vector SVG, NPCI schemes, domain idempotency, store recovery & auth tests (6 tests)
     ├── test_voice_ai.py         # Voice AI scenarios, dual dialects, audio assets, security auth & IVR cost tests (8 tests)
     ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (4 tests)
     ├── test_upi_recovery.py     # NPCI codes, scheduler, ledger pipeline tests (37 tests)
@@ -646,7 +646,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 194 passed in ~5-15s (or ~28s on Windows)
+# 195 passed in ~5-15s (or ~28s on Windows)
 ```
 
 ---

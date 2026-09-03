@@ -2177,7 +2177,64 @@ async def simulate_upi_payment(req: UPISimulatePaymentRequest):
         # Settle the B2B receivable via domain method
         b2b_chaser.settle(r_obj.receivable_id, clean_amt or r_obj.amount)
 
-    # 2. Generic / Cart Reference Check: In-memory set + permanent ledger entries
+    # 2. Authoritative Domain-State Check for existing RecoveryEvent in store
+    existing_event = next((e for e in store._events if e.id == clean_ref), None)
+    if existing_event:
+        # If already marked recovered (e.g., via smart retry or prior settlement), prevent duplicate recovery
+        if existing_event.success or clean_ref in _settled_qr_refs:
+            _settled_qr_refs.add(clean_ref)
+            return {
+                "status": "already_settled",
+                "message": f"Payment for event {clean_ref} ({existing_event.customer_vpa}) has already been recovered.",
+                "ref_id": clean_ref,
+                "amount": existing_event.amount_recovered or clean_amt,
+                "already_settled": True,
+                "overall_roi": recovery_ledger.overall_roi(),
+            }
+
+        # Event was not yet recovered: Settle existing event in place (zero duplicate event created)
+        _settled_qr_refs.add(clean_ref)
+        reasoning = f"Dynamic UPI QR payment verified & settled for {clean_ref} ({clean_name})."
+
+        ledger_entry = recovery_ledger.log(
+            event_type="recover",
+            vpa=clean_vpa,
+            amount=clean_amt,
+            reasoning=reasoning,
+            confidence=0.99,
+            channel="upi_collect",
+            outcome="success",
+            recovery_type="reactive",
+        )
+        recovery_ledger.mark_outcome(ledger_entry.ledger_id, "success", clean_amt)
+
+        ckey = get_context_key("upi_collect", "consumer_tier", "med")
+        bandit_engine.update(context_key=ckey, arm="upi_collect", success=True, amount_recovered=clean_amt)
+
+        existing_event.success = True
+        existing_event.status = "recovered"
+        existing_event.amount_recovered = clean_amt
+        existing_event.failure_code = "QR_SETTLED"
+        existing_event.failure_reason = reasoning
+        existing_event.bank = "NPCI UPI Switch"
+        if "upi_qr_collect" not in existing_event.interventions:
+            existing_event.interventions = list(existing_event.interventions) + ["upi_qr_collect"]
+        existing_event.intervention_msgs.append(f"Dynamic UPI QR scanned & settled for ₹{clean_amt:,.2f} by {clean_name}")
+        existing_event.trust_score = 0.95
+
+        await store.add_event(existing_event)
+
+        return {
+            "status": "success",
+            "message": f"Payment of ₹{clean_amt:,.2f} verified via UPI QR.",
+            "ref_id": clean_ref,
+            "amount": clean_amt,
+            "ledger_id": ledger_entry.ledger_id,
+            "already_settled": False,
+            "overall_roi": recovery_ledger.overall_roi(),
+        }
+
+    # 3. Generic / Cart Reference Check: In-memory set + permanent ledger entries
     ledger_duplicate = any(
         e.outcome == "success" and clean_ref in e.reasoning for e in recovery_ledger._entries
     )
@@ -2193,7 +2250,7 @@ async def simulate_upi_payment(req: UPISimulatePaymentRequest):
 
     _settled_qr_refs.add(clean_ref)
 
-    # 3. Log recovery to immutable audit ledger
+    # 4. Log recovery to immutable audit ledger
     reasoning = f"Dynamic UPI QR payment verified & settled for {clean_ref} ({clean_name})."
     ledger_entry = recovery_ledger.log(
         event_type="recover",
@@ -2207,15 +2264,15 @@ async def simulate_upi_payment(req: UPISimulatePaymentRequest):
     )
     recovery_ledger.mark_outcome(ledger_entry.ledger_id, "success", clean_amt)
 
-    # 4. Bayesian Posterior Update for Contextual Bandit
+    # 5. Bayesian Posterior Update for Contextual Bandit
     ckey = get_context_key("upi_collect", "consumer_tier", "med")
     bandit_engine.update(context_key=ckey, arm="upi_collect", success=True, amount_recovered=clean_amt)
 
-    # 5. Push live event to dashboard stream
+    # 6. Push live event to dashboard stream
     from api.store import RecoveryEvent, IST
     now_ist = datetime.now(IST).strftime("%H:%M:%S")
     ev = RecoveryEvent(
-        id=f"EVT-QR-{uuid.uuid4().hex[:6].upper()}",
+        id=clean_ref if clean_ref.startswith("EVT-") else f"EVT-QR-{uuid.uuid4().hex[:6].upper()}",
         timestamp=now_ist,
         event_type="upi.qr.settled",
         failure_code="QR_SETTLED",

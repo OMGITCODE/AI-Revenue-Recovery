@@ -272,7 +272,7 @@ class LLMIntentClassifier:
 Answer user questions accurately, factually, and concisely based on the project documentation and real-time event context below.
 
 Rules:
-1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, and 194 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
+1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, and 195 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
 2. If event context is provided in the CURRENT EVENT CONTEXT block below, answer using it directly and cite specific values (e.g. available balance, amount due, failure code, guardrail ID, chosen recovery action). Otherwise, fall back to the README documentation below.
 3. If asked about something not covered in the event context or project documentation, explicitly state: "This is not covered in the project documentation."
 4. Keep answers clear, structured, and easy to read with markdown bullet points or bold highlights. Limit answers to 2-3 focused paragraphs.
@@ -378,7 +378,7 @@ Rules:
                 "- **Recovery Rate**: **75.8% ± 4.9%** (vs. 11.7% baseline) → **+64.1 percentage points**\n"
                 "- **Retries Fired**: Reduced from 180 blind retries to **22 targeted retries** (saving 158 unnecessary bank attempts)\n"
                 "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
-                "- **Test Suite**: 194 automated unit & integration test cases passing."
+                "- **Test Suite**: 195 automated unit & integration test cases passing."
             )
         elif event_context and any(w in q for w in ["this", "event", "transaction", "failure", "status", "why", "recommend", "current"]):
             cust = event_context.get("customer") or event_context.get("customer_name") or event_context.get("customer_vpa") or "Customer"

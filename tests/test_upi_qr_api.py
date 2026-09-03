@@ -14,6 +14,7 @@ import pytest
 import os
 from fastapi.testclient import TestClient
 from api.main import app, _settled_qr_refs
+from api.store import store, RecoveryEvent
 from src.agent.recovery_ledger import ledger as recovery_ledger
 from src.agent.b2b_chaser import b2b_chaser
 from src.config import settings
@@ -169,3 +170,78 @@ def test_upi_qr_auth_gating(monkeypatch):
     )
     assert res_auth.status_code == 200
     assert res_auth.json()["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_upi_qr_settle_existing_store_event():
+    """
+    Validates QR settlement of an existing failed event in EventStore:
+    1. Event status flips from failed -> recovered, success becomes True.
+    2. amount_recovered is recorded and stats reflect the recovery.
+    3. interventions includes 'upi_qr_collect' and stats.upi_collects increments.
+    4. Domain-state idempotency: second attempt returns 'already_settled'.
+    """
+    ev_id = "EVT-TEST-U30-SETTLE-001"
+    _settled_qr_refs.discard(ev_id)
+
+    ev = RecoveryEvent(
+        id=ev_id,
+        timestamp="10:30:00",
+        event_type="mandate.execution.failed",
+        failure_code="U30",
+        failure_reason="Insufficient balance at SBI",
+        customer_id="Pooja Sharma",
+        customer_vpa="pooja@oksbi",
+        bank="State Bank of India",
+        amount=1999.0,
+        severity="high",
+        interventions=["smart_retry"],
+        intervention_msgs=["Smart retry queued"],
+        scheduled_at="15:00:00",
+        action_url=None,
+        success=False,
+        status="failed",
+        amount_recovered=0.0,
+    )
+    await store.add_event(ev)
+
+    stats_before = store.get_stats()
+
+    payload = {
+        "ref_id": ev_id,
+        "amount": 1999.0,
+        "debtor_name": "Pooja Sharma",
+        "vpa": "pooja@oksbi",
+        "note": "Recovery U30 via Instant UPI QR"
+    }
+
+    # First settlement
+    res1 = client.post("/api/upi/simulate-payment", json=payload)
+    assert res1.status_code == 200
+    data1 = res1.json()
+    assert data1["status"] == "success"
+    assert data1["already_settled"] is False
+    assert data1["amount"] == 1999.0
+
+    # Verify event was updated in-place in store
+    updated_ev = next(e for e in store._events if e.id == ev_id)
+    assert updated_ev.success is True
+    assert updated_ev.status == "recovered"
+    assert updated_ev.amount_recovered == 1999.0
+    assert "upi_qr_collect" in updated_ev.interventions
+
+    # Verify stats updated correctly
+    stats_after = store.get_stats()
+    assert stats_after["successful"] == stats_before["successful"] + 1
+    assert stats_after["failed"] == stats_before["failed"] - 1
+    assert stats_after["total_recovered"] >= stats_before["total_recovered"] + 1999.0
+    assert stats_after["upi_collects"] == stats_before["upi_collects"] + 1
+
+    # Second attempt: Idempotent block
+    res2 = client.post("/api/upi/simulate-payment", json=payload)
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["status"] == "already_settled"
+    assert data2["already_settled"] is True
+    assert "already been recovered" in data2["message"].lower()
+

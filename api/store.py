@@ -173,7 +173,7 @@ class EventStore:
                 if iv == "mandate_renewal":stats.renewals_sent     += 1
                 if iv == "escalation":     stats.escalations       += 1
                 if iv == "whatsapp_nudge": stats.whatsapp_sent     += 1
-                if iv == "upi_collect":    stats.upi_collects      += 1
+                if iv in ("upi_collect", "upi_qr_collect"): stats.upi_collects += 1
         return stats.to_dict()
 
     def reset(self) -> None:

@@ -421,6 +421,7 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
 
     # 1d) AA BALANCE CHECK for U30
     aa_check = ""
+    aa_funds_available = None
     if upi_event.failure_code == UPIFailureCode.U30:
         aa_result = setu_aa.check_balance(
             vpa          = upi_event.customer_vpa,
@@ -429,6 +430,7 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
             failure_code = upi_event.failure_code.value,
         )
         aa_check = aa_result.note
+        aa_funds_available = aa_result.funds_available
         if aa_result.funds_available:
             trust_score = min(1.0, trust_score + 0.20)
         else:
@@ -489,7 +491,13 @@ async def _execute_event_pipeline(upi_event: UPIAutopayEvent, cfg: dict) -> Reco
                 action_url = result.action_url
 
     # 4) Evaluate Recovery Outcome
-    success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
+    if upi_event.failure_code == UPIFailureCode.U30 and aa_funds_available is False:
+        # Verified insufficient funds via Setu AA (e.g. Rahul salary crunch):
+        # Cannot auto-recover immediately since the bank account is short on funds.
+        # Smart retry is queued for the salary window (or recoverable via Instant UPI QR).
+        success, status, amount_rec = False, "failed", 0.0
+    else:
+        success, status, amount_rec = evaluate_recovery_outcome(iv_types, risk.amount)
 
     # If successfully recovered, auto-fulfill any active P2P promise for this user
     if success:
