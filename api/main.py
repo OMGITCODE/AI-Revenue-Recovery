@@ -161,6 +161,7 @@ PUBLIC_EXACT_PATHS = {
     "/api/idempotency",
     "/api/suppression/list",
     "/api/whatsapp/inbound/samples",
+    "/api/webhook/whatsapp/samples",
     "/api/project-chat",
     "/api/prompt-to-scenario",
     "/api/classifier/eval",
@@ -1436,6 +1437,7 @@ async def webhook_whatsapp_twilio(
 
 
 @app.get("/api/whatsapp/inbound/samples")
+@app.get("/api/webhook/whatsapp/samples")
 async def inbound_samples():
     """Returns typical Hinglish & English inbound test messages for demo evaluation."""
     return [

@@ -820,14 +820,14 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 
 ### 4. Full 60-Scenario Dataset Explorer & Customer 360° Drawer
 
-- **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 real-world failure scenarios** directly from [`data/upi_failures_dataset.json`](file:///c:/Users/BIT/.gemini/antigravity-ide/scratch/ai-revenue-recovery-agent/data/upi_failures_dataset.json) with 1 click.
+- **Full Dataset Explorer**: The dashboard's Scenario Simulator features an interactive dropdown to execute any of the **60 real-world failure scenarios** directly from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json) with 1 click.
 - **Customer 360° Drawer**: Clicking on any customer handle or event row opens a unified behavioral drawer showing their **canonical profile**, **linked aliases** across all 3 financial rails (Autopay, B2B, Carts), **rolling spend baseline**, **P2P promises**, and **compliance holds**.
 
 ### 5. Dual-Mode Benchmark (Live Session Actuals ⟷ Global 60-Scenario Macro)
 
 RecoverIQ provides a dual-layer evaluative architecture directly inside the dashboard with an interactive segmented toggle:
 - **`🔴 Live Session Actuals` (Default)**: Dynamically evaluates the exact events currently active on the dashboard. Compares live recoveries, costs, and 0 compliance violations against what legacy fixed-schedule retry ($D+1, D+2, D+3$ blind retry) *would have done on those exact same events*. Auto-syncs in real time via SSE upon new event generation.
-- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](file:///c:/Users/BIT/.gemini/antigravity-ide/scratch/ai-revenue-recovery-agent/data/upi_failures_dataset.json), demonstrating **75.6%–75.8% ± 5.1%** recovery vs. **11.7%** baseline (+64.0 pts uplift) with automated 20% sensitivity haircut analysis.
+- **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **75.6%–75.8% ± 5.1%** recovery vs. **11.7%** baseline (+64.0 pts uplift) with automated 20% sensitivity haircut analysis.
 
 ---
 

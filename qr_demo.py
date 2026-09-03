@@ -149,7 +149,7 @@ def main():
             run_demo(p)
 
     print(f"\n{DSEP}")
-    print("  All 3 scenarios verified! To view the interactive UI with live scan:")
+    print("  All 4 personas verified! To view the interactive UI with live scan:")
     print("  1. Launch dashboard: python -m uvicorn api.main:app --port 8000")
     print("  2. Open http://localhost:8000/ and click '📲 UPI QR Pay' in the navbar")
     print(DSEP)
