@@ -1515,7 +1515,47 @@ async def project_chat_endpoint(req: ProjectChatRequest, request: Request):
     event_ctx = req.event_context
     if not event_ctx:
         q_lower = clean_query.lower()
-        if "rahul" in q_lower:
+        recent_events = list(getattr(store, "_events", []))
+
+        # 1. Search recent processed events by VPA prefix, Customer ID, scenario name, or error code
+        for ev in reversed(recent_events):
+            vpa = getattr(ev, "customer_vpa", None) or (ev.get("customer_vpa", "") if isinstance(ev, dict) else "")
+            vpa_str = str(vpa).lower() if vpa else ""
+            cid = getattr(ev, "customer_id", None) or (ev.get("customer_id", "") if isinstance(ev, dict) else "")
+            cid_str = str(cid).lower() if cid else ""
+            sc_name = getattr(ev, "scenario_name", None) or (ev.get("scenario_name", "") if isinstance(ev, dict) else "")
+            sc_lower = str(sc_name).lower() if sc_name else ""
+            code = getattr(ev, "failure_code", None) or (ev.get("failure_code", "") if isinstance(ev, dict) else "")
+            code_str = str(code).lower() if code else ""
+
+            if (
+                (vpa_str and vpa_str.split("@")[0] in q_lower)
+                or (cid_str and cid_str in q_lower)
+                or (sc_lower and any(w in q_lower for w in sc_lower.split() if len(w) >= 3))
+                or (code_str and code_str in q_lower.split())
+            ):
+                if hasattr(ev, "to_dict"):
+                    event_ctx = ev.to_dict()
+                elif hasattr(ev, "model_dump"):
+                    event_ctx = ev.model_dump()
+                elif isinstance(ev, dict):
+                    event_ctx = ev
+                break
+
+        # 2. If user asks general questions about "this transaction / failure / payment", bind to latest event
+        if not event_ctx and recent_events:
+            is_contextual = any(w in q_lower for w in ["this", "last", "latest", "current", "transaction", "payment", "failure", "fail", "why", "action"])
+            if is_contextual:
+                latest_ev = recent_events[-1]
+                if hasattr(latest_ev, "to_dict"):
+                    event_ctx = latest_ev.to_dict()
+                elif hasattr(latest_ev, "model_dump"):
+                    event_ctx = latest_ev.model_dump()
+                elif isinstance(latest_ev, dict):
+                    event_ctx = latest_ev
+
+        # 3. Default archetype fallback if asking about Rahul and no live event in store
+        if not event_ctx and "rahul" in q_lower:
             event_ctx = {
                 "customer": "Rahul Sharma",
                 "vpa": "rahul@oksbi",
@@ -1535,22 +1575,15 @@ async def project_chat_endpoint(req: ProjectChatRequest, request: Request):
                 "decision_outcome": "Immediate automated retry blocked. Rescheduled for predicted salary-credit window on the 5th at 10:00 AM IST.",
                 "bandit_channel_selected": "Salary-Window Smart Retry (Setu AA Liquidity Synchronized)",
             }
-        else:
-            for ev in getattr(store, "_events", []):
-                vpa = getattr(ev, "customer_vpa", None) or (ev.get("customer_vpa", "") if isinstance(ev, dict) else "")
-                vpa_str = str(vpa).lower() if vpa else ""
-                cid = getattr(ev, "customer_id", None) or (ev.get("customer_id", "") if isinstance(ev, dict) else "")
-                cid_str = str(cid).lower() if cid else ""
-                if (vpa_str and vpa_str.split("@")[0] in q_lower) or (cid_str and cid_str in q_lower):
-                    if hasattr(ev, "model_dump"):
-                        event_ctx = ev.model_dump()
-                    elif isinstance(ev, dict):
-                        event_ctx = ev
-                    else:
-                        event_ctx = {"customer_vpa": vpa_str, "customer_id": cid_str}
-                    break
 
-    result = await llm_classifier.ask_project_assistant(clean_query, history=req.history, event_context=event_ctx)
+    from src.integrations.llm_classifier import get_live_session_summary
+    live_stats = get_live_session_summary()
+    result = await llm_classifier.ask_project_assistant(
+        clean_query,
+        history=req.history,
+        event_context=event_ctx,
+        live_stats=live_stats,
+    )
     return result
 
 

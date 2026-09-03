@@ -303,6 +303,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Neural Edge-TTS Audio Engine** | `scripts/generate_voice_assets.py` | Microsoft Edge Neural Speech engine generating authentic Hinglish (`hi-IN-MadhurNeural`, `hi-IN-SwaraNeural`) and Indian English (`en-IN-PrabhatNeural`, `en-IN-NeerjaNeural`) voice audio with sub-second synchronized karaoke subtitle cues. |
 | **Razorpay UPI Gateway** | `src/integrations/razorpay_upi.py` | Razorpay Autopay webhook parsing, mandate verification, and collect request dispatch. |
 | **Setu Account Aggregator (AA)** | `src/integrations/setu_aa.py` | Full RBI-regulated Account Aggregator sandbox integration & balance verification engine. Manages 1-tap digital consent flows (`request_consent`), deterministic sandbox balance checks (`fetch_balance`), trust score adjustments, and decision note generation. |
+| **LLM Intent Classifier & Ask RecoverIQ Assistant** | `src/integrations/llm_classifier.py` | Dual-purpose Google Gemini & OpenAI engine powering 2-way WhatsApp Hinglish intent classification (5 intents + multi-turn history) and the grounded "Ask RecoverIQ" technical assistant with dynamic live session metrics, zero-division safety, and offline deterministic fallback. |
 
 ---
 
@@ -717,10 +718,26 @@ Customer interactions are tracked across turns in an in-memory `ConversationLog`
 - Gemini seamlessly reconciles context shifts, updates Promise-to-Pay deadlines, and adjusts empathetic responses without losing prior state.
 
 #### 🤖 Ask RecoverIQ — Grounded Technical Q&A Assistant:
-A dedicated chatbot grounded directly in the project's technical architecture and `README.md`.
-- **Endpoint**: `POST /api/project-chat` (accepts `{ "message": "...", "history": [...] }`).
-- **Grounded Prompting**: Evaluates questions strictly against README architecture, benchmark formulas, and NPCI error codes with explicit instruction to clarify if an inquiry is outside documentation scope.
-- **Frontend Panel**: Expandable drawer on the dashboard navbar (`✨ 🤖 Ask AI (Gemini)`) with quick evaluation chips for benchmark comparisons, U30 salary handling, Thompson Sampling, and RBI limits.
+A dedicated copilot assistant accessible via the dashboard navbar (`✨ 🤖 Ask AI (Gemini)`) and REST API (`POST /api/project-chat`), grounded strictly in the project's architecture, active runtime session state, and `README.md`.
+
+- **Endpoint**: `POST /api/project-chat` (accepts `{ "message": "...", "history": [...], "event_context": {...} }`).
+- **Live Active Session State Awareness**: Dynamically ingests real-time metrics across all 6 subsystem registries via `get_live_session_summary()`:
+  - `recovery_ledger`: Logged decisions, net ROI, active recovered revenue, reactive vs. proactive split.
+  - `suppression_registry`: Permanent blacklist count and active compliance holds.
+  - `promise_tracker`: Active Promise-to-Pay commitments and amount at risk.
+  - `mandate_expiry_scanner`: Expiring mandates tracked, renewals completed, and protected recurring ARR.
+  - `b2b_chaser`: Overdue enterprise receivables count, debtor aging, and settled balances.
+  - `checkout_agent`: High-intent cart drop-off sessions and recovered GMV.
+- **Zero-Division & Empty-State Resilience**: All aggregations are defensively wrapped with individual `try/except` fallbacks and zero-guarded divisions (`if len(...) else 0`). Even on a fresh server instance with 0 records, `/api/project-chat` is guaranteed never to crash or throw division-by-zero errors.
+- **🛡️ Anti-Hallucination Invariant (Live Session vs. Benchmark Proof)**:
+  - **Live Active Session Queries** (*"How much have we recovered in this session?"*): Reports strictly what has occurred in the active runtime instance. On a fresh clone, it reports **₹0 recovered** across 0 transactions and invites the user to run a scenario.
+  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹4,47,296 recovered, 75.8% recovery rate vs. 11.7% baseline**).
+  - The model and deterministic fallback are strictly prohibited from substituting or blurring benchmark proof numbers into active session responses.
+- **Universal Multi-Scenario Context Binding**:
+  - Automatically correlates queries against active or recently simulated scenarios in `store._events` (matching VPA, Customer ID, scenario title, or error code).
+  - General inquiries (*"Why did this transaction fail?"*, *"What recovery action was taken?"*) automatically bind to the most recent transaction across all archetypes (Rahul U30, Priya BT01, Arjun TM, Vikram BT02, Kavita U69, Sneha ZA, B2B, or custom prompt scenarios).
+- **Full-Platform Subsystem Coverage**: Deeply grounded across B2B aging buckets & debtor tiers, cart drop-off recovery sequences (T+10m, T+1h, T+24h), customer identity graph canonical resolution (`cust:...`), and T-72h proactive mandate expiry bridges.
+- **Dashboard Quick-Prompt Chips**: One-click quick evaluation chips for live session metrics, benchmark comparisons, B2B receivables, cart drop-off, identity graphs, and mandate expiries.
 
 #### Configuring Gemini (Recommended) or OpenAI in `.env`:
 

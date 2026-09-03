@@ -67,6 +67,96 @@ def get_cached_readme() -> str:
     return _README_CACHE
 
 
+def get_live_session_summary() -> Dict[str, Any]:
+    """
+    Safely collects real-time metrics across the active session with guaranteed zero-division
+    and empty-state resilience across all subsystem registries.
+    """
+    summary: Dict[str, Any] = {
+        "total_entries": 0,
+        "total_recovered": 0.0,
+        "net_roi": 0.0,
+        "total_at_stake": 0.0,
+        "recovery_rate_pct": 0.0,
+        "reactive_recovered": 0.0,
+        "proactive_protected": 0.0,
+        "suppression_blacklisted_count": 0,
+        "active_compliance_holds_count": 0,
+        "active_promises_count": 0,
+        "promises_amount_at_risk": 0.0,
+        "b2b_receivables_count": 0,
+        "b2b_total_outstanding": 0.0,
+        "b2b_settled_count": 0,
+        "checkout_sessions_count": 0,
+        "checkout_recovered_amount": 0.0,
+        "mandates_tracked_count": 0,
+        "mandates_renewed_count": 0,
+        "mandates_revenue_protected": 0.0,
+    }
+
+    # 1. Recovery Ledger
+    try:
+        from ..agent.recovery_ledger import ledger as recovery_ledger
+        roi = recovery_ledger.overall_roi()
+        summary["total_entries"] = roi.get("total_entries", 0)
+        summary["total_recovered"] = roi.get("total_recovered", 0.0)
+        summary["net_roi"] = roi.get("net_roi", 0.0)
+        summary["total_at_stake"] = roi.get("total_at_stake", 0.0)
+        summary["recovery_rate_pct"] = roi.get("recovery_rate_pct", 0.0)
+        summary["reactive_recovered"] = roi.get("reactive_recovered", 0.0)
+        summary["proactive_protected"] = roi.get("proactive_protected", 0.0)
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] Ledger read skipped: %s", e)
+
+    # 2. Suppression Registry
+    try:
+        from ..agent.whatsapp_inbound import suppression_registry
+        summary["suppression_blacklisted_count"] = len(getattr(suppression_registry, "_permanent_blacklist", set()))
+        summary["active_compliance_holds_count"] = len(getattr(suppression_registry, "_active_holds", {}))
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] Suppression read skipped: %s", e)
+
+    # 3. Promise Tracker
+    try:
+        from ..agent.promise_tracker import promise_tracker
+        p_stats = promise_tracker.stats()
+        summary["active_promises_count"] = p_stats.get("pending", 0)
+        summary["promises_amount_at_risk"] = p_stats.get("amount_at_risk", 0.0)
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] Promise tracker read skipped: %s", e)
+
+    # 4. Mandate Expiry Scanner
+    try:
+        from ..agent.mandate_expiry import mandate_expiry_scanner
+        m_stats = mandate_expiry_scanner.stats()
+        summary["mandates_tracked_count"] = m_stats.get("total_mandates_tracked", 0)
+        summary["mandates_renewed_count"] = m_stats.get("renewals_completed", 0)
+        summary["mandates_revenue_protected"] = m_stats.get("revenue_protected", 0.0)
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] Mandate scanner read skipped: %s", e)
+
+    # 5. B2B Receivables Chaser
+    try:
+        from ..agent.b2b_chaser import b2b_chaser
+        b_stats = b2b_chaser.stats()
+        summary["b2b_receivables_count"] = b_stats.get("total", 0)
+        summary["b2b_total_outstanding"] = b_stats.get("total_outstanding", 0.0)
+        summary["b2b_settled_count"] = b_stats.get("settled", 0)
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] B2B chaser read skipped: %s", e)
+
+    # 6. Checkout Recovery
+    try:
+        from ..agent.checkout_recovery import checkout_agent
+        c_stats = checkout_agent.stats()
+        summary["checkout_sessions_count"] = c_stats.get("total_sessions", 0)
+        summary["checkout_recovered_amount"] = c_stats.get("recovered_amount", 0.0)
+    except Exception as e:
+        logger.debug("[LIVE_SUMMARY] Checkout recovery read skipped: %s", e)
+
+    return summary
+
+
 class LLMIntentClassifier:
     """
     Asynchronous, fail-safe LLM intent classifier supporting Google Gemini and OpenAI.
@@ -257,25 +347,47 @@ class LLMIntentClassifier:
         query: str,
         history: Optional[List[Dict[str, Any]]] = None,
         event_context: Optional[Dict[str, Any]] = None,
+        live_stats: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Answers questions about the RecoverIQ project, architecture, benchmarks, and features,
-        grounded strictly in the project's README.md documentation and real-time event context.
+        grounded strictly in the project's README.md documentation, live session metrics,
+        and real-time event context.
         """
         clean_query = query.strip()
         if not clean_query:
             return {"reply": "Please provide a question about RecoverIQ.", "provider": "fallback"}
 
+        if live_stats is None:
+            live_stats = get_live_session_summary()
+
         readme_text = get_cached_readme()
         
         system_instruction = f"""You are RecoverIQ AI Assistant, an expert on the RecoverIQ project for judges, operators, and developers.
-Answer user questions accurately, factually, and concisely based on the project documentation and real-time event context below.
+Answer user questions accurately, factually, and concisely based on the project documentation, live session metrics, and real-time event context below.
+
+CRITICAL DISTINCTION INVARIANT (NEVER BLUR BENCHMARK VS. LIVE SESSION):
+1. LIVE SESSION METRICS vs. PUBLISHED BENCHMARK PROOF are two completely distinct, separate datasets:
+   - "LIVE ACTIVE SESSION STATE": Reflects what has executed in the current runtime session so far (detailed in the CURRENT LIVE SESSION METRICS block below). On a fresh server clone or before any scenarios are run, this will be ₹0 recovered across 0 transactions. If the user asks "how much have we recovered in this session", "current session stats", "live recovered amount", or "session recovery rate", YOU MUST REPORT THE EXACT REAL-TIME NUMBERS FROM THE LIVE SESSION STATE BLOCK. If it is ₹0, state clearly: "In this active session, ₹0 has been recovered so far across 0 transactions. Run a scenario or test simulation in the dashboard above to see live recovery in action."
+   - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo evaluation runs over the 60-scenario dataset documented in the README (₹4,47,296 ± ₹65,872 recovered, 75.8% recovery rate vs 11.7% baseline, 22 retries vs 180 blind retries, 195 test cases). YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
+   - NEVER substitute, quote, or blur the benchmark figures (₹4,47,296 / 75.8%) when answering questions about the current live session!
 
 Rules:
-1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, and 195 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
-2. If event context is provided in the CURRENT EVENT CONTEXT block below, answer using it directly and cite specific values (e.g. available balance, amount due, failure code, guardrail ID, chosen recovery action). Otherwise, fall back to the README documentation below.
-3. If asked about something not covered in the event context or project documentation, explicitly state: "This is not covered in the project documentation."
-4. Keep answers clear, structured, and easy to read with markdown bullet points or bold highlights. Limit answers to 2-3 focused paragraphs.
+1. Ground all numbers and architectural facts in the README below (e.g. ₹4,47,296 ± ₹65,872 recovered (vs. ₹44,849 baseline) → +₹4,02,447 mean net uplift, 75.8% ± 4.9% (vs. 11.7% baseline) → +64.1 percentage points, 195 test cases, Bayesian Thompson Sampling MAB, RBI Category Guardrails: ₹1L vs ₹15k).
+2. Deep Platform Architecture:
+   - B2B Receivables Chaser: Aging buckets 0-30d (gentle WhatsApp/email), 31-60d (firm notice + AR escalation), 61-90d (formal demand + 18% p.a. interest charge notice), 90d+ (collections/legal referral). Debtor Tiers: Tier A (>₹2L, dedicated manager), Tier B (₹25k-₹2L, AR specialist), Tier C (<₹25k, automated IVR).
+   - Checkout Drop-off Recovery: Captures drop-off reasons (payment_page_exit, otp_timeout, bank_error_exit, upi_intent_abandoned, address_form_exit), fires smart re-engagement links with pre-filled carts at T+10m, T+1h, T+24h.
+   - Customer Identity Graph: Resolves customer IDs, VPAs, phones, and emails into single canonical `cust:...` profiles, linking touches, promises, and compliance suppression across aliases to prevent fragmented customer interactions.
+   - Proactive Mandate Expiry Scanner: Identifies UPI Autopay mandates nearing expiration (T-72h to T-24h) and dispatches 1-click renewal links via WhatsApp/SMS to prevent NPCI BT02 ("Mandate Expired") failures before they ever occur.
+3. If event context is provided in the CURRENT EVENT CONTEXT block below, answer using it directly and cite specific values (e.g. available balance, amount due, failure code, guardrail ID, chosen recovery action).
+4. If asked about something not covered in the live context, event context, or project documentation, explicitly state: "This is not covered in the project documentation."
+5. Keep answers clear, structured, and easy to read with markdown bullet points or bold highlights. Limit answers to 2-3 focused paragraphs.
+"""
+
+        system_instruction += f"""
+=== CURRENT LIVE SESSION METRICS ===
+{json.dumps(live_stats, indent=2)}
+====================================
 """
 
         if event_context:
@@ -296,7 +408,7 @@ Rules:
         if not api_key or not provider or not model:
             # High quality grounded offline answer
             return {
-                "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context),
+                "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context, live_stats),
                 "provider": "offline_grounded",
             }
 
@@ -363,39 +475,147 @@ Rules:
             logger.warning("[PROJECT_CHAT] Exception during LLM query: %s (falling back to grounded search)", str(e))
 
         return {
-            "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context),
+            "reply": self._generate_offline_qa_response(clean_query, readme_text, event_context, live_stats),
             "provider": "offline_grounded",
         }
 
-    def _generate_offline_qa_response(self, query: str, readme: str, event_context: Optional[Dict[str, Any]] = None) -> str:
+    def _generate_offline_qa_response(
+        self,
+        query: str,
+        readme: str,
+        event_context: Optional[Dict[str, Any]] = None,
+        live_stats: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Deterministic offline fallback for project documentation questions."""
         q = query.lower()
-        if "benchmark" in q or "results" in q or "uplift" in q or "roi" in q:
+        if live_stats is None:
+            live_stats = get_live_session_summary()
+
+        # ── 1. Live Session Queries (Anti-Hallucination: Distinct from Benchmark) ────
+        is_live_query = any(w in q for w in [
+            "current session", "this session", "session stat", "session metric",
+            "live stat", "live recovery", "how much have we recovered",
+            "how much recovered", "revenue recovered so far", "what have we recovered",
+            "recovered in this session", "what's our current session"
+        ])
+        if is_live_query:
+            total_rec = live_stats.get("total_recovered", 0.0)
+            entries = live_stats.get("total_entries", 0)
+            if total_rec == 0.0 and entries == 0:
+                return (
+                    "**Current Live Session Metrics:**\n\n"
+                    "- **Active Session Recovered**: **₹0** across 0 logged transactions.\n"
+                    "- **Session State**: Fresh server instance. No recovery actions or simulations have executed yet in this session.\n"
+                    "- **How to test live recovery**: Click **'Run Scenario'** or trigger a failed payment (such as Rahul Sharma's U30 or an expiring BT02 mandate) in the simulator above to observe autonomous interventions, audit ledger logs, and real-time uplift in action!\n\n"
+                    "*(Note: For our published 50-run Monte Carlo offline benchmark proof showing ₹4,47,296 recovered at 75.8% rate, ask: 'What are the benchmark results?')*"
+                )
+            roi = live_stats.get("net_roi", 0.0)
+            rate = live_stats.get("recovery_rate_pct", 0.0)
+            reactive = live_stats.get("reactive_recovered", 0.0)
+            proactive = live_stats.get("proactive_protected", 0.0)
+            holds = live_stats.get("active_compliance_holds_count", 0)
+            suppressed = live_stats.get("suppression_blacklisted_count", 0)
+            promises = live_stats.get("active_promises_count", 0)
             return (
-                "**RecoverIQ Benchmark Results (vs. Razorpay Fixed-Schedule Baseline):**\n\n"
+                "**Current Live Session Metrics:**\n\n"
+                f"- **Total Recovered**: **₹{total_rec:,.2f}** (Net ROI: **₹{roi:,.2f}**)\n"
+                f"- **Session Recovery Rate**: **{rate:.1f}%** across {entries} logged decisions\n"
+                f"- **Reactive Recovered**: ₹{reactive:,.2f} | **Proactive Protected**: ₹{proactive:,.2f}\n"
+                f"- **Active Compliance Holds**: {holds} | **Suppressed Contacts**: {suppressed}\n"
+                f"- **Active Promises-to-Pay**: {promises} pending\n\n"
+                "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline benchmark evaluation of ₹4,47,296 across 50 Monte Carlo runs.)*"
+            )
+
+        # ── 2. Published Offline Benchmark Results ──────────────────────────────
+        if "benchmark" in q or "results" in q or "uplift" in q or "monte carlo" in q:
+            return (
+                "**RecoverIQ Published Benchmark Results (50 Monte Carlo Runs vs. Razorpay Baseline):**\n\n"
                 "Across 50 Monte Carlo simulation runs on our 60-scenario real-world failure dataset:\n"
                 "- **Total Recovered Revenue**: **₹4,47,296 ± ₹65,872** (vs. ₹44,849 baseline) → **+₹4,02,447 mean net uplift**\n"
                 "- **Recovery Rate**: **75.8% ± 4.9%** (vs. 11.7% baseline) → **+64.1 percentage points**\n"
                 "- **Retries Fired**: Reduced from 180 blind retries to **22 targeted retries** (saving 158 unnecessary bank attempts)\n"
                 "- **Compliance Breaches**: 0 violations (vs. 7 baseline violations in benchmark suite)\n"
-                "- **Test Suite**: 195 automated unit & integration test cases passing."
+                "- **Test Suite**: 195 automated unit & integration test cases passing.\n\n"
+                "*(Note: These figures represent the published 50-run evaluation over the 60-scenario dataset, distinct from the active live session state.)*"
             )
-        elif event_context and any(w in q for w in ["this", "event", "transaction", "failure", "status", "why", "recommend", "current"]):
-            cust = event_context.get("customer") or event_context.get("customer_name") or event_context.get("customer_vpa") or "Customer"
+
+        # ── 3. B2B Receivables Chaser ───────────────────────────────────────────
+        if any(w in q for w in ["b2b", "receivable", "invoice", "aging", "debtor"]):
+            return (
+                "**B2B Receivables Chaser Architecture:**\n\n"
+                "RecoverIQ handles enterprise invoice recovery through automated aging buckets and value tiering:\n"
+                "- **Aging Buckets**:\n"
+                "  - **0–30 Days (Current)**: Gentle reminders via automated WhatsApp & email.\n"
+                "  - **31–60 Days (Early Overdue)**: Firm notice via phone/SMS + AR specialist escalation.\n"
+                "  - **61–90 Days (Late Overdue)**: Formal demand notice + 18% p.a. interest charge notification.\n"
+                "  - **90+ Days (Critical)**: Legal counsel engagement / collections referral.\n"
+                "- **Debtor Tiers**:\n"
+                "  - **Tier A (> ₹2,00,000)**: Assigned to a dedicated recovery manager + legal escalation.\n"
+                "  - **Tier B (₹25,000–₹2,00,000)**: AR specialist intervention with structured follow-ups.\n"
+                "  - **Tier C (< ₹25,000)**: 100% automated conversational IVR & WhatsApp dunning sequences.\n"
+                "- **Promise-to-Pay Integration**: When a B2B debtor commits a payment date, escalation is paused; broken promises trigger immediate tier-up."
+            )
+
+        # ── 4. Checkout Drop-off Recovery ───────────────────────────────────────
+        if any(w in q for w in ["checkout", "cart", "drop-off", "dropoff", "abandon"]):
+            return (
+                "**Checkout Drop-off Recovery Architecture:**\n\n"
+                "RecoverIQ detects abandoned checkout sessions and recovers lost conversions without spamming:\n"
+                "- **Captured Drop-off Reasons**:\n"
+                "  - `payment_page_exit`: Abandoned at payment rail selection\n"
+                "  - `otp_timeout`: OTP window expired without customer retry\n"
+                "  - `bank_error_exit`: User bounced after encountering an issuer bank error\n"
+                "  - `upi_intent_abandoned`: UPI app opened on device but intent payment not completed\n"
+                "  - `address_form_exit`: Abandoned before reaching payment gateway\n"
+                "- **Smart Recovery Sequences**:\n"
+                "  - **T+10 min**: Non-intrusive WhatsApp nudge with 1-click pre-filled cart re-engagement link.\n"
+                "  - **T+1 hour**: Follow-up message addressing payment failure / offering alternative rails.\n"
+                "  - **T+24 hour**: Final discount/incentive reminder before session expiry."
+            )
+
+        # ── 5. Customer Identity Graph ──────────────────────────────────────────
+        if any(w in q for w in ["identity", "graph", "alias", "canonical", "profile"]):
+            return (
+                "**Customer Identity Graph & Unified Behavioral History:**\n\n"
+                "Customers often interact across multiple VPAs, phones, and customer IDs. RecoverIQ unifies these:\n"
+                "- **Canonical Resolution**: Maps disparate identifiers (`rahul@oksbi`, `+91-9876543210`, `CUST-1001`) to a single canonical ID (`cust:rahul@oksbi`).\n"
+                "- **Unified Behavioral History**: Retry attempts, payment failures, trust scores, and spend baselines are tracked across the person, not isolated aliases.\n"
+                "- **Synchronized Compliance & Suppression**: If a customer requests DND or reports hardship on WhatsApp via phone, their VPA and Customer ID are immediately suppressed across all automated retries and channels."
+            )
+
+        # ── 6. Mandate Expiry / BT02 Prevention ────────────────────────────────
+        if any(w in q for w in ["mandate expiry", "expiring", "t-72", "bt02", "lapse"]):
+            return (
+                "**Proactive Mandate Expiry Interceptor (T-72h BT02 Prevention):**\n\n"
+                "UPI Autopay mandates have finite validity periods. When they expire, debits fail with NPCI error **BT02 ('Mandate Expired')**.\n"
+                "- **Proactive Detection**: Scans all active mandates 24 to 72 hours prior to expiration date.\n"
+                "- **1-Click Renewal**: Dispatches a personalized WhatsApp/SMS message containing a secure Razorpay mandate re-registration link.\n"
+                "- **Zero Churn Impact**: Re-registers the mandate before the next billing cycle, eliminating bank decline charges and preserving recurring merchant ARR without reactive failure."
+            )
+
+        # ── 7. Live Customer Event Context ──────────────────────────────────────
+        elif event_context and any(w in q for w in ["this", "event", "transaction", "failure", "status", "why", "recommend", "current", "what happened", "action"]):
+            cust = event_context.get("customer") or event_context.get("customer_name") or event_context.get("scenario_name") or event_context.get("customer_vpa") or "Customer"
             vpa = event_context.get("vpa") or event_context.get("customer_vpa") or "N/A"
             code = event_context.get("failure_code") or "U30"
             reason = event_context.get("failure_reason") or "Payment failure"
             amt = event_context.get("amount") or event_context.get("mandate_amount") or 999.0
-            bank = event_context.get("bank") or "SBI"
-            guardrail = event_context.get("guardrail_triggered") or "Deterministic safety policy (GR1/GR5)"
-            outcome = event_context.get("decision_outcome") or "Automated recovery pipeline active"
+            bank = event_context.get("bank") or "Bank"
+            guardrail = event_context.get("guardrail_triggered") or "Deterministic safety policy (GR1–GR8)"
+            outcome = event_context.get("decision_outcome") or (", ".join(event_context.get("interventions", [])) if event_context.get("interventions") else "Automated recovery pipeline active")
+            scheduled = event_context.get("scheduled_at")
+            sched_line = f"\n- **Scheduled Retry**: {scheduled}" if scheduled else ""
+            aa = event_context.get("aa_check")
+            aa_line = f"\n- **Account Aggregator Verification**: {aa}" if aa else ""
             return (
                 f"**Live Event Diagnosis for {cust} ({code}):**\n\n"
                 f"- **Failure Code & Reason**: **{code}** ({reason}) on {bank}.\n"
                 f"- **Amount**: ₹{amt:,.0f} | **VPA**: `{vpa}`\n"
                 f"- **Guardrail & Safety Check**: {guardrail}\n"
-                f"- **Autonomous Recovery Action**: {outcome}\n"
-                f"- **Channel Allocation**: Bayesian Thompson Sampling selects the highest expected utility channel without exhausting retry limits."
+                f"- **Autonomous Recovery Action**: {outcome}"
+                f"{sched_line}"
+                f"{aa_line}\n"
+                f"- **Channel Optimization**: Bayesian Thompson Sampling allocates the highest expected utility channel without exhausting retry limits."
             )
         elif "rahul" in q or ("u30" in q and ("retry" in q or "immediate" in q or "not" in q)):
             bal = event_context.get("setu_aa_balance_check", {}).get("available_balance", 432.63) if event_context else 432.63
@@ -464,7 +684,7 @@ Rules:
                 "**RecoverIQ Overview:**\n\n"
                 "RecoverIQ is an autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem. "
                 "It combines 14 NPCI error code root-cause diagnostics, RBI/TRAI deterministic guardrails, Bayesian Thompson Sampling channel optimization, and a fail-safe Google Gemini 2-way conversational WhatsApp recovery engine.\n\n"
-                "Ask me about: **Benchmark stats**, **U30 salary retries**, **RBI ₹1L limits**, **Thompson Sampling**, or **WhatsApp NLP intents**!"
+                "Ask me about: **Live session stats**, **Benchmark results**, **U30 salary retries**, **B2B Receivables Chaser**, **Checkout Drop-off Recovery**, or **Customer Identity Graph**!"
             )
 
     async def parse_natural_language_scenario(self, prompt: str) -> Dict[str, Any]:
