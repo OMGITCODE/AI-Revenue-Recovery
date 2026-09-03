@@ -744,7 +744,7 @@ A dedicated copilot assistant accessible via the dashboard navbar (`✨ 🤖 Ask
 ```env
 # ── Google Gemini Configuration ───────────────────────────────────────────
 GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-flash-lite-latest
 LLM_PROVIDER=gemini
 
 # ── OpenAI Configuration (Alternative) ────────────────────────────────────
