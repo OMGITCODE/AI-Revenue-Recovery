@@ -7,7 +7,7 @@
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > Detects revenue at risk, diagnoses root causes via NPCI response codes, evaluates RBI guardrails, uses **Bayesian Thompson Sampling** for optimal intervention selection, and tracks verified recovery in an immutable audit ledger.
 
-[![Tests](https://img.shields.io/badge/tests-195%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-203%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -348,7 +348,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 
 ---
 
-### 🧪 7. Automated Test Suite (`tests/` — 195 Tests across 13 Files)
+### 🧪 7. Automated Test Suite (`tests/` — 203 Tests across 14 Files)
 
 | Test Suite | File | Tests | Coverage Scope |
 |---|---|---|---|
@@ -365,13 +365,14 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | **Messaging & Cryptographic Webhooks** | `tests/test_messaging.py` | **14 tests** | Twilio client init, live/mock routing, DLT compliance, Form webhook parser, HMAC signature verification, and API auth on state mutation & PII routes. |
 | **Prompt-to-Scenario & Eval Suite** | `tests/test_prompt_to_scenario.py` | **13 tests** | Natural language scenario generator, proactive mandate lapse bridge, Pydantic validation boundaries, sliding-window rate limiter, and held-out classifier benchmark. |
 | **Proactive Mandate Expiry** | `tests/test_mandate_expiry.py` | **15 tests** | $T-72\text{h}$ validity window filtering, batch `nudge-all` execution, 1-click magic link dispatch, force-lapse live bridge, ledger logging, simulator scenario, and live REST endpoints. |
-| **Total Test Suite** | `pytest tests/` | **195 passing** | **100% test pass rate in ~36s** |
+| **Ask RecoverIQ Chat Grounding** | `tests/test_project_chat_grounding.py` | **8 tests** | Live session awareness, ₹0 fresh-session safety, zero-division invariance, empirical benchmark citation, and module domain grounding (B2B, Drop-off, Identity, Mandates). |
+| **Total Test Suite** | `pytest tests/` | **203 passing** | **100% test pass rate in ~36s** |
 
 ---
 
 ## 🤖 Natural Language Prompt-to-Scenario & Security/Eval Architecture
 
-RecoverIQ integrates **Google Gemini 1.5/3.6 Flash** and **OpenAI GPT-4o-mini** with enterprise security, dual-layer rate limiting, XSS defense, and honest evaluation benchmarks:
+RecoverIQ integrates **Google Gemini** (default: `gemini-flash-lite-latest`) and **OpenAI GPT-4o-mini** with enterprise security, dual-layer rate limiting, XSS defense, and honest evaluation benchmarks:
 
 ### 1. Natural Language "Prompt-to-Scenario" Generator (`POST /api/prompt-to-scenario`)
 Allows judges, reviewers, and operators to type freeform payment failure prompts (e.g. *"Simulate Rahul Sharma ₹4,500 U30 insufficient funds on SBI salary account"* or *"Simulate Infosys B2B invoice ₹1.85L overdue"*):
@@ -574,7 +575,7 @@ ai-revenue-recovery-agent/
 ├── archive/                     # Preserved Architectural Evolution
 │   └── v1_prototypes/           # Early conceptual v1 prototypes (detector, interventions, orchestrator)
 │
-└── tests/                       # Test Suite (195 passing tests across 13 files)
+└── tests/                       # Test Suite (203 passing tests across 14 files)
     ├── test_upi_qr_api.py       # Dynamic vector SVG, NPCI schemes, domain idempotency, store recovery & auth tests (6 tests)
     ├── test_voice_ai.py         # Voice AI scenarios, dual dialects, audio assets, security auth & IVR cost tests (8 tests)
     ├── test_setu_aa_api.py      # Setu AA endpoint, API key security & consent verification tests (4 tests)
@@ -587,7 +588,8 @@ ai-revenue-recovery-agent/
     ├── test_idempotency.py      # Atomic reservation, concurrency locks & module deduplication (12 tests)
     ├── test_messaging.py        # Twilio WhatsApp/SMS client, Form webhook, signature & auth tests (14 tests)
     ├── test_prompt_to_scenario.py # Prompt-to-Scenario generator, proactive lapse bridge, rate limiter & eval benchmark tests (13 tests)
-    └── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (15 tests)
+    ├── test_mandate_expiry.py   # Proactive T-72h Mandate Expiry Interceptor & Pre-BT02 tests (15 tests)
+    └── test_project_chat_grounding.py # Live session awareness, ₹0 session safety & anti-hallucination grounding (8 tests)
 ```
 
 ---
@@ -647,7 +649,7 @@ Open **`http://localhost:8000`** in your browser to view the live interactive da
 
 ```bash
 python -m pytest tests/ -v
-# 195 passed in ~5-15s (or ~28s on Windows)
+# 203 passed in ~5-15s (or ~30s on Windows)
 ```
 
 ---
