@@ -395,10 +395,10 @@ function openDrawer(ev) {
       ${row('Result', `<span style="font-size:12px;color:var(--text-sub)">${esc(ev.aa_check)}</span>`)}
       ${row('Why', '"We don\'t guess when the customer can pay — we ask, with consent, and check."')}
       <div style="margin-top:10px;display:flex;gap:6px;">
-        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.customer_vpa || ev.vpa || '')}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.failure_code || ev.code || 'U30')}')">
           🏦 Setu AA Check
         </button>
-        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.vpa)}', '${esc(ev.customer_id||ev.vpa)}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.code||'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.customer_vpa || ev.vpa || '')}', '${esc(ev.customer_id || ev.customer_vpa || ev.vpa || '')}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.failure_code || ev.code || 'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
           📲 Instant QR Pay
         </button>
       </div>
@@ -406,13 +406,13 @@ function openDrawer(ev) {
     <div class="dl-section">
       <div class="dl-section-title">🏦 Recovery Actions (Setu AA &amp; UPI QR)</div>
       <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">
-        ${ev.code === 'U30' ? 'U30 Insufficient Funds: Verify real bank balance via Setu AA, or dispatch an instant dynamic UPI QR payment link.' : 'Verify customer balance via Setu AA or offer instant scan-to-pay via dynamic UPI QR code.'}
+        ${(ev.failure_code || ev.code) === 'U30' ? 'U30 Insufficient Funds: Verify real bank balance via Setu AA, or dispatch an instant dynamic UPI QR payment link.' : 'Verify customer balance via Setu AA or offer instant scan-to-pay via dynamic UPI QR code.'}
       </div>
       <div style="display:flex;gap:6px;">
-        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.vpa)}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.code||'U30')}')">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:var(--green);border-color:rgba(16,185,129,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openSetuAAModal('${esc(ev.customer_vpa || ev.vpa || '')}', ${Number(ev.amount)||1000}, '${esc(ev.bank||'')}', '${esc(ev.failure_code || ev.code || 'U30')}')">
           🏦 Setu AA Check
         </button>
-        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.vpa)}', '${esc(ev.customer_id||ev.vpa)}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.code||'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
+        <button class="btn-ghost" style="flex:1;padding:7px 10px;font-size:12px;color:#60a5fa;border-color:rgba(59,130,246,0.35);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;" onclick="openUPIQRModal('${esc(ev.customer_vpa || ev.vpa || '')}', '${esc(ev.customer_id || ev.customer_vpa || ev.vpa || '')}', ${Number(ev.amount)||999}, 'Recovery ${esc(ev.failure_code || ev.code || 'UPI')}', '${esc(ev.id||'EVT-DEMO')}')">
           📲 Instant QR Pay
         </button>
       </div>
@@ -2392,51 +2392,116 @@ function removeProjectChatTyping(id) {
 
 // ── Setu Account Aggregator (AA) Consent Flow Simulator ─────────────────────
 
+const NPCI_CODE_LABELS = {
+  'U30': 'U30 — Insufficient Funds (Simulate Salary Window Check)',
+  'TM': 'TM — Technical Glitch / Timeout (Immediate Retry Window)',
+  'U29': 'U29 — Mandate Amount Cap Exceeded',
+  'BT01': 'BT01 — Mandate Revoked by Customer',
+  'BT02': 'BT02 — Mandate Expired',
+  'U69': 'U69 — Daily Transaction Limit Exceeded',
+  'U13': 'U13 — Mandate Paused by Customer',
+  'BA': 'BA — Account Closed / KYC Frozen',
+  'RB': 'RB — Bank Generic Decline',
+  'U66': 'U66 — Device Binding Lost / SIM Swapped',
+  'UT': 'UT — Remitter Bank Unavailable / NPCI Timeout',
+  'Z9': 'Z9 — Insufficient Funds (Core Banking Decline)',
+  'ZH': 'ZH — Invalid / Inactive Customer VPA',
+  'ZM': 'ZM — Invalid MPIN / PIN Limit Exceeded',
+};
+
+const SETU_PERSONAS = {
+  'rahul@oksbi': { name: 'Rahul', vpa: 'rahul@oksbi', amount: 999, bank: 'SBI', code: 'U30' },
+  'priya@okhdfcbank': { name: 'Priya', vpa: 'priya@okhdfcbank', amount: 1499, bank: 'HDFC', code: 'BT01' },
+  'arjun@okicici': { name: 'Arjun', vpa: 'arjun@okicici', amount: 4500, bank: 'ICICI', code: 'TM' },
+  'kavita@okkotak': { name: 'Kavita', vpa: 'kavita@okkotak', amount: 3499, bank: 'Kotak Mahindra Bank', code: 'U29' },
+  'vikram@ybl': { name: 'Vikram', vpa: 'vikram@ybl', amount: 2999, bank: 'Yes Bank', code: 'BT02' },
+  'meera@okaxis': { name: 'Meera', vpa: 'meera@okaxis', amount: 1250, bank: 'Axis', code: 'U69' },
+  'anita@paytm': { name: 'Anita', vpa: 'anita@paytm', amount: 299, bank: 'Paytm Payments Bank', code: 'U13' },
+  'deepak@okkotak': { name: 'Deepak', vpa: 'deepak@okkotak', amount: 899, bank: 'Kotak', code: 'BA' },
+  'ananya@oksbi': { name: 'Ananya', vpa: 'ananya@oksbi', amount: 3499, bank: 'SBI', code: 'U30' },
+  'rohit@okhdfcbank': { name: 'Rohit', vpa: 'rohit@okhdfcbank', amount: 1999, bank: 'HDFC', code: 'U30' },
+};
+
+function _updateSetuPills(vpa) {
+  const clean = (vpa || '').toLowerCase();
+  document.querySelectorAll('.upi-preset-pill').forEach(pill => {
+    const text = pill.textContent.toLowerCase();
+    const isRahul = clean.includes('rahul') && text.includes('rahul');
+    const isPriya = clean.includes('priya') && text.includes('priya');
+    const isArjun = clean.includes('arjun') && text.includes('arjun');
+    const isKavita = clean.includes('kavita') && text.includes('kavita');
+    const isVikram = clean.includes('vikram') && text.includes('vikram');
+    if (isRahul || isPriya || isArjun || isKavita || isVikram) {
+      pill.classList.add('active');
+    } else {
+      pill.classList.remove('active');
+    }
+  });
+}
+
 function fillSetuPreset(vpa, amount, bank, code, btn) {
   const vpaInput = document.getElementById('setu-input-vpa');
   const amountInput = document.getElementById('setu-input-amount');
   const bankInput = document.getElementById('setu-input-bank');
   const codeSelect = document.getElementById('setu-input-code');
 
+  const cleanCode = (code || 'U30').trim().toUpperCase();
+
   if (vpaInput) vpaInput.value = vpa;
   if (amountInput) amountInput.value = amount;
   if (bankInput) bankInput.value = bank;
   if (codeSelect) {
-    _ensureSelectOption(codeSelect, code);
-    codeSelect.value = code;
+    _ensureSelectOption(codeSelect, cleanCode);
+    codeSelect.value = cleanCode;
   }
 
   // Highlight selected pill
   document.querySelectorAll('.upi-preset-pill').forEach(p => p.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    _updateSetuPills(vpa);
+  }
 }
 
 function _ensureSelectOption(selectEl, code) {
   if (!selectEl || !code) return;
-  const exists = Array.from(selectEl.options).some(opt => opt.value === code);
+  const cleanCode = String(code).trim().toUpperCase();
+  const exists = Array.from(selectEl.options).some(opt => opt.value.toUpperCase() === cleanCode);
   if (!exists) {
     const opt = document.createElement('option');
-    opt.value = code;
-    opt.textContent = `${code} — Dataset Custom Failure`;
+    opt.value = cleanCode;
+    opt.textContent = NPCI_CODE_LABELS[cleanCode] || `${cleanCode} — NPCI Failure Reason`;
     selectEl.appendChild(opt);
   }
 }
+
+let _setuVpaInputBound = false;
 
 function openSetuAAModal(vpa, amount, bank, failureCode) {
   const modal = document.getElementById('setu-modal');
   const backdrop = document.getElementById('setu-backdrop');
   if (!modal || !backdrop) return;
 
-  // Pre-fill inputs with either arguments or dataset-aligned defaults (Rahul Sharma, SBI, ₹999, U30)
   const vpaInput = document.getElementById('setu-input-vpa');
   const amountInput = document.getElementById('setu-input-amount');
   const bankInput = document.getElementById('setu-input-bank');
   const codeSelect = document.getElementById('setu-input-code');
 
-  const resolvedVpa = vpa || 'rahul@oksbi';
-  const resolvedAmount = (amount !== undefined && amount !== null) ? Number(amount) : 999;
-  const resolvedBank = bank || 'SBI';
-  const resolvedCode = failureCode || 'U30';
+  const cleanVpa = (vpa && String(vpa).trim()) || '';
+  const known = SETU_PERSONAS[cleanVpa.toLowerCase()];
+
+  // Pre-fill inputs with either arguments or dataset-aligned defaults
+  const resolvedVpa = cleanVpa || 'rahul@oksbi';
+  const resolvedAmount = (amount !== undefined && amount !== null && !isNaN(Number(amount)) && Number(amount) > 0)
+    ? Number(amount)
+    : (known ? known.amount : 999);
+  const resolvedBank = (bank && String(bank).trim())
+    ? String(bank).trim()
+    : (known ? known.bank : 'SBI');
+  const resolvedCode = (failureCode && String(failureCode).trim())
+    ? String(failureCode).trim().toUpperCase()
+    : (known ? known.code : 'U30');
 
   if (vpaInput) vpaInput.value = resolvedVpa;
   if (amountInput) amountInput.value = resolvedAmount;
@@ -2446,19 +2511,26 @@ function openSetuAAModal(vpa, amount, bank, failureCode) {
     codeSelect.value = resolvedCode;
   }
 
-  // Match preset pill active state
-  document.querySelectorAll('.upi-preset-pill').forEach(pill => {
-    const isRahul = resolvedVpa.includes('rahul') && pill.textContent.includes('Rahul');
-    const isPriya = resolvedVpa.includes('priya') && pill.textContent.includes('Priya');
-    const isArjun = resolvedVpa.includes('arjun') && pill.textContent.includes('Arjun');
-    const isKavita = resolvedVpa.includes('kavita') && pill.textContent.includes('Kavita');
-    const isVikram = resolvedVpa.includes('vikram') && pill.textContent.includes('Vikram');
-    if (isRahul || isPriya || isArjun || isKavita || isVikram) {
-      pill.classList.add('active');
-    } else {
-      pill.classList.remove('active');
-    }
-  });
+  // Update preset pill active state
+  _updateSetuPills(resolvedVpa);
+
+  // Attach real-time input synchronization for VPA typing
+  if (vpaInput && !_setuVpaInputBound) {
+    _setuVpaInputBound = true;
+    vpaInput.addEventListener('input', (e) => {
+      const val = (e.target.value || '').trim().toLowerCase();
+      const match = SETU_PERSONAS[val];
+      if (match) {
+        if (amountInput) amountInput.value = match.amount;
+        if (bankInput) bankInput.value = match.bank;
+        if (codeSelect) {
+          _ensureSelectOption(codeSelect, match.code);
+          codeSelect.value = match.code;
+        }
+      }
+      _updateSetuPills(val);
+    });
+  }
 
   resetSetuModalForm();
 
