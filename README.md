@@ -140,7 +140,10 @@ $$\text{Context Key} = \text{FailureCategory} \times \text{CustomerTier} \times 
 
 - **Domain-Informed Priors**: Initialized with domain-informed priors (e.g. `U30` + `SalaryWindow` $\alpha=14.0, \beta=6.0 \implies 70\%$ initial win rate).
 - **Sampling**: Draws stochastic probability sample $\theta_i \sim \text{Beta}(\alpha_i, \beta_i)$.
-- **Online Learning**: Real-time Bayesian updating as webhooks and payment confirmations arrive.
+- **Cost-Aware Utility Optimization**: The bandit maximizes net financial return rather than just raw conversion probability:
+  $$\text{Utility}(a) = \theta_a \times \text{Amount} - \text{Channel\_Cost}(a)$$
+  accounting for intervention costs: Silent Retry (₹0), WhatsApp nudge (₹0.50), Mandate Renewal (₹1.00), UPI Collect (₹1.50), Voice IVR (₹1.50), Escalation (₹25.00). High-value recoveries justify multi-touch interventions while micro-transactions avoid cost-depleting over-action.
+- **Online Bayesian Updates**: Real-time Bayesian updating ($\alpha \leftarrow \alpha + 1$ on success, $\beta \leftarrow \beta + 1$ on failure) as webhooks and payment confirmations arrive.
 
 ### 2. CRED-Style Payer Trust Score
 The agent computes a continuous **Payer Trust Score ($0.0 - 1.0$)** from the customer's **Promise-to-Pay (P2P)** historical track record:
@@ -356,6 +359,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | File | Technology | Description |
 |---|---|---|
 | `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Global ↻ Refresh All synchronizer, Outbound Voice AI Outreach Studio, Setu AA Simulator Modal, Proactive Mandate Expiry Interceptor with authentic WhatsApp Preview Modal, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
+| `dashboard/analytics.html` | HTML5 / Semantic UI | Dedicated Analytics Dashboard (`/analytics`) featuring Live Recovery Funnel, Intervention Channel Performance distribution bars, Interactive Contextual Bandit Posterior Inspector with Beta($\alpha, \beta$) 90% Bayesian Credible Intervals and pull tracking, and a filterable Regulatory Audit Trail table with instant search and action/outcome pills. |
 | `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, parallel multi-panel refresh synchronization with toast feedback, audio alerts, and interactive simulation controls. |
 | `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, authentic WhatsApp chat bubbles, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
 
@@ -555,6 +559,7 @@ ai-revenue-recovery-agent/
 │
 ├── dashboard/                   # Razorpay-Style Dark UI
 │   ├── index.html               # Responsive multi-panel dashboard
+│   ├── analytics.html           # Standalone Analytics page (Funnel, Channels, Bandit Beta Posteriors, Audit Trail)
 │   ├── app.js                   # SSE listeners, animated counters, charts
 │   └── style.css                # Polished dark mode UI with glassmorphism
 │
@@ -668,7 +673,7 @@ python -X utf8 demo.py
 # Explicit UTF-8 encoding flag prevents console character mangling on Windows
 python -X utf8 -m uvicorn api.main:app --port 8000 --reload
 ```
-Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, the **`📞 Voice AI Studio`**, the **`🏦 Setu AA Simulator`**, and the **`📲 UPI QR Pay`** modal in the top navigation bar.
+Open **`http://localhost:8000`** in your browser to view the live interactive dashboard, conversational simulator, the **`📞 Voice AI Studio`**, the **`🏦 Setu AA Simulator`**, and the **`📲 UPI QR Pay`** modal. Navigate to **`http://localhost:8000/analytics`** for the dedicated Analytics Dashboard featuring live recovery funnel, channel distribution charts, contextual bandit posterior state viewer with Beta($\alpha, \beta$) credible intervals, and filterable regulatory audit trail.
 
 ### 5. Run the Automated Test Suite
 
@@ -879,6 +884,8 @@ RecoverIQ provides a dual-layer evaluative architecture directly inside the dash
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/analytics` | Dedicated standalone Analytics Dashboard (Funnel, Channels, Bandit Posteriors, Audit Trail) |
+| `POST`| `/api/seed` | Seeds dashboard, ledger, and bandit models with realistic multi-rail recovery events on demand |
 | `GET` | `/api/customers` | Lists all active canonical customer profiles and alias mappings across financial rails |
 | `GET` | `/api/customer/{identifier}/history` | Returns Customer 360° view: aliases, rolling spend history, trust score, active mandates, B2B invoices, cart drop-offs, compliance holds, and event ledger |
 | `GET` | `/api/whatsapp/conversation/{identifier}` | Retrieves multi-turn conversational message history for a customer |
