@@ -163,6 +163,20 @@ DEFAULT_PRIORS: Dict[str, Dict[RecoveryArm, Tuple[float, float]]] = {
 }
 
 
+# ── Channel Costs (₹ per intervention attempt) ───────────────────────────────
+# Used to compute Expected Recovery Utility: θ × Amount - ChannelCost
+
+CHANNEL_COSTS: Dict[RecoveryArm, float] = {
+    RecoveryArm.SMART_RETRY_SALARY:    0.00,   # Automated scheduler — zero cost
+    RecoveryArm.SMART_RETRY_IMMEDIATE: 0.00,   # Automated backoff — zero cost
+    RecoveryArm.UPI_COLLECT_DIRECT:    0.25,   # UPI collect API call
+    RecoveryArm.WHATSAPP_PAY_LINK:     0.50,   # WhatsApp message
+    RecoveryArm.MANDATE_RE_REGISTER:   0.50,   # WhatsApp magic link
+    RecoveryArm.B2B_IVR_CHASER:        2.00,   # IVR call
+    RecoveryArm.HUMAN_ESCALATION:     25.00,   # Human agent touch
+}
+
+
 # ── Thompson Sampling Bandit Engine ───────────────────────────────────────────
 
 class ThompsonSamplingEngine:
@@ -252,17 +266,28 @@ class ThompsonSamplingEngine:
             samples[arm] = sampled_val
             means[arm] = arm_state.mean
 
-        # Select arm with highest sampled probability
-        best_arm = max(samples, key=lambda a: samples[a])
+        # Select arm maximising Expected Recovery Utility: θ × Amount - ChannelCost
+        # This implements the documented utility function from the module docstring.
+        utilities: Dict[RecoveryArm, float] = {
+            arm: samples[arm] * amount - CHANNEL_COSTS.get(arm, 0.0)
+            for arm in candidate_arms
+        }
+        best_arm = max(utilities, key=lambda a: utilities[a])
         best_state = self._get_or_create_arm(context_key, best_arm)
 
-        # Check if this choice was an exploration move (i.e. not the highest mean)
-        highest_mean_arm = max(means, key=lambda a: means[a])
+        # Check if this choice was an exploration move (i.e. not the highest mean utility)
+        mean_utilities = {
+            arm: means[arm] * amount - CHANNEL_COSTS.get(arm, 0.0)
+            for arm in candidate_arms
+        }
+        highest_mean_arm = max(mean_utilities, key=lambda a: mean_utilities[a])
         is_exploration = (best_arm != highest_mean_arm)
 
         reasoning = (
             f"Thompson Sampling [{context_key}]: Selected '{best_arm.value}' "
-            f"(Sampled P={samples[best_arm]:.1%}, Posterior E[Win]={best_state.mean:.1%}, "
+            f"(Utility={utilities[best_arm]:.2f} = θ={samples[best_arm]:.3f} × ₹{amount:.0f} "
+            f"- cost={CHANNEL_COSTS.get(best_arm, 0.0):.2f}, "
+            f"Posterior E[Win]={best_state.mean:.1%}, "
             f"90% CI=[{best_state.confidence_interval[0]:.2f}, {best_state.confidence_interval[1]:.2f}]). "
             + ("Exploration mode active." if is_exploration else "Exploiting top empirical policy.")
         )

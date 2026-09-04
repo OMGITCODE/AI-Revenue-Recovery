@@ -97,7 +97,11 @@ class Receivable:
     status:         ChaseStatus        = ChaseStatus.ACTIVE
     actions:        List[ChaseAction]  = field(default_factory=list)
     promise_id:     Optional[str]      = None    # linked P2P if any
-    interest_rate:  float              = 0.18    # 18% per annum
+    interest_rate:  float              = 0.0    # Unused; MSMED compound rate applied via interest_accrued
+
+    # MSMED Act Section 16: compound interest at 3 × RBI bank rate with monthly rests
+    _RBI_BANK_RATE: float = field(default=0.065, init=False, repr=False)  # 6.5% current RBI repo rate proxy
+    _MSMED_MULTIPLIER: int = field(default=3, init=False, repr=False)     # Section 16: three times the bank rate
 
     # ── Computed properties ───────────────────────────────────────────────────
 
@@ -122,8 +126,19 @@ class Receivable:
 
     @property
     def interest_accrued(self) -> float:
-        """Simple interest since due date."""
-        return self.amount * self.interest_rate * max(0, self.days_overdue) / 365
+        """
+        Simulated MSMED Act Section 16 statutory interest.
+        Compound interest with monthly rests at 3 × RBI bank rate.
+        Current assumption: RBI bank rate = 6.5%, MSMED rate = 19.5% p.a.
+        (Not legal advice; actual interest subject to prevailing RBI bank rate.)
+        """
+        days = max(0, self.days_overdue)
+        if days == 0:
+            return 0.0
+        annual_rate = self._RBI_BANK_RATE * self._MSMED_MULTIPLIER  # 19.5%
+        monthly_rate = annual_rate / 12
+        months = days / 30.44  # average Gregorian month length
+        return round(self.amount * ((1 + monthly_rate) ** months - 1), 2)
 
     @property
     def total_outstanding(self) -> float:
@@ -171,7 +186,7 @@ CHASE_TEMPLATES: Dict[AgingBucket, Dict[DebtorTier, dict]] = {
     AgingBucket.EARLY: {
         DebtorTier.C: {
             "channel": "whatsapp+ivr",
-            "message": "⚠️ Invoice #{inv} is now {days} days overdue (₹{amount:,.0f}). Please settle immediately to avoid interest charges (18% p.a.). Pay: https://rzp.io/l/inv-{id}",
+            "message": "⚠️ Invoice #{inv} is now {days} days overdue (₹{amount:,.0f}). Please settle immediately to avoid MSMED Act statutory interest (~19.5% p.a., compounded monthly). Pay: https://rzp.io/l/inv-{id}",
         },
         DebtorTier.B: {
             "channel": "ar_specialist",
@@ -189,7 +204,7 @@ CHASE_TEMPLATES: Dict[AgingBucket, Dict[DebtorTier, dict]] = {
         },
         DebtorTier.B: {
             "channel": "legal_notice",
-            "message": "FORMAL DEMAND — Invoice #{inv} for ₹{total:,.0f} (including 18% p.a. interest) remains unpaid after {days} days. Legal proceedings may commence within 14 days without payment. Pay: https://rzp.io/l/inv-{id}",
+            "message": "FORMAL DEMAND — Invoice #{inv} for ₹{total:,.0f} (including MSMED Act Section 16 interest at 3× RBI bank rate, compounded monthly) remains unpaid after {days} days. Legal proceedings may commence within 14 days without payment. Pay: https://rzp.io/l/inv-{id}",
         },
         DebtorTier.A: {
             "channel": "legal+senior_manager",

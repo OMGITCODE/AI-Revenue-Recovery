@@ -291,13 +291,45 @@ def simulate_ai_agent_on_event(
     }
 
 
+def _check_ai_compliance_violation(
+    action: str,
+    amount: float,
+    category: str,
+    is_night: bool,
+) -> int:
+    """
+    Independent post-hoc compliance validator.
+    Counts regulatory violations for the AI-chosen action, separately from
+    the guardrail engine, so '0 violations' is independently measured rather
+    than assumed by the simulator.
+    """
+    violations = 0
+    rbi_threshold = DecisionEngine.get_rbi_threshold(category)
+    # RBI Mandate Circular: silent retry above category ceiling is a violation
+    if action == "smart_retry" and amount > rbi_threshold:
+        violations += 1
+    # TRAI TCCCPR: outreach during 21:00-08:00 IST blackout is a violation
+    if is_night and action in ("whatsapp_nudge", "smart_retry", "upi_collect"):
+        violations += 1
+    return violations
+
+
 def run_single_benchmark(
     events: list,
     seed: int,
     conversion_rates: Optional[Dict[str, float]] = None,
 ) -> tuple[PolicyResult, PolicyResult]:
-    """Run one full benchmark pass with a fixed random seed for reproducibility."""
+    """Run one full benchmark pass with a fixed random seed for reproducibility.
+
+    Each trial resets the bandit to its initial domain-informed priors, then
+    performs an online Bayesian update after every simulated AI event, making
+    the benchmark genuinely test contextual Thompson Sampling with online learning.
+    """
     rng = random.Random(seed)
+
+    # Reset bandit to initial domain-informed priors for each Monte Carlo trial
+    # (ensures each of the N runs is an independent trajectory, not cumulative state)
+    bandit_engine.reset()
 
     base_res = PolicyResult(policy_name="Baseline (Fixed-Schedule Retry)")
     ai_res   = PolicyResult(policy_name="RecoverIQ (AI Recovery Agent)")
@@ -321,16 +353,47 @@ def run_single_benchmark(
         else:
             base_res.failed_events += 1
 
-        # 2. Run AI Agent (probabilistic)
+        # 2. Run AI Agent (probabilistic + online learning)
         a_out = simulate_ai_agent_on_event(ev, rng, conversion_rates=conversion_rates)
+
+        # Independent compliance check (post-hoc validator — not circular)
+        ai_action = a_out.get("action", "blocked_by_guardrails")
+        ai_violations = _check_ai_compliance_violation(
+            action=ai_action,
+            amount=float(ev.get("amount", 0)),
+            category=ev.get("category", "general"),
+            is_night=ev.get("is_night_event", False),
+        )
+
         ai_res.retries_fired += a_out["retries"]
         ai_res.channel_costs += a_out["cost"]
-        ai_res.compliance_violations += a_out["violations"]
+        ai_res.compliance_violations += ai_violations  # independently measured
         if a_out["recovered"]:
             ai_res.recovered_events += 1
             ai_res.total_recovered += a_out["amount_recovered"]
         else:
             ai_res.failed_events += 1
+
+        # Bayesian online update: update bandit posterior from simulated outcome
+        # This makes each run a genuine learning trajectory, not fixed-prior sampling.
+        if ai_action not in ("blocked_by_guardrails", "escalation", None):
+            from src.agent.bandit import get_context_key
+            failure_cat = ev.get("failure_category") or ev.get("failure_code", "U30")
+            # Map failure code to category if needed
+            code_to_cat = {
+                "U30": "insufficient_funds", "U29": "insufficient_funds",
+                "TM": "technical_error",     "TE": "technical_error",
+                "BT01": "mandate_inactive",   "BT02": "mandate_inactive",
+            }
+            failure_cat = code_to_cat.get(failure_cat, failure_cat)
+            tier = ev.get("customer_tier", "silver")
+            context_key = get_context_key(failure_cat, tier, "med")
+            bandit_engine.update(
+                context_key=context_key,
+                arm=ai_action,
+                success=a_out["recovered"],
+                amount_recovered=a_out["amount_recovered"],
+            )
 
     base_res.net_roi = base_res.total_recovered - base_res.channel_costs
     ai_res.net_roi = ai_res.total_recovered - ai_res.channel_costs

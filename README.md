@@ -233,7 +233,8 @@ Shifts RecoverIQ from purely reactive recovery after payment failure to **proact
 ### 6. B2B Receivables Chaser & Statutory MSMED Act Dunning Engine
 Enterprise invoices require specialized handling distinct from consumer micro-transactions. The B2B Chaser automates invoice dunning with full Indian regulatory compliance:
 - **4 Dynamic Aging Buckets**: Classifies receivables into `0–30d` (Current), `31–60d` (Early), `61–90d` (Late), and `90d+` (Critical).
-- **Statutory MSMED Act 2006 Interest**: Automatically calculates and compounds **18% p.a. penal interest** on delayed payments from corporate debtors.
+- **Statutory MSMED Act 2006 Interest**: Automatically simulates **MSMED Act Section 16** penal interest — **3× the RBI bank rate (~19.5% p.a.), compounded monthly** — on delayed B2B payments. *(Simulated statutory computation; actual interest subject to prevailing RBI bank rate.)*
+
 - **Debtor Exposure Tiering**:
   - **Tier C (< ₹25,000)**: Fully automated low-cost outreach via **Hinglish automated IVR voice bot** + payment link SMS.
   - **Tier B (₹25,000 – ₹2,00,000)**: Semi-automated outreach (Formal demand email + designated Account Manager).
