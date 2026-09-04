@@ -1938,7 +1938,7 @@ function setBenchmarkMode(mode) {
       liveTab.style.boxShadow = 'none';
     }
     if (cardTitle) cardTitle.textContent = '📊 Global 60-Scenario Benchmark: RecoverIQ vs Fixed-Schedule Retry Baseline (Monte Carlo)';
-    if (cardSub) cardSub.textContent = 'Probabilistic policy comparison across all 60 scenarios (n=50 runs) · Calibrated on Indian FinTech conversion benchmarks';
+    if (cardSub) cardSub.textContent = 'Probabilistic policy comparison across all 60 scenarios (n=50 runs) · Modeled conversion assumptions informed by industry failure dynamics';
   }
   loadBenchmark();
 }

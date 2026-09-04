@@ -658,7 +658,7 @@ if __name__ == "__main__":
         n_runs = getattr(a, "_n_runs", 1)
         out = {
             "n_runs": n_runs,
-            "methodology": "Monte Carlo — probabilistic outcomes per published Indian FinTech conversion rates",
+            "methodology": "Monte Carlo — probabilistic outcomes under modeled, industry-informed conversion assumptions",
             "conversion_rates": CONVERSION,
             "baseline": {
                 "total_at_stake": b.total_at_stake,

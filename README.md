@@ -6,7 +6,7 @@
 
 > **Autonomous revenue recovery agent for India's UPI Autopay and recurring commerce ecosystem.**  
 > `+₹1.93L mean simulated recovery uplift across 60 curated synthetic UPI failure scenarios (50 Monte Carlo runs), with compliance violations reduced from 7 to 0.`  
-> *(Note: All benchmark recovery figures reported are derived from controlled Monte Carlo simulation models calibrated against published Indian FinTech conversion benchmarks, not live production claims.)*
+> *(Note: All benchmark recovery figures reported are derived from controlled Monte Carlo policy simulation models evaluated under modeled conversion assumptions informed by Indian recurring-payment failure mechanics and published industry research, not live production claims.)*
 
 [![Tests](https://img.shields.io/badge/tests-207%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
@@ -78,9 +78,16 @@ The recovery channel parameters in `benchmark.py` are defensible as a **policy s
 
 ### 🛡️ Robustness & Sensitivity Analysis (20% Pessimistic Haircut)
 
-To test how RecoverIQ performs if real-world merchant conversion rates are lower than modeled, `benchmark.py` includes a built-in sensitivity test that applies an automated **20% pessimistic haircut** across all channel conversion probabilities:
+To test how RecoverIQ performs if real-world merchant conversion rates are lower than modeled, `benchmark.py` includes a built-in sensitivity test (`python -X utf8 benchmark.py --sensitivity`) that applies an automated **20% pessimistic haircut** across all channel conversion probabilities:
 
-**Key Takeaway**: Even under a 20% pessimistic haircut across every single channel, RecoverIQ recovers **₹1.26 Lakh+ (~60% recovery rate)** with a **+44.6 pts net gain**, showing that the simulated uplift remains positive under a 20% haircut, demonstrating that the simulated advantage is resilient when modeled conversion rates are uniformly reduced by 20%.
+| Metric | Baseline Policy (Fixed-Schedule Retry) | RecoverIQ (20% Haircut Applied) | Delta / Simulated Uplift |
+|---|---|---|---|
+| **Modeled Conversion Rates** | Unchanged ($D+1, D+2, D+3$) | Smart Retry: 70.4% · Tech: 73.6% · WhatsApp: 57.6% · Mandate: 54.4% · Collect: 52.0% | -20% uniform reduction |
+| **Simulated Revenue Recovered** | ₹89,063 | **₹229,090 ± ₹73,540** | **+₹140,027 net uplift** |
+| **Simulated Recovery Rate** | 16.9% | **43.4% ± 6.5%** | **+26.4% pts uplift** |
+
+**Key Takeaway**: Even under an aggressive 20% pessimistic haircut applied uniformly across every recovery channel, RecoverIQ still recovers **₹2.29 Lakh (43.4% simulated recovery rate)** with a **+₹140,027 net uplift (+26.4 pts gain over baseline)**, showing that the simulated uplift remains positive under a 20% haircut and demonstrating that the simulated advantage is resilient when modeled conversion rates are uniformly reduced.
+
 
 
 ---
