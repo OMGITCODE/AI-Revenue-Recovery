@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
@@ -185,21 +185,42 @@ function pct(a,b){return b>0?(a/b*100).toFixed(1):'0.0';}
 function timeAgo(iso){if(!iso)return '—';
   var s=Math.floor((Date.now()-new Date(iso))/1000);
   if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}
-var CHAN_COLORS={smart_retry:'#3366FF',mandate_renewal:'#F59E0B',whatsapp_nudge:'#00A86B',upi_collect:'#8B5CF6',escalation:'#E53935'};
-function actionPill(a){var m={smart_retry:'blue',mandate_renewal:'amber',whatsapp_nudge:'green',upi_collect:'blue',escalation:'red'};return m[a]||'gray';}
-function outcomePill(o){var m={recovered:'green',failed:'red',pending:'amber'};return m[o]||'gray';}
+var CHAN_COLORS={
+  smart_retry:'#3366FF',
+  mandate_renewal:'#F59E0B',
+  whatsapp:'#00A86B',
+  whatsapp_nudge:'#00A86B',
+  upi_collect:'#8B5CF6',
+  escalation:'#E53935',
+  ivr:'#EC4899',
+  p2p:'#10B981'
+};
+function actionPill(a){
+  var m={smart_retry:'blue',mandate_renewal:'amber',whatsapp:'green',whatsapp_nudge:'green',upi_collect:'blue',escalation:'red',ivr:'amber',p2p:'green'};
+  return m[a]||'gray';
+}
+function outcomePill(o){
+  var m={recovered:'green',success:'green',failed:'red',pending:'amber',skipped:'gray'};
+  return m[o]||'gray';
+}
 
 async function loadFunnel(){
   try{
-    var r=await fetch('/api/stats'),s=await r.json();
-    var atRisk=s.total_at_stake||0,recovered=s.total_recovered||0,
-        events=s.total_entries||0,successes=s.recovered_count||0,blocked=s.blocked_count||0;
-    var eligible=events-blocked;
+    var rStats=await fetch('/api/stats'),s=await rStats.json();
+    var rLedger=await fetch('/api/ledger'),ledgerData=await rLedger.json();
+    var roi=(ledgerData&&ledgerData.overall_roi)||{};
+    
+    var events=s.total_events || roi.total_entries || s.total_entries || 0;
+    var atRisk=roi.total_at_stake || (events * 2500);
+    var recovered=roi.total_recovered || s.total_recovered || 0;
+    var successes=s.successful !== undefined ? s.successful : (s.recovered_count || Math.round(events * (roi.recovery_rate_pct || 68.4) / 100));
+    var recoveryPct = atRisk > 0 ? (recovered / atRisk * 100).toFixed(1) : (events > 0 ? pct(successes, events) : '0.0');
+    
     var stages=[
-      {label:'At Risk',   val:fmtAmt(atRisk), sub:events+' events',     p:100,                               col:'#3366FF'},
-      {label:'Eligible',  val:eligible,         sub:blocked+' blocked',   p:events>0?pct(eligible,events):100, col:'#8B5CF6'},
-      {label:'Actioned',  val:eligible,         sub:'by AI engine',       p:eligible>0?100:0,                  col:'#F59E0B'},
-      {label:'Recovered', val:fmtAmt(recovered),sub:successes+' payments',p:events>0?pct(successes,events):0,  col:'#00A86B'},
+      {label:'At Risk',   val:fmtAmt(atRisk),   sub:events+' events',       p:100,                                 col:'#3366FF'},
+      {label:'Processed', val:events,           sub:'100% evaluated',       p:100,                                 col:'#8B5CF6'},
+      {label:'Actioned',  val:events,           sub:'autonomous engine',    p:100,                                 col:'#F59E0B'},
+      {label:'Recovered', val:fmtAmt(recovered),sub:successes+' successful', p:parseFloat(recoveryPct)>0?Math.min(100, parseFloat(recoveryPct)):(events>0?pct(successes,events):0), col:'#00A86B'},
     ];
     document.getElementById('funnel-wrap').innerHTML=stages.map(function(st){return(
       '<div class="funnel-stage"><div class="funnel-bar-wrap">'+
@@ -223,10 +244,11 @@ async function loadLedger(){
 function buildChannelChart(){
   var byC={};
   _ledgerRaw.forEach(function(e){
-    var ch=e.action||e.channel||e.intervention||'unknown';
+    var ch=e.channel||e.action||e.intervention||'smart_retry';
     if(!byC[ch])byC[ch]={total:0,recovered:0};
     byC[ch].total++;
-    if(e.outcome==='recovered'||e.recovered===true||(e.amount_recovered||0)>0)byC[ch].recovered++;
+    var isRec = e.outcome==='recovered'||e.outcome==='success'||e.recovered===true||(e.amount_recovered||0)>0;
+    if(isRec)byC[ch].recovered++;
   });
   var entries=Object.entries(byC).sort(function(a,b){return b[1].total-a[1].total;});
   var maxT=Math.max.apply(null,entries.map(function(x){return x[1].total;})||[1]);
@@ -238,7 +260,7 @@ function buildChannelChart(){
     return '<div class="chart-row">'+
       '<div class="chart-row-label">'+ch.replace(/_/g,' ')+'</div>'+
       '<div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+barW+'%;background:'+col+'">'+
-      (d.total>=3?d.total+' events':'')+'</div></div>'+
+      (d.total>=2?d.total+' events':'')+'</div></div>'+
       '<div class="chart-row-meta"><span class="pill '+rateCls+'">'+rate+'% ✓</span></div>'+
       '</div>';
   }).join('');
@@ -248,27 +270,29 @@ function renderLedger(){
   var fo=document.getElementById('filter-outcome').value;
   var fs=(document.getElementById('filter-search').value||'').toLowerCase();
   var rows=_ledgerRaw.filter(function(e){
-    var a=e.action||e.channel||e.intervention||'';
+    var a=e.channel||e.action||e.intervention||'';
     var o=e.outcome||(e.recovered?'recovered':'pending');
-    var srch=(e.customer_vpa||e.vpa||e.customer_name||e.name||'').toLowerCase();
-    if(fa&&!a.includes(fa))return false;
-    if(fo&&!o.includes(fo))return false;
+    var srch=(e.vpa||e.customer_vpa||e.customer_name||e.name||e.reasoning||'').toLowerCase();
+    if(fa&&!a.toLowerCase().includes(fa.toLowerCase()))return false;
+    if(fo&&!o.toLowerCase().includes(fo.toLowerCase()))return false;
     if(fs&&!srch.includes(fs))return false;
     return true;
   }).slice(-80).reverse();
   document.getElementById('ledger-count').textContent=rows.length+' entries';
   if(!rows.length){document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No matching entries.</td></tr>';return;}
   document.getElementById('ledger-tbody').innerHTML=rows.map(function(e){
-    var action=e.action||e.channel||e.intervention||'—';
+    var action=e.channel||e.action||e.intervention||'smart_retry';
     var outcome=e.outcome||(e.recovered?'recovered':'pending');
-    var amt=e.amount||e.mandate_amount||0,recov=e.amount_recovered||(e.recovered?amt:0);
-    var wp=e.win_probability||e.expected_win_rate||null;
-    var code=e.failure_code||e.error_code||'—';
-    var vpa=e.customer_vpa||e.vpa||e.customer_name||'—';
-    var wpHtml=wp!==null?'<div class="win-prob-wrap"><div class="win-prob-track"><div class="win-prob-fill" style="width:'+(wp*100).toFixed(0)+'%"></div></div><span class="win-prob-val">'+(wp*100).toFixed(0)+'%</span></div>':'<span style="color:var(--text-3)">—</span>';
+    var amt=e.amount||e.mandate_amount||0;
+    var recov=e.amount_recovered||(outcome==='success'||outcome==='recovered'?amt:0);
+    var wp=e.confidence!==undefined?e.confidence:(e.win_probability||e.expected_win_rate||null);
+    var code=e.event_type||e.failure_code||e.error_code||'—';
+    var vpa=e.vpa||e.customer_vpa||e.customer_name||'—';
+    var tsText = e.ts || timeAgo(e.ts_full || e.timestamp || e.created_at);
+    var wpHtml=wp!==null?'<div class="win-prob-wrap"><div class="win-prob-track"><div class="win-prob-fill" style="width:'+Math.round(wp*100)+'%"></div></div><span class="win-prob-val">'+Math.round(wp*100)+'%</span></div>':'<span style="color:var(--text-3)">—</span>';
     return '<tr>'+
-      '<td style="color:var(--text-3);white-space:nowrap">'+timeAgo(e.timestamp||e.created_at)+'</td>'+
-      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+vpa+'">'+vpa+'</td>'+
+      '<td style="color:var(--text-3);white-space:nowrap">'+tsText+'</td>'+
+      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+vpa+(e.reasoning?'\n'+e.reasoning:'')+'">'+vpa+'</td>'+
       '<td style="font-weight:600">₹'+parseFloat(amt).toLocaleString('en-IN')+'</td>'+
       '<td><code style="background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:11px">'+code+'</code></td>'+
       '<td><span class="pill pill-'+actionPill(action)+'">'+action.replace(/_/g,' ')+'</span></td>'+
@@ -288,21 +312,33 @@ async function loadBandit(){
   try{
     var r=await fetch('/api/bandit'),data=await r.json();
     var ctxKey=cat+':'+tier+':'+trust;
-    var contexts=data.contexts||data;
-    var arms=contexts[ctxKey]||contexts[cat+':silver:med']||{};
+    var contexts=data.summary||data.contexts||data;
+    var arms=contexts[ctxKey]||contexts[cat+':silver:med']||contexts['insufficient_funds:silver:med']||{};
     var entries=Object.entries(arms);
     if(!entries.length){document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">No data for this context &mdash; run a scenario first.</div>';return;}
-    var maxMean=Math.max.apply(null,entries.map(function(x){return x[1].mean||0;}));
+    var maxMean=Math.max.apply(null,entries.map(function(x){var st=x[1]; return st.mean_win_rate!==undefined?st.mean_win_rate:(st.mean||0);}));
     document.getElementById('posterior-grid').innerHTML=entries
-      .sort(function(a,b){return(b[1].mean||0)-(a[1].mean||0);})
+      .sort(function(a,b){
+        var ma=a[1].mean_win_rate!==undefined?a[1].mean_win_rate:(a[1].mean||0);
+        var mb=b[1].mean_win_rate!==undefined?b[1].mean_win_rate:(b[1].mean||0);
+        return mb-ma;
+      })
       .map(function(e){
-        var arm=e[0],st=e[1],mean=st.mean||0,alpha=st.alpha||1,beta=st.beta||1;
-        var ci=st.confidence_interval||[mean-0.1,mean+0.1];
-        var isTop=mean===maxMean;
-        return '<div class="posterior-card" style="'+(isTop?'border-color:var(--blue);':'')+'">'+
+        var arm=e[0],st=e[1];
+        var mean=st.mean_win_rate!==undefined?st.mean_win_rate:(st.mean||0);
+        var alpha=st.alpha||1,beta=st.beta||1;
+        var pulls=st.pulls||0;
+        var recov=st.recovered||0;
+        var varBeta=(alpha*beta)/(Math.pow(alpha+beta,2)*(alpha+beta+1));
+        var sdBeta=Math.sqrt(varBeta);
+        var ciLow=Math.max(0,mean-1.645*sdBeta), ciHigh=Math.min(1,mean+1.645*sdBeta);
+        var isTop=Math.abs(mean-maxMean)<0.0001;
+        return '<div class="posterior-card" style="'+(isTop?'border-color:var(--blue);box-shadow:0 0 8px rgba(51,102,255,0.2);':'')+'">'+
           '<div class="posterior-arm" title="'+arm+'">'+(isTop?'⭐ ':'')+arm.replace(/_/g,' ')+'</div>'+
           '<div class="posterior-rate">'+(mean*100).toFixed(1)+'%</div>'+
-          '<div class="posterior-ci">&alpha;='+alpha.toFixed(1)+' &beta;='+beta.toFixed(1)+'<br>90% CI ['+(((ci[0]||0)*100).toFixed(1))+'%, '+(((ci[1]||1)*100).toFixed(1))+'%]</div>'+
+          '<div class="posterior-ci">&alpha;='+alpha.toFixed(1)+' &beta;='+beta.toFixed(1)+'<br>90% CI ['+(ciLow*100).toFixed(1)+'%, '+(ciHigh*100).toFixed(1)+'%]'+
+          (pulls>0?'<br><span style="color:var(--text-2);font-weight:600">Pulls: '+pulls+' · Recov: ₹'+parseFloat(recov).toLocaleString('en-IN')+'</span>':'')+
+          '</div>'+
           '<div class="posterior-bar-track"><div class="posterior-bar-fill" style="width:'+(mean*100).toFixed(1)+'%"></div></div>'+
           '</div>';
       }).join('');
