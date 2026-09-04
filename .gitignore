@@ -43,3 +43,6 @@ logs/
 # Data
 *.db
 *.sqlite3
+
+# Scratch / temporary scripts
+scratch/

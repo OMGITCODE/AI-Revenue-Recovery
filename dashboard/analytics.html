@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RecoverIQ — Analytics</title>
+  <title>RecoverIQ — Analytics & Recovery Intelligence</title>
   <script>
     (function() {
       var theme = localStorage.getItem('riq-theme') || 'dark';
@@ -13,59 +13,109 @@
   <link rel="icon" type="image/png" href="/static/logo_mark.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260902-v3" />
+  <link rel="stylesheet" href="/static/style.css?v=20260904-v1" />
   <style>
+    /* ── Analytics & Scenario Control Styles ── */
     .an-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
     @media(max-width:860px){.an-grid{grid-template-columns:1fr}}
+    
+    /* KPI Banner */
+    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+    @media(max-width:960px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:540px){.kpi-row{grid-template-columns:1fr}}
+    .kpi-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;position:relative;overflow:hidden;transition:transform .15s ease,box-shadow .15s ease}
+    .kpi-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+    .kpi-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .kpi-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+    .kpi-card-val{font-size:24px;font-weight:800;color:var(--text-1);line-height:1.2;font-feature-settings:"tnum"}
+    .kpi-card-sub{font-size:11px;color:var(--text-2);margin-top:4px;display:flex;align-items:center;gap:6px}
+
+    /* Scenario Simulation Bar */
+    .scenario-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px}
+    .scenario-bar-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+    .scenario-bar-top-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text-1)}
+    .scenario-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .scenario-select{font-family:inherit;font-size:12px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--iv-bg);color:var(--text-1);min-width:240px;outline:none;transition:border-color .15s ease}
+    .scenario-select:focus{border-color:var(--blue)}
+    .btn-sim{padding:6px 14px;font-size:12px;font-weight:600;border-radius:var(--radius-sm);border:none;background:var(--blue);color:#fff;cursor:pointer;font-family:inherit;transition:background .15s ease,transform .1s ease;display:inline-flex;align-items:center;gap:6px}
+    .btn-sim:hover{background:var(--blue-dk)}
+    .btn-sim:active{transform:scale(.98)}
+    .btn-sim-ghost{padding:6px 12px;font-size:12px;font-weight:500;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
+    .btn-sim-ghost:hover{background:var(--hover);border-color:var(--text-3)}
+    .btn-sim-danger{padding:6px 12px;font-size:12px;font-weight:600;border-radius:var(--radius-sm);border:1px solid rgba(229,57,53,0.3);background:var(--red-lt);color:var(--red);cursor:pointer;font-family:inherit;transition:background .15s ease}
+    .btn-sim-danger:hover{background:rgba(229,57,53,0.18)}
+    .quick-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .chip-btn{font-size:11px;font-weight:500;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--iv-bg);color:var(--text-2);cursor:pointer;transition:all .12s ease;white-space:nowrap}
+    .chip-btn:hover{background:var(--blue-lt);color:var(--blue);border-color:var(--blue)}
+    
+    /* Live Status Banner */
+    .sim-feedback{margin-top:10px;padding:8px 12px;border-radius:var(--radius-sm);font-size:11.5px;display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--blue-lt);color:var(--blue);border:1px solid rgba(51,102,255,0.2)}
+    .sim-feedback.success{background:var(--green-lt);color:var(--green);border-color:rgba(0,168,107,0.2)}
+    .sim-feedback.error{background:var(--red-lt);color:var(--red);border-color:rgba(229,57,53,0.2)}
+
+    /* Funnel */
     .funnel-wrap{display:flex;align-items:flex-start;gap:0;padding:20px 24px 12px}
     .funnel-stage{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;text-align:center}
     .funnel-stage:not(:last-child)::after{content:'›';position:absolute;right:-10px;top:20px;font-size:18px;color:var(--text-3);z-index:1}
-    .funnel-bar-wrap{width:100%;padding:0 8px;display:flex;flex-direction:column;align-items:center;gap:5px}
-    .funnel-bar-track{width:100%;height:7px;background:var(--border);border-radius:99px;overflow:hidden}
+    .funnel-bar-wrap{width:100%;padding:0 8px;display:flex;flex-direction:column;align-items:center;gap:6px}
+    .funnel-bar-track{width:100%;height:8px;background:var(--border);border-radius:99px;overflow:hidden}
     .funnel-bar-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
-    .funnel-value{font-size:18px;font-weight:700;color:var(--text-1);line-height:1.2}
+    .funnel-value{font-size:20px;font-weight:800;color:var(--text-1);line-height:1.2;font-feature-settings:"tnum"}
     .funnel-sub{font-size:10px;color:var(--text-3)}
-    .funnel-label{font-size:9px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+    .funnel-label{font-size:9.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+    
+    /* Intervention Performance */
     .chart-wrap{padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px}
     .chart-row{display:flex;align-items:center;gap:10px}
-    .chart-row-label{width:130px;flex-shrink:0;font-size:11px;font-weight:500;color:var(--text-2);text-align:right;white-space:nowrap}
-    .chart-bar-track{flex:1;height:20px;background:var(--border);border-radius:4px;overflow:hidden}
-    .chart-bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:#fff;transition:width .7s cubic-bezier(.4,0,.2,1);white-space:nowrap;min-width:2px}
-    .chart-row-meta{width:72px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--text-2)}
-    .audit-scroll{max-height:360px;overflow-y:auto}
+    .chart-row-label{width:140px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--text-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .chart-bar-track{flex:1;height:22px;background:var(--border);border-radius:4px;overflow:hidden;position:relative}
+    .chart-bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:700;color:#fff;transition:width .7s cubic-bezier(.4,0,.2,1);white-space:nowrap;min-width:4px}
+    .chart-row-meta{width:80px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--text-2);text-align:right}
+    
+    /* Bandit Posterior */
+    .posterior-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding:16px 20px}
+    .posterior-card{background:var(--iv-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s,box-shadow .2s}
+    .posterior-card.winner{border-color:var(--blue);box-shadow:0 0 12px rgba(51,102,255,0.25);background:var(--white)}
+    .posterior-arm{font-size:11px;font-weight:700;color:var(--text-2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .posterior-rate{font-size:24px;font-weight:800;color:var(--text-1);margin-bottom:2px;font-feature-settings:"tnum"}
+    .posterior-ci{font-size:10px;color:var(--text-3);line-height:1.4}
+    .posterior-bar-track{height:5px;background:var(--border);border-radius:99px;margin-top:8px;overflow:hidden}
+    .posterior-bar-fill{height:100%;border-radius:99px;background:var(--blue);transition:width .6s ease}
+    
+    /* Audit Trail */
+    .audit-scroll{max-height:420px;overflow-y:auto}
     .audit-tbl{width:100%;border-collapse:collapse;font-size:12px}
-    .audit-tbl th{background:var(--tbl-head);color:var(--text-3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
-    .audit-tbl td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-1);vertical-align:middle}
+    .audit-tbl th{background:var(--tbl-head);color:var(--text-3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:9px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
+    .audit-tbl td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text-1);vertical-align:middle}
     .audit-tbl tr:hover td{background:var(--hover)}
     .audit-tbl tr:last-child td{border-bottom:none}
-    .posterior-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:16px 20px}
-    .posterior-card{background:var(--iv-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px}
-    .posterior-arm{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .posterior-rate{font-size:22px;font-weight:700;color:var(--text-1);margin-bottom:2px}
-    .posterior-ci{font-size:10px;color:var(--text-3)}
-    .posterior-bar-track{height:4px;background:var(--border);border-radius:99px;margin-top:8px;overflow:hidden}
-    .posterior-bar-fill{height:100%;border-radius:99px;background:var(--blue);transition:width .6s ease}
+    
+    /* Common UI Utilities */
     .section-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 0;margin-bottom:4px}
-    .section-hd h3{font-size:13px;font-weight:600;color:var(--text-1)}
+    .section-hd h3{font-size:13px;font-weight:700;color:var(--text-1);display:flex;align-items:center;gap:6px}
     .section-hd span{font-size:11px;color:var(--text-3)}
     .an-empty{padding:28px 20px;text-align:center;color:var(--text-3);font-size:12px}
     .an-refresh-btn{margin-left:6px;padding:2px 8px;font-size:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-2);cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
     .an-refresh-btn:hover{background:var(--hover);color:var(--text-1)}
-    .pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.2px}
+    .pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.2px}
     .pill-green{background:var(--green-lt);color:var(--green)}
     .pill-red{background:var(--red-lt);color:var(--red)}
     .pill-blue{background:var(--blue-lt);color:var(--blue)}
     .pill-amber{background:var(--amber-lt);color:var(--amber)}
     .pill-gray{background:var(--canvas);color:var(--text-3);border:1px solid var(--border)}
     .win-prob-wrap{display:flex;align-items:center;gap:6px}
-    .win-prob-track{width:56px;height:5px;background:var(--border);border-radius:99px;overflow:hidden;flex-shrink:0}
+    .win-prob-track{width:54px;height:5px;background:var(--border);border-radius:99px;overflow:hidden;flex-shrink:0}
     .win-prob-fill{height:100%;border-radius:99px;background:var(--blue)}
-    .win-prob-val{font-size:11px;font-weight:600;color:var(--text-2);width:30px}
-    .ctx-select{font-family:inherit;font-size:11px;padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1)}
+    .win-prob-val{font-size:11px;font-weight:700;color:var(--text-2);width:30px}
+    .ctx-select{font-family:inherit;font-size:11px;font-weight:500;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);outline:none}
+    .ctx-select:focus{border-color:var(--blue)}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 6px var(--green);animation:pulse-live 2s infinite}
+    @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.4}}
   </style>
 </head>
 <body>
 
+<!-- ── Navigation ── -->
 <nav class="nav">
   <a class="nav-logo" href="/">
     <img src="/static/logo_mark.png" class="nav-logo-mark-img" alt="RecoverIQ" />
@@ -78,90 +128,232 @@
     <a href="/docs" target="_blank" class="nav-link">API Docs</a>
   </div>
   <div class="nav-actions">
-    <span class="nav-badge">Demo Mode</span>
-    <button class="btn-nav" onclick="refreshAll(this)" title="Refresh all panels">&#8635; Refresh</button>
+    <span class="pill pill-green" style="display:inline-flex;align-items:center;gap:5px;">
+      <span class="live-dot"></span> Live Sync Active
+    </span>
+    <span class="nav-badge">Autonomous AI</span>
+    <button class="btn-nav" onclick="refreshAll(this)" title="Refresh all panels">↻ Refresh</button>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
-      <span id="theme-icon">&#9728;&#65039;</span>
+      <span id="theme-icon">☀️</span>
     </button>
   </div>
 </nav>
 
 <div class="page">
 
-  <!-- Row 1: Funnel + Channel -->
-  <div class="an-grid">
-    <div class="card">
-      <div class="section-hd"><h3>&#9889; Recovery Funnel</h3><span id="funnel-ts">Live session</span></div>
-      <div class="funnel-wrap" id="funnel-wrap"><div class="an-empty">Loading&hellip;</div></div>
+  <!-- ── Section 1: Scenario Simulator & Control Strip ── -->
+  <div class="scenario-card">
+    <div class="scenario-bar-top">
+      <div class="scenario-bar-top-title">
+        <span>⚡ Scenario Control &amp; Autonomous Simulation</span>
+        <span class="pill pill-blue" id="scenario-count-badge">18 Scenarios Available</span>
+      </div>
+      <div class="scenario-controls">
+        <select class="scenario-select" id="scenario-dropdown">
+          <optgroup label="⚡ High-Impact &amp; Critical Anomaly Scenarios">
+            <option value="spike_critical">⚡ Spike Critical — ₹100 Base vs ₹70,000 (Circuit Block)</option>
+            <option value="normal_variation">📊 Normal Variation — ₹10k–50k Base vs ₹60,000</option>
+          </optgroup>
+          <optgroup label="💼 Liquidity, Salary Window &amp; RBI Limits">
+            <option value="u30" selected>💼 U30 — Insufficient Funds (Salary Window Scheduled)</option>
+            <option value="rbi_threshold">🛡️ RBI Limit — ₹18,500 (&gt;₹15k Pre-debit Threshold)</option>
+            <option value="rbi_enhanced_insurance">🛡️ RBI Enhanced — ₹45,000 Insurance (&lt;₹1L Cap)</option>
+            <option value="rbi_enhanced_breach">🚨 RBI Breach — ₹1,15,000 Credit Card (&gt;₹1L Breached)</option>
+          </optgroup>
+          <optgroup label="⏳ Mandate Lifecycle &amp; Proactive Protection">
+            <option value="bt01">🔄 BT01 — Mandate Revoked (1-Click Magic Renewal Link)</option>
+            <option value="bt02">⏳ BT02 — Mandate Expired (Proactive Expiry Prevention)</option>
+            <option value="u13">⏸️ U13 — Mandate Paused (Thompson Sampling Nudge)</option>
+            <option value="proactive_mandate_expiry">🔮 Proactive Renewal — T-18h Before Mandate Expiry</option>
+          </optgroup>
+          <optgroup label="🔄 Gateway &amp; Technical Failures">
+            <option value="tm">🔄 TM — Technical Error (Off-Peak Hour Retry)</option>
+            <option value="ba">🏦 BA — Bank Down (Smart Reschedule)</option>
+            <option value="xb">💳 XB — Card Expired (Alternate Payment Redirect)</option>
+            <option value="te">📱 TE — Device Binding Error (Hinglish Support)</option>
+          </optgroup>
+          <optgroup label="🛡️ Daily Velocity &amp; Policy Declines">
+            <option value="u29">⚠️ U29 — Exceeds Mandate Cap (Limit Adjustment Link)</option>
+            <option value="u69">🌅 U69 — Daily Limit Exceeded (Next Morning 06:00 AM)</option>
+            <option value="rb">🔒 RB — Bank Risk Block (2FA Verification Alert)</option>
+            <option value="u66">📊 U66 — Weekly Velocity Limit (Cycle Alignment)</option>
+          </optgroup>
+        </select>
+        <button class="btn-sim" id="btn-run-scenario" onclick="runSelectedScenario()">
+          ▶ Simulate Scenario
+        </button>
+        <button class="btn-sim-ghost" id="btn-run-all" onclick="runAllScenarios()" title="Simulate all 18 core scenarios sequentially">
+          ⚡ Run All 18
+        </button>
+        <button class="btn-sim-danger" id="btn-reset" onclick="hardResetSession()" title="Reset session stats and ledger">
+          ↺ Reset Session
+        </button>
+      </div>
     </div>
-    <div class="card">
-      <div class="section-hd"><h3>&#128202; Intervention Performance</h3><span>by channel</span></div>
-      <div class="chart-wrap" id="channel-chart"><div class="an-empty">Loading&hellip;</div></div>
+    
+    <!-- Quick-Trigger Chips -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Quick Tests:</span>
+      <div class="quick-chips">
+        <button class="chip-btn" onclick="triggerScenario('spike_critical')">⚡ ₹70k Spike Anomaly</button>
+        <button class="chip-btn" onclick="triggerScenario('u30')">💼 U30 Salary ₹999</button>
+        <button class="chip-btn" onclick="triggerScenario('bt01')">🔄 BT01 Magic Link</button>
+        <button class="chip-btn" onclick="triggerScenario('bt02')">⏳ BT02 Mandate Expired</button>
+        <button class="chip-btn" onclick="triggerScenario('tm')">🔄 TM Tech Retry</button>
+        <button class="chip-btn" onclick="triggerScenario('rbi_enhanced_breach')">🛡️ ₹1.15L RBI Breaker</button>
+        <button class="chip-btn" onclick="triggerScenario('proactive_mandate_expiry')">🔮 Proactive T-18h</button>
+      </div>
+    </div>
+
+    <!-- Live Simulation Feedback -->
+    <div class="sim-feedback" id="sim-feedback-bar">
+      <span id="sim-feedback-text">Executing scenario...</span>
+      <button onclick="document.getElementById('sim-feedback-bar').style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:12px">✕</button>
     </div>
   </div>
 
-  <!-- Row 2: Bandit Posterior -->
+  <!-- ── Section 2: Executive Headline KPIs ── -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-card-header">
+        <div class="kpi-card-title">Total Revenue At Stake</div>
+        <span class="pill pill-blue" id="kpi-events-pill">0 events</span>
+      </div>
+      <div class="kpi-card-val" id="kpi-at-stake">₹0</div>
+      <div class="kpi-card-sub" id="kpi-at-stake-sub">Evaluated across autonomous pipeline</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card-header">
+        <div class="kpi-card-title">Total Recovered &amp; Protected</div>
+        <span class="pill pill-green" id="kpi-net-roi-pill">ROI: ₹0</span>
+      </div>
+      <div class="kpi-card-val" style="color:var(--green)" id="kpi-recovered">₹0</div>
+      <div class="kpi-card-sub" id="kpi-recovered-sub">0.0% overall recovery rate</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card-header">
+        <div class="kpi-card-title">Reactive Recovery</div>
+        <span class="pill pill-blue" id="kpi-reactive-pill">0.0% rate</span>
+      </div>
+      <div class="kpi-card-val" id="kpi-reactive-recovered">₹0</div>
+      <div class="kpi-card-sub" id="kpi-reactive-sub">Post-failure smart retries &amp; collect</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-card-header">
+        <div class="kpi-card-title">Proactive Churn Protection</div>
+        <span class="pill pill-amber" id="kpi-proactive-pill">0 protected</span>
+      </div>
+      <div class="kpi-card-val" style="color:var(--amber)" id="kpi-proactive-recovered">₹0</div>
+      <div class="kpi-card-sub" id="kpi-proactive-sub">Pre-failure mandate expiry renewals</div>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Funnel + Intervention Channel Performance ── -->
+  <div class="an-grid">
+    <div class="card">
+      <div class="section-hd">
+        <h3>⚡ Recovery Conversion Funnel</h3>
+        <span id="funnel-ts">Real-Time Metric Sync</span>
+      </div>
+      <div class="funnel-wrap" id="funnel-wrap">
+        <div class="an-empty">Loading funnel data&hellip;</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-hd">
+        <h3>📊 Intervention Performance</h3>
+        <span>By autonomous channel</span>
+      </div>
+      <div class="chart-wrap" id="channel-chart">
+        <div class="an-empty">Loading channel performance&hellip;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 4: Contextual Thompson Sampling Posterior ── -->
   <div class="card" style="margin-bottom:16px">
     <div class="section-hd">
-      <h3>&#127919; Bandit Posterior &mdash; &#952; ~ Beta(&alpha;, &beta;) per Context</h3>
-      <span id="bandit-ctx-label">insufficient_funds &middot; silver &middot; med</span>
+      <h3>🎯 Contextual Bandit Posterior &mdash; &theta; ~ Beta(&alpha;, &beta;) per Context</h3>
+      <span id="bandit-ctx-label">insufficient_funds &middot; bronze &middot; med</span>
     </div>
-    <div style="display:flex;gap:8px;padding:8px 20px 0;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;padding:10px 20px 0;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Context Selectors:</span>
       <select class="ctx-select" id="ctx-category" onchange="loadBandit()">
-        <option value="insufficient_funds">insufficient_funds</option>
+        <option value="insufficient_funds" selected>insufficient_funds</option>
         <option value="technical_error">technical_error</option>
         <option value="mandate_inactive">mandate_inactive</option>
         <option value="b2b_overdue">b2b_overdue</option>
       </select>
       <select class="ctx-select" id="ctx-tier" onchange="loadBandit()">
-        <option value="silver">silver</option>
-        <option value="bronze">bronze</option>
-        <option value="gold">gold</option>
-        <option value="platinum">platinum</option>
+        <option value="bronze" selected>Tier: Bronze</option>
+        <option value="silver">Tier: Silver</option>
+        <option value="gold">Tier: Gold</option>
+        <option value="platinum">Tier: Platinum</option>
       </select>
       <select class="ctx-select" id="ctx-trust" onchange="loadBandit()">
-        <option value="med">med trust</option>
-        <option value="high">high trust</option>
-        <option value="low">low trust</option>
+        <option value="low">Trust: Low (&lt;0.30)</option>
+        <option value="med" selected>Trust: Medium (0.30–0.70)</option>
+        <option value="high">Trust: High (&gt;0.70)</option>
       </select>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-3)">⭐ Indicates Top Arm Selected by MAB</span>
     </div>
-    <div class="posterior-grid" id="posterior-grid"><div class="an-empty" style="grid-column:1/-1">Loading&hellip;</div></div>
+    <div class="posterior-grid" id="posterior-grid">
+      <div class="an-empty" style="grid-column:1/-1">Loading Bayesian posterior distributions&hellip;</div>
+    </div>
   </div>
 
-  <!-- Row 3: Audit Trail -->
+  <!-- ── Section 5: Audit Trail & Regulatory Ledger ── -->
   <div class="card" style="margin-bottom:24px">
     <div class="section-hd">
-      <h3>&#128193; Audit Trail <button class="an-refresh-btn" onclick="loadLedger()">&#8635;</button></h3>
-      <span id="ledger-count">&mdash;</span>
+      <h3>📁 Regulatory Audit Trail &amp; Ledger <button class="an-refresh-btn" onclick="loadLedger()" title="Refresh Ledger">↻</button></h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn-sim-ghost" onclick="exportLedgerCSV()" style="padding:3px 8px;font-size:11px" title="Export audit trail to CSV">📥 Export CSV</button>
+        <button class="btn-sim-ghost" onclick="exportLedgerJSON()" style="padding:3px 8px;font-size:11px" title="Export audit trail to JSON">📥 Export JSON</button>
+        <span id="ledger-count">—</span>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;padding:8px 20px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+    <div style="display:flex;gap:8px;padding:10px 20px;flex-wrap:wrap;border-bottom:1px solid var(--border);align-items:center">
       <select class="ctx-select" id="filter-action" onchange="renderLedger()">
         <option value="">All actions</option>
         <option value="smart_retry">smart_retry</option>
         <option value="mandate_renewal">mandate_renewal</option>
-        <option value="whatsapp_nudge">whatsapp_nudge</option>
+        <option value="whatsapp">whatsapp_nudge</option>
         <option value="upi_collect">upi_collect</option>
         <option value="escalation">escalation</option>
-        <option value="blocked">blocked</option>
+        <option value="p2p">promise_to_pay</option>
+        <option value="blocked">blocked / guardrail</option>
       </select>
       <select class="ctx-select" id="filter-outcome" onchange="renderLedger()">
         <option value="">All outcomes</option>
-        <option value="recovered">recovered</option>
+        <option value="recovered">recovered / success</option>
         <option value="failed">failed</option>
         <option value="pending">pending</option>
+        <option value="skipped">skipped</option>
       </select>
-      <input id="filter-search" type="text" placeholder="Search VPA / name&hellip;" oninput="renderLedger()"
-        style="font-family:inherit;font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);width:160px" />
+      <input id="filter-search" type="text" placeholder="Search VPA / customer / reason…" oninput="renderLedger()"
+        style="font-family:inherit;font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);width:200px" />
     </div>
     <div class="audit-scroll">
       <table class="audit-tbl">
         <thead>
           <tr>
-            <th>Time</th><th>Customer / VPA</th><th>Amount</th><th>Error</th>
-            <th>Action</th><th>Win Prob</th><th>Outcome</th><th>Recovered</th>
+            <th>Time</th>
+            <th>Customer / VPA</th>
+            <th>Amount</th>
+            <th>Stage / Error</th>
+            <th>Action / Channel</th>
+            <th>Win Prob</th>
+            <th>Outcome</th>
+            <th>Recovered</th>
           </tr>
         </thead>
-        <tbody id="ledger-tbody"><tr><td colspan="8" class="an-empty">Loading&hellip;</td></tr></tbody>
+        <tbody id="ledger-tbody">
+          <tr><td colspan="8" class="an-empty">Loading audit ledger…</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -169,119 +361,309 @@
 </div>
 
 <script>
+// ── Theme Management ──
 function toggleTheme(){
   var html=document.documentElement,next=html.getAttribute('data-theme')==='dark'?'light':'dark';
   html.setAttribute('data-theme',next);localStorage.setItem('riq-theme',next);
   document.getElementById('theme-icon').textContent=next==='dark'?'☀️':'🌙';
 }
-(function(){var t=localStorage.getItem('riq-theme')||'dark';
-  document.getElementById('theme-icon').textContent=t==='dark'?'☀️':'🌙';})();
+(function(){
+  var t=localStorage.getItem('riq-theme')||'dark';
+  document.getElementById('theme-icon').textContent=t==='dark'?'☀️':'🌙';
+})();
 
-function fmtAmt(n){n=parseFloat(n)||0;
-  if(n>=100000)return '₹'+(n/100000).toFixed(2)+'L';
-  if(n>=1000)return '₹'+(n/1000).toFixed(1)+'k';
-  return '₹'+n.toFixed(0);}
-function pct(a,b){return b>0?(a/b*100).toFixed(1):'0.0';}
-function timeAgo(iso){if(!iso)return '—';
+// ── Formatting Utilities ──
+function fmtAmt(n){
+  n=parseFloat(n)||0;
+  if(n>=100000) return '₹'+(n/100000).toFixed(2)+'L';
+  if(n>=1000) return '₹'+(n/1000).toFixed(1)+'k';
+  return '₹'+n.toFixed(0);
+}
+function fmtFullAmt(n){
+  n=parseFloat(n)||0;
+  return '₹'+n.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function pct(a,b){
+  return b>0?(a/b*100).toFixed(1):'0.0';
+}
+function timeAgo(iso){
+  if(!iso) return '—';
   var s=Math.floor((Date.now()-new Date(iso))/1000);
-  if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}
-var CHAN_COLORS={
-  smart_retry:'#3366FF',
-  mandate_renewal:'#F59E0B',
-  whatsapp:'#00A86B',
-  whatsapp_nudge:'#00A86B',
-  upi_collect:'#8B5CF6',
-  escalation:'#E53935',
-  ivr:'#EC4899',
-  p2p:'#10B981'
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+
+var CHAN_COLORS = {
+  smart_retry: '#3366FF',
+  smart_retry_offpeak: '#2952CC',
+  mandate_renewal: '#F59E0B',
+  whatsapp: '#00A86B',
+  whatsapp_nudge: '#00A86B',
+  upi_collect: '#8B5CF6',
+  escalation: '#E53935',
+  ivr: '#EC4899',
+  p2p: '#10B981',
+  checkout: '#06B6D4'
 };
+
 function actionPill(a){
-  var m={smart_retry:'blue',mandate_renewal:'amber',whatsapp:'green',whatsapp_nudge:'green',upi_collect:'blue',escalation:'red',ivr:'amber',p2p:'green'};
+  var m={smart_retry:'blue',smart_retry_offpeak:'blue',mandate_renewal:'amber',whatsapp:'green',whatsapp_nudge:'green',upi_collect:'blue',escalation:'red',ivr:'amber',p2p:'green',checkout:'blue'};
   return m[a]||'gray';
 }
 function outcomePill(o){
-  var m={recovered:'green',success:'green',failed:'red',pending:'amber',skipped:'gray'};
+  var m={recovered:'green',success:'green',failed:'red',pending:'amber',skipped:'gray',escalated:'red'};
   return m[o]||'gray';
 }
 
-async function loadFunnel(){
-  try{
-    var rStats=await fetch('/api/stats'),s=await rStats.json();
-    var rLedger=await fetch('/api/ledger'),ledgerData=await rLedger.json();
-    var roi=(ledgerData&&ledgerData.overall_roi)||{};
-    
-    var events=s.total_events || roi.total_entries || s.total_entries || 0;
-    var atRisk=roi.total_at_stake || (events * 2500);
-    var recovered=roi.total_recovered || s.total_recovered || 0;
-    var successes=s.successful !== undefined ? s.successful : (s.recovered_count || Math.round(events * (roi.recovery_rate_pct || 68.4) / 100));
-    var recoveryPct = atRisk > 0 ? (recovered / atRisk * 100).toFixed(1) : (events > 0 ? pct(successes, events) : '0.0');
-    
-    var stages=[
-      {label:'At Risk',   val:fmtAmt(atRisk),   sub:events+' events',       p:100,                                 col:'#3366FF'},
-      {label:'Processed', val:events,           sub:'100% evaluated',       p:100,                                 col:'#8B5CF6'},
-      {label:'Actioned',  val:events,           sub:'autonomous engine',    p:100,                                 col:'#F59E0B'},
-      {label:'Recovered', val:fmtAmt(recovered),sub:successes+' successful', p:parseFloat(recoveryPct)>0?Math.min(100, parseFloat(recoveryPct)):(events>0?pct(successes,events):0), col:'#00A86B'},
-    ];
-    document.getElementById('funnel-wrap').innerHTML=stages.map(function(st){return(
-      '<div class="funnel-stage"><div class="funnel-bar-wrap">'+
-      '<div class="funnel-value">'+st.val+'</div>'+
-      '<div class="funnel-sub">'+st.sub+'</div>'+
-      '<div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:'+st.p+'%;background:'+st.col+'"></div></div>'+
-      '<span class="pill" style="background:'+st.col+'22;color:'+st.col+'">'+st.p+'%</span>'+
-      '<div class="funnel-label">'+st.label+'</div>'+
-      '</div></div>');}).join('');
-  }catch(e){document.getElementById('funnel-wrap').innerHTML='<div class="an-empty">Seed demo data first.</div>';}
+// ── Scenario-to-Context Mapping for Live Bandit Selection ──
+var SCENARIO_CONTEXT_MAP = {
+  spike_critical:          {cat:'insufficient_funds', tier:'bronze',   trust:'med'},
+  normal_variation:        {cat:'insufficient_funds', tier:'bronze',   trust:'med'},
+  u30:                     {cat:'insufficient_funds', tier:'bronze',   trust:'med'},
+  u29:                     {cat:'mandate_inactive',   tier:'silver',   trust:'med'},
+  bt01:                    {cat:'mandate_inactive',   tier:'bronze',   trust:'med'},
+  bt02:                    {cat:'mandate_inactive',   tier:'silver',   trust:'med'},
+  u13:                     {cat:'mandate_inactive',   tier:'silver',   trust:'med'},
+  tm:                      {cat:'technical_error',    tier:'silver',   trust:'med'},
+  u69:                     {cat:'insufficient_funds', tier:'silver',   trust:'med'},
+  ba:                      {cat:'technical_error',    tier:'silver',   trust:'med'},
+  xb:                      {cat:'technical_error',    tier:'silver',   trust:'med'},
+  te:                      {cat:'technical_error',    tier:'silver',   trust:'med'},
+  rb:                      {cat:'insufficient_funds', tier:'silver',   trust:'med'},
+  u66:                     {cat:'insufficient_funds', tier:'silver',   trust:'med'},
+  rbi_threshold:           {cat:'insufficient_funds', tier:'silver',   trust:'med'},
+  rbi_enhanced_insurance:  {cat:'insufficient_funds', tier:'gold',     trust:'med'},
+  rbi_enhanced_breach:     {cat:'insufficient_funds', tier:'platinum', trust:'med'},
+  proactive_mandate_expiry:{cat:'mandate_inactive',   tier:'bronze',   trust:'med'}
+};
+
+function showFeedback(msg, type){
+  var b=document.getElementById('sim-feedback-bar');
+  var t=document.getElementById('sim-feedback-text');
+  t.textContent=msg;
+  b.className='sim-feedback '+(type||'info');
+  b.style.display='flex';
 }
 
+// ── Simulation Actions ──
+async function triggerScenario(key){
+  var drop=document.getElementById('scenario-dropdown');
+  if(drop) drop.value=key;
+  await runScenarioByKey(key);
+}
+
+async function runSelectedScenario(){
+  var key=document.getElementById('scenario-dropdown').value;
+  await runScenarioByKey(key);
+}
+
+async function runScenarioByKey(key){
+  var btn=document.getElementById('btn-run-scenario');
+  if(btn){btn.disabled=true;btn.textContent='Simulating…';}
+  showFeedback('Running scenario '+key+' through autonomous pipeline…', 'info');
+  try{
+    var r=await fetch('/api/simulate/'+encodeURIComponent(key),{method:'POST'});
+    if(!r.ok) throw new Error('Simulation failed with status '+r.status);
+    var ev=await r.json();
+    
+    // Auto-select bandit context
+    var ctx=SCENARIO_CONTEXT_MAP[key];
+    if(ctx){
+      document.getElementById('ctx-category').value=ctx.cat;
+      document.getElementById('ctx-tier').value=ctx.tier;
+      document.getElementById('ctx-trust').value=ctx.trust;
+    }
+    
+    var amt = ev.amount ? fmtFullAmt(ev.amount) : '';
+    var ivDesc = (ev.interventions && ev.interventions.length) ? ev.interventions.join(', ') : (ev.status || 'evaluated');
+    showFeedback('✓ Simulated '+key.toUpperCase()+' ('+amt+') — Interventions: '+ivDesc+' · Success: '+(ev.success?'YES':'NO'), 'success');
+    await refreshAll();
+  }catch(err){
+    showFeedback('Error simulating '+key+': '+err.message, 'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='▶ Simulate Scenario';}
+  }
+}
+
+async function runAllScenarios(){
+  var btn=document.getElementById('btn-run-all');
+  if(btn){btn.disabled=true;btn.textContent='⚡ Simulating All 18…';}
+  showFeedback('Executing all 18 failure scenarios sequentially through agent pipeline…', 'info');
+  try{
+    var r=await fetch('/api/simulate/all',{method:'POST'});
+    if(!r.ok) throw new Error('Batch simulation failed');
+    var res=await r.json();
+    showFeedback('✓ All '+res.processed+' scenarios executed. Recovery ledger and Bayesian distributions updated.', 'success');
+    await refreshAll();
+  }catch(err){
+    showFeedback('Error running all scenarios: '+err.message, 'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='⚡ Run All 18';}
+  }
+}
+
+async function hardResetSession(){
+  if(!confirm('Reset all session state, events, audit ledger, and MAB pulls?')) return;
+  var btn=document.getElementById('btn-reset');
+  if(btn){btn.disabled=true;btn.textContent='Resetting…';}
+  try{
+    var r=await fetch('/api/reset',{method:'POST'});
+    if(!r.ok) throw new Error('Reset failed');
+    showFeedback('✓ Session reset. All modules, ledger, and event counters cleared.', 'success');
+    await refreshAll();
+  }catch(err){
+    showFeedback('Reset error: '+err.message, 'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='↺ Reset Session';}
+  }
+}
+
+// ── Funnel & Executive KPIs ──
+async function loadFunnel(){
+  try{
+    var [rStats, rLedger]=await Promise.all([fetch('/api/stats'), fetch('/api/ledger')]);
+    var s=await rStats.json();
+    var ledgerData=await rLedger.json();
+    var roi=(ledgerData && ledgerData.overall_roi)||{};
+
+    var events = s.total_events !== undefined ? s.total_events : (roi.total_entries || 0);
+    var atRisk = (s.total_at_stake !== undefined && s.total_at_stake > 0) ? s.total_at_stake : (roi.total_at_stake || 0);
+    var recovered = (s.total_recovered !== undefined && s.total_recovered > 0) ? s.total_recovered : (roi.total_recovered || 0);
+    var successes = s.successful !== undefined ? s.successful : (roi.recovery_rate_pct ? Math.round(events * roi.recovery_rate_pct / 100) : 0);
+    var recoveryPct = atRisk > 0 ? (recovered / atRisk * 100).toFixed(1) : (events > 0 ? pct(successes, events) : '0.0');
+
+    // Update Executive Headline KPIs
+    document.getElementById('kpi-at-stake').textContent = fmtAmt(atRisk);
+    document.getElementById('kpi-events-pill').textContent = events + ' events';
+    document.getElementById('kpi-at-stake-sub').textContent = events > 0 ? (fmtFullAmt(atRisk) + ' evaluated') : 'Awaiting failure simulation';
+
+    document.getElementById('kpi-recovered').textContent = fmtAmt(recovered);
+    document.getElementById('kpi-net-roi-pill').textContent = 'Net ROI: ' + fmtAmt(roi.net_roi || recovered);
+    document.getElementById('kpi-recovered-sub').textContent = recoveryPct + '% overall recovery rate';
+
+    var reactiveAmt = roi.reactive_recovered !== undefined ? roi.reactive_recovered : recovered;
+    var reactiveRate = roi.reactive_rate_pct !== undefined ? roi.reactive_rate_pct : recoveryPct;
+    document.getElementById('kpi-reactive-recovered').textContent = fmtAmt(reactiveAmt);
+    document.getElementById('kpi-reactive-pill').textContent = reactiveRate + '% rate';
+    document.getElementById('kpi-reactive-sub').textContent = successes + ' of ' + events + ' successful actions';
+
+    var proactiveAmt = roi.proactive_protected || 0;
+    var proactiveRate = roi.proactive_rate_pct || 0;
+    document.getElementById('kpi-proactive-recovered').textContent = fmtAmt(proactiveAmt);
+    document.getElementById('kpi-proactive-pill').textContent = (proactiveAmt > 0 ? (proactiveRate + '% win') : '0 protected');
+    document.getElementById('kpi-proactive-sub').textContent = proactiveAmt > 0 ? (fmtFullAmt(proactiveAmt) + ' pre-failure prevented') : 'Pre-failure mandate expiry renewals';
+
+    // Render 4-Stage Funnel
+    var atRiskFill = events > 0 ? 100 : 0;
+    var procFill = events > 0 ? 100 : 0;
+    var actFill = events > 0 ? 100 : 0;
+    var recFill = Math.min(100, Math.max(0, parseFloat(recoveryPct)));
+
+    var stages=[
+      {label:'At Risk',   val:fmtAmt(atRisk),   sub:events+' events',       p:atRiskFill, col:'#3366FF'},
+      {label:'Processed', val:events,           sub:'100% evaluated',       p:procFill,   col:'#8B5CF6'},
+      {label:'Actioned',  val:events,           sub:'autonomous engine',    p:actFill,    col:'#F59E0B'},
+      {label:'Recovered', val:fmtAmt(recovered),sub:successes+' successful', p:recFill,    col:'#00A86B', pillText:recoveryPct+'%'},
+    ];
+    document.getElementById('funnel-wrap').innerHTML=stages.map(function(st){
+      var badge = st.pillText || (st.p+'%');
+      return (
+        '<div class="funnel-stage"><div class="funnel-bar-wrap">'+
+        '<div class="funnel-value">'+st.val+'</div>'+
+        '<div class="funnel-sub">'+st.sub+'</div>'+
+        '<div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:'+st.p+'%;background:'+st.col+'"></div></div>'+
+        '<span class="pill" style="background:'+st.col+'22;color:'+st.col+'">'+badge+'</span>'+
+        '<div class="funnel-label">'+st.label+'</div>'+
+        '</div></div>'
+      );
+    }).join('');
+  }catch(e){
+    document.getElementById('funnel-wrap').innerHTML='<div class="an-empty">Run a scenario to view funnel metrics.</div>';
+  }
+}
+
+// ── Ledger & Channel Performance ──
 var _ledgerRaw=[];
 async function loadLedger(){
   try{
-    var r=await fetch('/api/ledger'),data=await r.json();
+    var r=await fetch('/api/ledger');
+    var data=await r.json();
     _ledgerRaw=Array.isArray(data)?data:(data.entries||data.ledger||[]);
-    renderLedger();buildChannelChart();
-  }catch(e){document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No ledger data yet.</td></tr>';}
+    renderLedger();
+    buildChannelChart();
+  }catch(e){
+    document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No ledger entries recorded yet.</td></tr>';
+  }
 }
+
 function buildChannelChart(){
   var byC={};
+  var VALID_INTERVENTIONS = ['smart_retry', 'smart_retry_offpeak', 'mandate_renewal', 'whatsapp', 'whatsapp_nudge', 'upi_collect', 'escalation', 'ivr', 'p2p', 'checkout'];
+
   _ledgerRaw.forEach(function(e){
-    var ch=e.channel||e.action||e.intervention||'smart_retry';
-    if(!byC[ch])byC[ch]={total:0,recovered:0};
+    var ch = e.channel || e.action || e.intervention || '';
+    // Only aggregate actual intervention steps, not passive audit traces like detect or pattern check
+    if(!ch || ch === 'pattern_engine' || ch === 'setu_aa') return;
+    if(e.event_type === 'detect' || e.event_type === 'pattern_check' || e.event_type === 'aa_check') return;
+
+    if(!byC[ch]) byC[ch]={total:0, recovered:0, recoveredAmt:0};
     byC[ch].total++;
     var isRec = e.outcome==='recovered'||e.outcome==='success'||e.recovered===true||(e.amount_recovered||0)>0;
-    if(isRec)byC[ch].recovered++;
+    if(isRec){
+      byC[ch].recovered++;
+      byC[ch].recoveredAmt += (e.amount_recovered || e.amount || 0);
+    }
   });
+
   var entries=Object.entries(byC).sort(function(a,b){return b[1].total-a[1].total;});
   var maxT=Math.max.apply(null,entries.map(function(x){return x[1].total;})||[1]);
-  if(!entries.length){document.getElementById('channel-chart').innerHTML='<div class="an-empty">Run a scenario first.</div>';return;}
+  if(!entries.length){
+    document.getElementById('channel-chart').innerHTML='<div class="an-empty">Trigger a scenario to see channel conversion performance.</div>';
+    return;
+  }
   document.getElementById('channel-chart').innerHTML=entries.map(function(e){
-    var ch=e[0],d=e[1],rate=d.total>0?(d.recovered/d.total*100).toFixed(0):0;
-    var barW=(d.total/maxT*100).toFixed(1),col=CHAN_COLORS[ch]||'#9A9AB0';
+    var ch=e[0], d=e[1], rate=d.total>0?(d.recovered/d.total*100).toFixed(0):0;
+    var barW=(d.total/maxT*100).toFixed(1), col=CHAN_COLORS[ch]||'#9A9AB0';
     var rateCls=parseInt(rate)>=60?'pill-green':parseInt(rate)>=30?'pill-amber':'pill-red';
+    var chTitle = ch.replace(/_/g,' ');
     return '<div class="chart-row">'+
-      '<div class="chart-row-label">'+ch.replace(/_/g,' ')+'</div>'+
-      '<div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+barW+'%;background:'+col+'">'+
-      (d.total>=2?d.total+' events':'')+'</div></div>'+
-      '<div class="chart-row-meta"><span class="pill '+rateCls+'">'+rate+'% ✓</span></div>'+
+      '<div class="chart-row-label" title="'+ch+'">'+chTitle+'</div>'+
+      '<div class="chart-bar-track">'+
+        '<div class="chart-bar-fill" style="width:'+barW+'%;background:'+col+'">'+
+          (d.total > 0 ? (d.total + ' pulls') : '')+
+        '</div>'+
+      '</div>'+
+      '<div class="chart-row-meta">'+
+        '<span class="pill '+rateCls+'">'+rate+'% win</span>'+
+      '</div>'+
       '</div>';
   }).join('');
 }
+
 function renderLedger(){
   var fa=document.getElementById('filter-action').value;
   var fo=document.getElementById('filter-outcome').value;
   var fs=(document.getElementById('filter-search').value||'').toLowerCase();
+  
   var rows=_ledgerRaw.filter(function(e){
     var a=e.channel||e.action||e.intervention||'';
     var o=e.outcome||(e.recovered?'recovered':'pending');
-    var srch=(e.vpa||e.customer_vpa||e.customer_name||e.name||e.reasoning||'').toLowerCase();
-    if(fa&&!a.toLowerCase().includes(fa.toLowerCase()))return false;
-    if(fo&&!o.toLowerCase().includes(fo.toLowerCase()))return false;
-    if(fs&&!srch.includes(fs))return false;
+    var srch=(e.vpa||e.customer_vpa||e.customer_name||e.name||e.reasoning||e.event_type||'').toLowerCase();
+    if(fa&&!a.toLowerCase().includes(fa.toLowerCase())) return false;
+    if(fo&&!o.toLowerCase().includes(fo.toLowerCase())) return false;
+    if(fs&&!srch.includes(fs)) return false;
     return true;
-  }).slice(-80).reverse();
+  }).slice(-100).reverse();
+
   document.getElementById('ledger-count').textContent=rows.length+' entries';
-  if(!rows.length){document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No matching entries.</td></tr>';return;}
+  if(!rows.length){
+    document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No matching ledger entries found.</td></tr>';
+    return;
+  }
+
   document.getElementById('ledger-tbody').innerHTML=rows.map(function(e){
-    var action=e.channel||e.action||e.intervention||'smart_retry';
+    var action=e.channel||e.action||e.intervention||e.event_type||'smart_retry';
     var outcome=e.outcome||(e.recovered?'recovered':'pending');
     var amt=e.amount||e.mandate_amount||0;
     var recov=e.amount_recovered||(outcome==='success'||outcome==='recovered'?amt:0);
@@ -290,33 +672,82 @@ function renderLedger(){
     var vpa=e.vpa||e.customer_vpa||e.customer_name||'—';
     var tsText = e.ts || timeAgo(e.ts_full || e.timestamp || e.created_at);
     var wpHtml=wp!==null?'<div class="win-prob-wrap"><div class="win-prob-track"><div class="win-prob-fill" style="width:'+Math.round(wp*100)+'%"></div></div><span class="win-prob-val">'+Math.round(wp*100)+'%</span></div>':'<span style="color:var(--text-3)">—</span>';
+    
     return '<tr>'+
       '<td style="color:var(--text-3);white-space:nowrap">'+tsText+'</td>'+
-      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+vpa+(e.reasoning?'\n'+e.reasoning:'')+'">'+vpa+'</td>'+
-      '<td style="font-weight:600">₹'+parseFloat(amt).toLocaleString('en-IN')+'</td>'+
-      '<td><code style="background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:11px">'+code+'</code></td>'+
+      '<td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+vpa+(e.reasoning?'\n'+e.reasoning:'')+'">'+vpa+'</td>'+
+      '<td style="font-weight:700">₹'+parseFloat(amt).toLocaleString('en-IN')+'</td>'+
+      '<td><code style="background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600">'+code.toUpperCase()+'</code></td>'+
       '<td><span class="pill pill-'+actionPill(action)+'">'+action.replace(/_/g,' ')+'</span></td>'+
       '<td>'+wpHtml+'</td>'+
       '<td><span class="pill pill-'+outcomePill(outcome)+'">'+outcome+'</span></td>'+
-      '<td style="font-weight:600;color:'+(recov>0?'var(--green)':'var(--text-3)')+'">'+
-      (recov>0?'₹'+parseFloat(recov).toLocaleString('en-IN'):'—')+'</td>'+
+      '<td style="font-weight:700;color:'+(recov>0?'var(--green)':'var(--text-3)')+'">'+
+        (recov>0?'₹'+parseFloat(recov).toLocaleString('en-IN'):'—')+
+      '</td>'+
       '</tr>';
   }).join('');
 }
 
+// ── Client-Side Regulatory Export ──
+function exportLedgerCSV(){
+  if(!_ledgerRaw.length){alert('No ledger records to export.');return;}
+  var headers = ['Timestamp', 'LedgerID', 'EventType', 'VPA', 'Amount', 'Channel', 'Confidence', 'Outcome', 'AmountRecovered', 'Reasoning'];
+  var lines = [headers.join(',')];
+  _ledgerRaw.forEach(function(e){
+    var row = [
+      JSON.stringify(e.ts_full || e.timestamp || ''),
+      JSON.stringify(e.ledger_id || ''),
+      JSON.stringify(e.event_type || ''),
+      JSON.stringify(e.vpa || ''),
+      e.amount || 0,
+      JSON.stringify(e.channel || ''),
+      e.confidence || 0,
+      JSON.stringify(e.outcome || ''),
+      e.amount_recovered || 0,
+      JSON.stringify(e.reasoning || '')
+    ];
+    lines.push(row.join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type: 'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'recoveriq_audit_ledger_' + Date.now() + '.csv';
+  a.click();
+}
+
+function exportLedgerJSON(){
+  if(!_ledgerRaw.length){alert('No ledger records to export.');return;}
+  var blob = new Blob([JSON.stringify(_ledgerRaw, null, 2)], {type: 'application/json'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'recoveriq_audit_ledger_' + Date.now() + '.json';
+  a.click();
+}
+
+// ── Contextual Thompson Sampling Posterior ──
 async function loadBandit(){
   var cat=document.getElementById('ctx-category').value;
   var tier=document.getElementById('ctx-tier').value;
   var trust=document.getElementById('ctx-trust').value;
   document.getElementById('bandit-ctx-label').textContent=cat+' · '+tier+' · '+trust;
+
   try{
-    var r=await fetch('/api/bandit'),data=await r.json();
+    var r=await fetch('/api/bandit');
+    var data=await r.json();
     var ctxKey=cat+':'+tier+':'+trust;
     var contexts=data.summary||data.contexts||data;
     var arms=contexts[ctxKey]||contexts[cat+':silver:med']||contexts['insufficient_funds:silver:med']||{};
     var entries=Object.entries(arms);
-    if(!entries.length){document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">No data for this context &mdash; run a scenario first.</div>';return;}
-    var maxMean=Math.max.apply(null,entries.map(function(x){var st=x[1]; return st.mean_win_rate!==undefined?st.mean_win_rate:(st.mean||0);}));
+    if(!entries.length){
+      document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">No arm distributions initialized for this context.</div>';
+      return;
+    }
+    var maxMean=Math.max.apply(null,entries.map(function(x){
+      var st=x[1]; return st.mean_win_rate!==undefined?st.mean_win_rate:(st.mean||0);
+    }));
+
     document.getElementById('posterior-grid').innerHTML=entries
       .sort(function(a,b){
         var ma=a[1].mean_win_rate!==undefined?a[1].mean_win_rate:(a[1].mean||0);
@@ -324,34 +755,61 @@ async function loadBandit(){
         return mb-ma;
       })
       .map(function(e){
-        var arm=e[0],st=e[1];
+        var arm=e[0], st=e[1];
         var mean=st.mean_win_rate!==undefined?st.mean_win_rate:(st.mean||0);
-        var alpha=st.alpha||1,beta=st.beta||1;
+        var alpha=st.alpha||1, beta=st.beta||1;
         var pulls=st.pulls||0;
         var recov=st.recovered||0;
         var varBeta=(alpha*beta)/(Math.pow(alpha+beta,2)*(alpha+beta+1));
         var sdBeta=Math.sqrt(varBeta);
         var ciLow=Math.max(0,mean-1.645*sdBeta), ciHigh=Math.min(1,mean+1.645*sdBeta);
         var isTop=Math.abs(mean-maxMean)<0.0001;
-        return '<div class="posterior-card" style="'+(isTop?'border-color:var(--blue);box-shadow:0 0 8px rgba(51,102,255,0.2);':'')+'">'+
+
+        return '<div class="posterior-card '+(isTop?'winner':'')+'">'+
           '<div class="posterior-arm" title="'+arm+'">'+(isTop?'⭐ ':'')+arm.replace(/_/g,' ')+'</div>'+
           '<div class="posterior-rate">'+(mean*100).toFixed(1)+'%</div>'+
           '<div class="posterior-ci">&alpha;='+alpha.toFixed(1)+' &beta;='+beta.toFixed(1)+'<br>90% CI ['+(ciLow*100).toFixed(1)+'%, '+(ciHigh*100).toFixed(1)+'%]'+
-          (pulls>0?'<br><span style="color:var(--text-2);font-weight:600">Pulls: '+pulls+' · Recov: ₹'+parseFloat(recov).toLocaleString('en-IN')+'</span>':'')+
+          (pulls>0?'<br><span style="color:var(--text-1);font-weight:700">Pulls: '+pulls+' · Recov: ₹'+parseFloat(recov).toLocaleString('en-IN')+'</span>':'<br><span style="color:var(--text-3)">Prior distribution</span>')+
           '</div>'+
           '<div class="posterior-bar-track"><div class="posterior-bar-fill" style="width:'+(mean*100).toFixed(1)+'%"></div></div>'+
           '</div>';
       }).join('');
-  }catch(e){document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">Could not load bandit state.</div>';}
+  }catch(e){
+    document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">Could not fetch bandit posteriors.</div>';
+  }
 }
 
+// ── Refresh & Real-Time Sync ──
 async function refreshAll(btn){
   if(btn){btn.textContent='↻ …';btn.disabled=true;}
-  await Promise.all([loadFunnel(),loadLedger(),loadBandit()]);
+  await Promise.all([loadFunnel(), loadLedger(), loadBandit()]);
   if(btn){btn.textContent='↻ Refresh';btn.disabled=false;}
 }
+
+// Initial load
 refreshAll();
-setInterval(function(){loadFunnel();loadLedger();},15000);
+
+// Connect SSE stream for live updates across browser tabs & background simulations
+try{
+  var es = new EventSource('/api/stream');
+  es.onmessage = function(e){
+    try{
+      var data = JSON.parse(e.data);
+      if(data.type === 'ping') return;
+      loadFunnel();
+      loadLedger();
+    }catch(err){}
+  };
+  es.onerror = function(){
+    // EventSource will auto-reconnect on disconnect
+  };
+}catch(e){}
+
+// Periodic polling fallback (every 10s)
+setInterval(function(){
+  loadFunnel();
+  loadLedger();
+}, 10000);
 </script>
 </body>
 </html>

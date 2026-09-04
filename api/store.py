@@ -75,6 +75,7 @@ class RecoveryEvent:
 @dataclass
 class Stats:
     total_events:       int   = 0
+    total_at_stake:     float = 0.0
     total_recovered:    float = 0.0
     successful:         int   = 0
     failed:             int   = 0
@@ -93,6 +94,7 @@ class Stats:
     def to_dict(self) -> dict:
         return {
             "total_events":      self.total_events,
+            "total_at_stake":    round(self.total_at_stake, 2),
             "total_recovered":   round(self.total_recovered, 2),
             "successful":        self.successful,
             "failed":            self.failed,
@@ -162,6 +164,7 @@ class EventStore:
         stats = Stats()
         for event in self._events:
             stats.total_events += 1
+            stats.total_at_stake += event.amount
             if event.success:
                 stats.successful += 1
                 stats.total_recovered += (event.amount_recovered if event.amount_recovered > 0 else event.amount)

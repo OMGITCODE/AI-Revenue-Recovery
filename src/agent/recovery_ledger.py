@@ -220,6 +220,16 @@ class RecoveryLedger:
             s.pop("_conf_sum", None)
         return summary
 
+    def _is_primary_entry(self, e: LedgerEntry) -> bool:
+        """Identifies primary decision/intervention entries to prevent multi-counting auxiliary audit steps."""
+        if e.event_type in ("detect", "pattern_check", "aa_check", "p2p"):
+            return False
+        if e.event_type == "checkout" and "Auto checkout session" in (e.reasoning or ""):
+            return False
+        if e.event_type in ("decide", "guardrail") and e.outcome not in ("skipped", "success", "failure"):
+            return False
+        return True
+
     def overall_roi(self) -> dict:
         """
         Returns comprehensive ROI breakdown separating:
@@ -227,12 +237,20 @@ class RecoveryLedger:
           2. Proactive protection: ₹ protected before failure ever happened (e.g. T-72h mandate expiry renewal)
           3. Combined headline impact: total net value delivered to merchant
         """
+        primary = [e for e in self._entries if self._is_primary_entry(e)]
+        if not primary and self._entries:
+            # Fallback for manual or test entries without explicit intervention type
+            primary = [e for e in self._entries if e.outcome != "skipped"]
+
         reactive_entries  = [e for e in self._entries if getattr(e, "recovery_type", "reactive") == "reactive"]
         proactive_entries = [e for e in self._entries if getattr(e, "recovery_type", "reactive") == "proactive"]
 
+        reactive_primary  = [e for e in primary if getattr(e, "recovery_type", "reactive") == "reactive"]
+        proactive_primary = [e for e in primary if getattr(e, "recovery_type", "reactive") == "proactive"]
+
         total_cost      = sum(e.channel_cost     for e in self._entries)
         total_recovered = sum(e.amount_recovered for e in self._entries)
-        total_at_stake  = sum(e.amount           for e in self._entries if e.outcome != "skipped")
+        total_at_stake  = sum(e.amount           for e in primary)
         success_count   = sum(1 for e in self._entries if e.outcome == "success")
         total_actioned  = sum(1 for e in self._entries if e.outcome in ("success", "failure"))
         avg_conf        = (
@@ -243,7 +261,7 @@ class RecoveryLedger:
         # ── Reactive metrics (post-failure recovery) ──────────────────────────
         reactive_cost      = sum(e.channel_cost     for e in reactive_entries)
         reactive_recovered = sum(e.amount_recovered for e in reactive_entries)
-        reactive_at_stake  = sum(e.amount           for e in reactive_entries if e.outcome != "skipped")
+        reactive_at_stake  = sum(e.amount           for e in reactive_primary)
         reactive_success   = sum(1 for e in reactive_entries if e.outcome == "success")
         reactive_actioned  = sum(1 for e in reactive_entries if e.outcome in ("success", "failure"))
         reactive_rate      = round(reactive_success / reactive_actioned * 100, 1) if reactive_actioned else 0.0
@@ -251,7 +269,7 @@ class RecoveryLedger:
         # ── Proactive metrics (pre-failure churn prevention) ──────────────────
         proactive_cost      = sum(e.channel_cost     for e in proactive_entries)
         proactive_protected = sum(e.amount_recovered for e in proactive_entries)
-        proactive_at_stake  = sum(e.amount           for e in proactive_entries if e.outcome != "skipped")
+        proactive_at_stake  = sum(e.amount           for e in proactive_primary)
         proactive_success   = sum(1 for e in proactive_entries if e.outcome == "success")
         proactive_actioned  = sum(1 for e in proactive_entries if e.outcome in ("success", "failure"))
         proactive_rate      = round(proactive_success / proactive_actioned * 100, 1) if proactive_actioned else 0.0

@@ -359,7 +359,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 | File | Technology | Description |
 |---|---|---|
 | `dashboard/index.html` | HTML5 / Semantic UI | Multi-panel dark mode dashboard featuring Live Event Ingress, Global ↻ Refresh All synchronizer, Outbound Voice AI Outreach Studio, Setu AA Simulator Modal, Proactive Mandate Expiry Interceptor with authentic WhatsApp Preview Modal, Interactive Hinglish WhatsApp Chat Simulator, Regulatory Audit Ledger (CSV export), Thompson Sampling Posterior Visualizer, and Simulated Benchmark Inspector. |
-| `dashboard/analytics.html` | HTML5 / Semantic UI | Dedicated Analytics Dashboard (`/analytics`) featuring Live Recovery Funnel, Intervention Channel Performance distribution bars, Interactive Contextual Bandit Posterior Inspector with Beta($\alpha, \beta$) 90% Bayesian Credible Intervals and pull tracking, and a filterable Regulatory Audit Trail table with instant search and action/outcome pills. |
+| `dashboard/analytics.html` | HTML5 / Semantic UI | Dedicated Analytics & Recovery Intelligence Suite (`/analytics`) featuring an interactive 18-scenario runner with 1-click batch execution, 4-stage Live Recovery Funnel, Channel Performance distribution bars, 48-context Bayesian Bandit Beta($\alpha, \beta$) Credible Interval Grid, and a filterable Regulatory Audit Trail table with instant search and client-side CSV/JSON compliance export. |
 | `dashboard/app.js` | Vanilla ES6+ JavaScript | High-frequency Server-Sent Events (SSE) listener, animated counter interpolations, parallel multi-panel refresh synchronization with toast feedback, audio alerts, and interactive simulation controls. |
 | `dashboard/style.css` | Modern Vanilla CSS | Custom design system with glassmorphism cards, authentic WhatsApp chat bubbles, CSS variables, responsive grid layouts, and smooth micro-animations without external CSS bloat. |
 
@@ -430,7 +430,7 @@ Allows judges, reviewers, and operators to type freeform payment failure prompts
 
 ## 🐛 What Broke & How We Fixed It (Failure Recovery Case Study)
 
-During development and testing, we ran into six real-world failures where our assumptions broke down. Here is how we diagnosed and fixed each one:
+During development and testing, we ran into seven real-world failures where our assumptions broke down. Here is how we diagnosed and fixed each one:
 
 ### 1. Windows Crashed on the Rupee Symbol (`₹`) and Emojis
 * **The Bug:** On Windows computers, our backend server crashed the moment it tried to send the Indian Rupee symbol (`₹`), Hindi text, or status emojis to the dashboard. The default Windows console couldn't read these special characters, throwing a fatal crash (`UnicodeEncodeError`).
@@ -468,6 +468,12 @@ During development and testing, we ran into six real-world failures where our as
 * **The Fix:**
   1. We built an automatic connection bridge (`POST /api/mandates/force-lapse/{id}`).
   2. If a customer ignores the warning and the subscription expires, the system automatically creates a real failure event and starts the recovery process with a fresh 1-click renewal link.
+
+### 7. Auxiliary Sub-Logs Double-Counting "Total at Stake" in the Regulatory Ledger
+* **The Bug:** During multi-step recovery workflows, internal sub-decision checkpoints (such as webhook ingress detection, historical spend anomaly checks, Setu AA liquidity balance checks, and P2P promise evaluation) were logging separate entries into the audit ledger with the full transaction amount. When calculating the financial summary, the ledger counted each sub-step as a distinct recovery opportunity, causing the total amount at stake to appear inflated (e.g. 2× to 3× higher than actual failures), which artificially deflated the calculated recovery percentage and caused a discrepancy with the primary event store.
+* **The Fix:**
+  1. We introduced precision primary-entry classification (`_is_primary_entry()` in `recovery_ledger.py`) that strictly distinguishes primary decision events from auxiliary monitoring sub-steps (`detect`, `pattern_check`, `aa_check`, `p2p`, and internal checkout transitions).
+  2. The financial summary and ROI calculation now aggregate only genuine primary recovery events, establishing **100% mathematical reconciliation** between the event store and the audit ledger (e.g., exactly ₹15,694.00 recovered across all 18 test scenarios).
 
 ---
 
@@ -877,6 +883,26 @@ python qr_demo.py --amount 5400 --vpa kavita@okkotak --name "Kavita Reddy"
 RecoverIQ provides a dual-layer evaluative architecture directly inside the dashboard with an interactive segmented toggle:
 - **`🔴 Live Session Actuals` (Default)**: Dynamically evaluates the exact events currently active on the dashboard. Compares live recoveries, costs, and 0 compliance violations against what legacy fixed-schedule retry ($D+1, D+2, D+3$ blind retry) *would have done on those exact same events*. Auto-syncs in real time via SSE upon new event generation.
 - **`📊 60-Scenario Macro (n=50)`**: Runs a 50-iteration Monte Carlo stress test across all 60 scenarios from [`data/upi_failures_dataset.json`](data/upi_failures_dataset.json), demonstrating **54.7% ± 6.6%** recovery vs. **16.9%** baseline (+37.8 pts uplift) with automated 20% sensitivity haircut analysis.
+
+### 6. RecoverIQ Analytics & Recovery Intelligence Suite (`/analytics`)
+
+<p align="center">
+  <img src="./assets/analytics_dashboard.png" alt="RecoverIQ Analytics & Intelligence Suite" width="850"/>
+</p>
+
+RecoverIQ includes a dedicated, production-grade **Analytics & Recovery Intelligence Dashboard** accessible at `http://localhost:8000/analytics` or via the top navbar link:
+
+- **Executive KPI Cards**: Real-time tracking of Reactive Recovered revenue, Proactive Protected ARR, Net Recovery Rate, Net ROI (after communication and channel costs), and Active Interventions in flight.
+- **Real-Time 4-Stage Recovery Funnel**: Visualizes transaction volume and step-by-step conversion drop-offs:
+  1. *Failures Ingested*: Raw recurring payment bounces captured across UPI Autopay and B2B rails.
+  2. *Diagnosed & Guardrail Checked*: Evaluated against 10 deterministic guardrails (RBI category limits, TRAI DND, P2P harassment suppression).
+  3. *Interventions Dispatched*: Routed through optimal AI-chosen recovery channels.
+  4. *Revenue Recovered*: Verified settled payments and pre-empted mandate renewals.
+- **Multi-Channel Conversion Distribution**: Real-time performance breakdown across Smart Retry (Salary Window), UPI Collect (Push-to-VPA), WhatsApp Conversational Nudges, Mandate 1-Click Renewal, and Outbound Voice IVR with success percentages and action counts.
+- **48-Context Bayesian Thompson Sampling Posterior Grid**: Live inspection of Beta distribution posteriors ($\text{Beta}(\alpha, \beta)$) partitioned across Failure Code × Customer Tier × Trust Score Bucket, showing 90% Bayesian credible intervals and pull counters.
+- **Interactive Live Scenario Runner**: Full catalog of 18 curated synthetic failure archetypes with 1-click Quick Action Chips (Rahul U30, Priya BT01, Arjun TM, etc.), "Execute Next Scenario", and a single-click **"⚡ Run All Scenarios Batch"** runner.
+- **Searchable Regulatory Audit Ledger**: Filterable, searchable audit trail of all intervention decisions, confidence scores, plain-English reasons, and outcome badges with client-side **CSV and JSON export** capabilities.
+- **Full SSE Live Synchronization**: Dynamically updates KPIs, funnel stages, channel conversion bars, and audit entries whenever any scenario or webhook executes.
 
 ---
 
