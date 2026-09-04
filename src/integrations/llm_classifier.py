@@ -526,8 +526,26 @@ Rules:
                 "*(Note: These figures reflect this live runtime session only, clearly distinct from the published offline simulated benchmark evaluation of +₹1.93L mean uplift across 50 Monte Carlo runs.)*"
             )
 
+        # ── 2a. Sensitivity / Pessimistic Haircut Analysis ──────────────────────
+        if any(w in q for w in ["sensitivity", "haircut", "pessimistic", "worst case", "20%", "20 percent", "conservative", "lower conversion"]):
+            return (
+                "**RecoverIQ Sensitivity Analysis — 20% Pessimistic Haircut:**\n\n"
+                "*(To stress-test robustness, benchmark.py applies a uniform 20% downward haircut across all "
+                "channel conversion probabilities. Run anytime: `python -X utf8 benchmark.py --sensitivity`)*\n\n"
+                "| Metric | Baseline (Fixed Retry) | RecoverIQ (20% Haircut Applied) | Delta |\n"
+                "|---|---|---|---|\n"
+                "| **Modeled Conversion Rates** | Unchanged (D+1, D+2, D+3) | Smart Retry: 70.4% · Tech: 73.6% · WhatsApp: 57.6% · Mandate: 54.4% · Collect: 52.0% | −20% uniform reduction |\n"
+                "| **Simulated Revenue Recovered** | ₹89,063 | **₹2,29,090 ± ₹73,540** | **+₹1,40,027 net uplift** |\n"
+                "| **Simulated Recovery Rate** | 16.9% | **43.4% ± 6.5%** | **+26.4% pts uplift** |\n\n"
+                "**Key Takeaway**: Even with every channel conversion rate reduced by 20%, RecoverIQ still achieves a "
+                "**43.4% simulated recovery rate** and a **+₹1,40,027 (+26.4 pts) net uplift** over baseline — "
+                "demonstrating resilience under conservatively modeled assumptions.\n\n"
+                "*(All figures are from the Monte Carlo policy simulation model, not observed live production revenue.)*"
+            )
+
         # ── 2. Published Offline Benchmark Results ──────────────────────────────
         if "benchmark" in q or "results" in q or "uplift" in q or "monte carlo" in q:
+
             try:
                 from benchmark import get_canonical_benchmark_summary
                 can = get_canonical_benchmark_summary(n_runs=50)
