@@ -42,8 +42,6 @@
     .btn-sim:active{transform:scale(.98)}
     .btn-sim-ghost{padding:6px 12px;font-size:12px;font-weight:500;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
     .btn-sim-ghost:hover{background:var(--hover);border-color:var(--text-3)}
-    .btn-sim-danger{padding:6px 12px;font-size:12px;font-weight:600;border-radius:var(--radius-sm);border:1px solid rgba(229,57,53,0.3);background:var(--red-lt);color:var(--red);cursor:pointer;font-family:inherit;transition:background .15s ease}
-    .btn-sim-danger:hover{background:rgba(229,57,53,0.18)}
     .quick-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
     .chip-btn{font-size:11px;font-weight:500;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--iv-bg);color:var(--text-2);cursor:pointer;transition:all .12s ease;white-space:nowrap}
     .chip-btn:hover{background:var(--blue-lt);color:var(--blue);border-color:var(--blue)}
@@ -95,8 +93,6 @@
     .section-hd h3{font-size:13px;font-weight:700;color:var(--text-1);display:flex;align-items:center;gap:6px}
     .section-hd span{font-size:11px;color:var(--text-3)}
     .an-empty{padding:28px 20px;text-align:center;color:var(--text-3);font-size:12px}
-    .an-refresh-btn{margin-left:6px;padding:2px 8px;font-size:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-2);cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
-    .an-refresh-btn:hover{background:var(--hover);color:var(--text-1)}
     .pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.2px}
     .pill-green{background:var(--green-lt);color:var(--green)}
     .pill-red{background:var(--red-lt);color:var(--red)}
@@ -132,7 +128,6 @@
       <span class="live-dot"></span> Live Sync Active
     </span>
     <span class="nav-badge">Autonomous AI</span>
-    <button class="btn-nav" onclick="refreshAll(this)" title="Refresh all panels">↻ Refresh</button>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
       <span id="theme-icon">☀️</span>
     </button>
@@ -184,9 +179,6 @@
         </button>
         <button class="btn-sim-ghost" id="btn-run-all" onclick="runAllScenarios()" title="Simulate all 18 core scenarios sequentially">
           ⚡ Run All 18
-        </button>
-        <button class="btn-sim-danger" id="btn-reset" onclick="hardResetSession()" title="Reset session stats and ledger">
-          ↺ Reset Session
         </button>
       </div>
     </div>
@@ -309,7 +301,7 @@
   <!-- ── Section 5: Audit Trail & Regulatory Ledger ── -->
   <div class="card" style="margin-bottom:24px">
     <div class="section-hd">
-      <h3>📁 Regulatory Audit Trail &amp; Ledger <button class="an-refresh-btn" onclick="loadLedger()" title="Refresh Ledger">↻</button></h3>
+      <h3>📁 Regulatory Audit Trail &amp; Ledger</h3>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn-sim-ghost" onclick="exportLedgerCSV()" style="padding:3px 8px;font-size:11px" title="Export audit trail to CSV">📥 Export CSV</button>
         <button class="btn-sim-ghost" onclick="exportLedgerJSON()" style="padding:3px 8px;font-size:11px" title="Export audit trail to JSON">📥 Export JSON</button>
@@ -500,22 +492,6 @@ async function runAllScenarios(){
     showFeedback('Error running all scenarios: '+err.message, 'error');
   }finally{
     if(btn){btn.disabled=false;btn.textContent='⚡ Run All 18';}
-  }
-}
-
-async function hardResetSession(){
-  if(!confirm('Reset all session state, events, audit ledger, and MAB pulls?')) return;
-  var btn=document.getElementById('btn-reset');
-  if(btn){btn.disabled=true;btn.textContent='Resetting…';}
-  try{
-    var r=await fetch('/api/reset',{method:'POST'});
-    if(!r.ok) throw new Error('Reset failed');
-    showFeedback('✓ Session reset. All modules, ledger, and event counters cleared.', 'success');
-    await refreshAll();
-  }catch(err){
-    showFeedback('Reset error: '+err.message, 'error');
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='↺ Reset Session';}
   }
 }
 
@@ -779,11 +755,9 @@ async function loadBandit(){
   }
 }
 
-// ── Refresh & Real-Time Sync ──
-async function refreshAll(btn){
-  if(btn){btn.textContent='↻ …';btn.disabled=true;}
+// ── Real-Time Data Sync ──
+async function refreshAll(){
   await Promise.all([loadFunnel(), loadLedger(), loadBandit()]);
-  if(btn){btn.textContent='↻ Refresh';btn.disabled=false;}
 }
 
 // Initial load
