@@ -367,7 +367,7 @@ class LLMIntentClassifier:
 Answer user questions accurately, factually, and concisely based on the project documentation, live session metrics, and real-time event context below.
 
 CRITICAL DISTINCTION INVARIANT (NEVER BLUR BENCHMARK VS. LIVE SESSION):
-1. LIVE SESSION METRICS vs. PUBLISHED BENCHMARK PROOF are two completely distinct, separate datasets:
+1. LIVE SESSION METRICS vs. PUBLISHED BENCHMARK SIMULATION RESULTS are two completely distinct, separate datasets:
    - "LIVE ACTIVE SESSION STATE": Reflects what has executed in the current runtime session so far (detailed in the CURRENT LIVE SESSION METRICS block below). On a fresh server clone or before any scenarios are run, this will be ₹0 recovered across 0 transactions. If the user asks "how much have we recovered in this session", "current session stats", "live recovered amount", or "session recovery rate", YOU MUST REPORT THE EXACT REAL-TIME NUMBERS FROM THE LIVE SESSION STATE BLOCK. If it is ₹0, state clearly: "In this active session, ₹0 has been recovered so far across 0 transactions. Run a scenario or test simulation in the dashboard above to see live recovery in action."
    - "PUBLISHED OFFLINE BENCHMARK EVALUATION": Reflects the 50 Monte Carlo simulation runs over the 60 curated synthetic failure scenarios documented in the README (RecoverIQ: ₹2,82,154 ± ₹77,144 vs. Baseline: ₹89,063 ± ₹43,728 → Mean Simulated Net Uplift: +₹1,93,091 ± ₹78,177 with 95% CI: [+₹1,70,873, +₹2,15,309], 54.7% ± 6.6% recovery rate vs 16.9% ± 3.8% baseline, 20 retries vs 180 blind retries, 207 test cases). This is a controlled synthetic simulation benchmark, NOT observed live merchant production performance. YOU MUST ONLY CITE THESE NUMBERS when the user explicitly asks about the benchmark, historical evaluation runs, published research results, test suite, or baseline comparison.
    - NEVER substitute, quote, or blur the benchmark figures (+₹1.93L / 54.7%) when answering questions about the current live session!
@@ -507,7 +507,7 @@ Rules:
                     "- **Active Session Recovered**: **₹0** across 0 logged transactions.\n"
                     "- **Session State**: Fresh server instance. No recovery actions or simulations have executed yet in this session.\n"
                     "- **How to test live recovery**: Click **'Run Scenario'** or trigger a failed payment (such as Rahul Sharma's U30 or an expiring BT02 mandate) in the simulator above to observe autonomous interventions, audit ledger logs, and real-time uplift in action!\n\n"
-                    "*(Note: For our published 50-run Monte Carlo offline benchmark proof showing ₹4,47,296 recovered at 75.8% rate, ask: 'What are the benchmark results?')*"
+                    "*(Note: For our published 50-run Monte Carlo offline benchmark simulation results showing +₹1.93L mean simulated uplift (54.7% recovery rate), ask: 'What are the benchmark results?')*"
                 )
             roi = live_stats.get("net_roi", 0.0)
             rate = live_stats.get("recovery_rate_pct", 0.0)
@@ -528,20 +528,45 @@ Rules:
 
         # ── 2. Published Offline Benchmark Results ──────────────────────────────
         if "benchmark" in q or "results" in q or "uplift" in q or "monte carlo" in q:
+            try:
+                from benchmark import get_canonical_benchmark_summary
+                can = get_canonical_benchmark_summary(n_runs=50)
+            except Exception:
+                can = {
+                    "mean_uplift_revenue": 193091.0,
+                    "std_uplift_revenue": 78177.0,
+                    "ai_revenue_mean": 282154.0,
+                    "ai_revenue_std": 77144.0,
+                    "baseline_revenue_mean": 89063.0,
+                    "baseline_revenue_std": 43728.0,
+                    "ci_95_revenue_low": 170873.0,
+                    "ci_95_revenue_high": 215309.0,
+                    "mean_uplift_rate": 37.8,
+                    "std_uplift_rate": 6.8,
+                    "ai_rate_mean": 54.7,
+                    "ai_rate_std": 6.6,
+                    "baseline_rate_mean": 16.9,
+                    "baseline_rate_std": 3.8,
+                    "ci_95_rate_low": 35.9,
+                    "ci_95_rate_high": 39.7,
+                    "win_rate_pct": 100.0,
+                }
+
             return (
-                "**RecoverIQ Published Synthetic Benchmark Results (50 Monte Carlo Simulation Runs vs. Razorpay Baseline):**\n\n"
-                "*(Note: All figures represent a controlled synthetic simulation comparison across 60 curated failure archetypes calibrated on published Indian FinTech conversion models, not observed live merchant production revenue.)*\n\n"
-                "- **Mean Simulated Net Uplift**: **+₹1,93,091 ± ₹78,177**\n"
-                "  - RecoverIQ AI Agent: ₹2,82,154 ± ₹77,144\n"
-                "  - Baseline Fixed Retry: ₹89,063 ± ₹43,728\n"
-                "- **95% Confidence Interval (t=49)**: **[+₹1,70,873, +₹2,15,309]**\n"
-                "- **Mean Recovery Rate Uplift**: **+37.8% pts ± 6.8% pts** (RecoverIQ: **54.7% ± 6.6%** vs. Baseline: 16.9% ± 3.8%)\n"
-                "- **95% CI Recovery Rate**: **[+35.9%, +39.7%]**\n"
-                "- **Empirical Win Rate**: **100.0%** (50/50 paired simulation trials with positive uplift)\n"
+                "**RecoverIQ Published Synthetic Benchmark Results (50 Monte Carlo Simulation Runs vs. Modeled Fixed-Schedule Baseline):**\n\n"
+                "*(Note: All figures represent a controlled policy simulation across 60 curated failure archetypes using industry-informed assumptions, not observed live merchant production revenue. The baseline models generic D+1/D+2/D+3 retries and is not Razorpay's production retry system.)*\n\n"
+                f"- **Mean Simulated Net Uplift**: **+₹{can.get('mean_uplift_revenue', 193091):,.0f} ± ₹{can.get('std_uplift_revenue', 78177):,.0f}**\n"
+                f"  - RecoverIQ AI Agent: ₹{can.get('ai_revenue_mean', 282154):,.0f} ± ₹{can.get('ai_revenue_std', 77144):,.0f}\n"
+                f"  - Modeled Fixed Retry Baseline: ₹{can.get('baseline_revenue_mean', 89063):,.0f} ± ₹{can.get('baseline_revenue_std', 43728):,.0f}\n"
+                f"- **95% CI for Mean Simulated Uplift (t=49)**: **[+₹{can.get('ci_95_revenue_low', 170873):,.0f}, +₹{can.get('ci_95_revenue_high', 215309):,.0f}]**\n"
+                f"- **Mean Recovery Rate Uplift**: **+{can.get('mean_uplift_rate', 37.8):.1f}% pts ± {can.get('std_uplift_rate', 6.8):.1f}% pts** (RecoverIQ: **{can.get('ai_rate_mean', 54.7):.1f}% ± {can.get('ai_rate_std', 6.6):.1f}%** vs. Baseline: {can.get('baseline_rate_mean', 16.9):.1f}% ± {can.get('baseline_rate_std', 3.8):.1f}%)\n"
+                f"- **95% CI Rate Uplift**: **[+{can.get('ci_95_rate_low', 35.9):.1f}%, +{can.get('ci_95_rate_high', 39.7):.1f}%]**\n"
+                f"- **Simulated Win Rate**: **{can.get('win_rate_pct', 100.0):.1f}%** (50/50 paired simulation trials with positive uplift)\n"
+                "  *(Note: The AI won all 50 simulated paired trials under the specified assumptions; this is an outcome of the policy simulation model and is not presented as a production guarantee.)*\n"
                 "- **Compliance Breaches**: **0 violations** (vs. 7 baseline violations in benchmark suite)\n"
                 "- **Wasted Retries**: Reduced from 180 blind flood retries to **20 targeted retries** (-160 retries)\n"
                 "- **Test Suite**: 207 automated unit & integration test cases passing across 14 files.\n\n"
-                "*(These figures represent the published 50-run synthetic evaluation over the 60-scenario dataset, distinct from the active live session state.)*"
+                "*(These figures represent the canonical 50-run simulation over the 60-scenario dataset, distinct from the active live session state.)*"
             )
 
         # ── 3. B2B Receivables Chaser ───────────────────────────────────────────

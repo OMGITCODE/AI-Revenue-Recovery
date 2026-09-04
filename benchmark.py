@@ -1,15 +1,17 @@
 """
 benchmark.py — Probabilistic Benchmark: Baseline vs AI Agent Recovery
 =====================================================================
-Runs the entire 40-event dataset through two competing recovery policies:
+Runs the entire 60-event dataset through two competing recovery policies:
 
-  1. Baseline Policy (Fixed-Schedule / Razorpay Default Approach):
+  1. Modeled Baseline Policy (Fixed-Schedule Retry Baseline):
      - Blind fixed retry on D+1, D+2, D+3 at 09:00 IST
      - No NPCI error code diagnosis (treats all failures identically)
      - No salary-cycle awareness (retries month-end U30s before salary arrives)
      - Retries revoked/expired mandates (BT01/BT02) with 0% success rate
      - Silent retries on amounts > ₹15,000 (violates RBI mandate circular)
      - Blind nudges during TRAI DND blackout hours (21:00–08:00 IST)
+     *(Note: This models a generic industry fixed-schedule retry comparator and is
+     not intended to represent Razorpay's proprietary internal production retry systems.)*
 
   2. AI Revenue Recovery Agent (RecoverIQ):
      - NPCI error diagnosis (14 specific error codes)
@@ -22,20 +24,19 @@ Runs the entire 40-event dataset through two competing recovery policies:
      - RBI circuit breaker (GR7) + TRAI DND window (GR4) + P2P suppression (GR5)
 
 Methodology:
-  The benchmark executes an N=50 Monte Carlo probabilistic simulation drawn from
-  Indian FinTech channel conversion baselines, reporting mean ± std across runs.
+  The benchmark executes an N=50 Monte Carlo simulation drawn from modeled conversion
+  assumptions informed by Indian FinTech failure mechanics, reporting mean ± std across runs.
   An automated sensitivity analysis tests robustness under a 20% pessimistic
   conversion rate haircut.
 
-📚 Indian FinTech Industry Data Sources & Calibrated Baselines:
-  1. NPCI UPI Autopay Circulars & Failure Analysis (NPCI/UPI-OC/2021-22/004):
-     - Transient switch drops (TM) self-cure rate via backoff (92%).
-  2. Razorpay Recurring Payments & Subscription Industry Reports:
-     - Baseline blind month-end retry recovery (12-16%) vs. salary-cycle aligned recovery (85-90%).
-  3. Juspay Payments Conversion Index & UPI Autopay Studies:
-     - 1-click WhatsApp/SMS interactive mandate renewal links achieving 65-70% self-cure.
-  4. RBI Master Directions on Recurring Transactions (RBI/2019-20/47):
-     - ₹15,000 threshold requirement for explicit customer AFA consent.
+Modeled Conversion Assumptions:
+  These rates represent scenario assumptions informed by industry failure dynamics;
+  they are modeled assumptions for policy comparison, not empirically measured conversion rates:
+    - Smart retry (salary window): 88% (Informed by transient failure behavior and salary timing)
+    - Technical retry: 92% (Informed by transient gateway/switch timeout recovery)
+    - WhatsApp recovery: 72% (Modeled assumption for interactive conversational recovery)
+    - Mandate renewal: 68% (Modeled assumption for customer self-cure via re-registration links)
+    - UPI Collect: 65% (Modeled assumption for direct collect request authorization)
 
 Usage:
     python -X utf8 benchmark.py
@@ -51,7 +52,7 @@ import random
 import statistics
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 if sys.platform == "win32":
     try:
@@ -72,27 +73,32 @@ from src.integrations.setu_aa import setu_aa
 
 DATASET_PATH = ROOT / "data" / "upi_failures_dataset.json"
 
-# ── Calibrated Conversion Rates & Robustness Strategy ─────────────────────────
-# These conversion rates model typical recovery channel dynamics in Indian recurring
-# payment infrastructure, calibrated from published Razorpay, NPCI, and Juspay benchmarks.
+# ── Modeled Conversion Assumptions & Robustness Strategy ─────────────────────
+# These conversion rates are modeled policy assumptions informed by scenario mechanics
+# and typical recovery channel dynamics in Indian recurring payment infrastructure.
+# They are not empirically measured conversion rates for any specific merchant.
 #
-# Because conversion rates vary by merchant vertical, checkout flow, and customer tier,
-# RecoverIQ does not rely on static optimistic assumptions. Instead, RecoverIQ is evaluated
-# with an automated 20% pessimistic sensitivity haircut (--sensitivity), demonstrating that
-# the agent maintains a strong +44+ pts (+₹1.05L+) advantage even under stressed conditions.
+# Robustness Strategy:
+# Because real-world conversion rates vary by merchant vertical, checkout flow, and customer tier,
+# RecoverIQ is evaluated with an automated 20% pessimistic sensitivity haircut (--sensitivity).
+# This demonstrates that the simulated uplift remains positive (+44+ pts net gain) even under
+# stressed conditions where all modeled intervention probabilities are reduced by 20%.
 #
+# Modeled Probabilities Table:
 # 1. Mandate Renewal (68% modeled):
-#    - BT01/BT02 cannot be retried silently; 1-click WhatsApp/SMS re-registration enables self-cure.
+#    - Scenario assumption: expired/revoked mandates (BT01/BT02) cannot be retried silently;
+#      interactive 1-click WhatsApp/SMS re-registration enables self-cure.
 # 2. Salary-Window U30 Smart Retry (88% modeled):
-#    - Rescheduling month-end U30 retries to 1st–7th IST + Setu AA pre-flight balance verification.
+#    - Scenario assumption: rescheduling month-end U30 retries to 1st–7th IST + Setu AA
+#      pre-flight balance verification.
 # 3. Technical Error Exponential Backoff (92% modeled):
-#    - 15-minute exponential backoff overcomes transient switch/network drops.
+#    - Scenario assumption: 15-minute exponential backoff overcomes transient switch/network drops.
 # 4. UPI Collect Direct (65% modeled):
-#    - Push-to-VPA collect request prompt for limit/decline scenarios.
+#    - Modeled assumption: push-to-VPA collect request prompt for limit/decline scenarios.
 # 5. WhatsApp Nudge + 1-Click Intent (72% modeled):
-#    - Interactive messaging with 1-click UPI intent fallback.
-# 6. High-Touch Escalation (85% modeled):
-#    - Assisted high-touch outreach for high-value B2B/Tier A receivables.
+#    - Modeled assumption: interactive messaging with 1-click UPI intent fallback.
+# 6. High-Touch Escalation (0% automated):
+#    - Support queue handoff — routed to human collections, not counted as instant automated recovery.
 
 CONVERSION = {
     "mandate_renewal":   0.68,
@@ -121,9 +127,9 @@ class PolicyResult:
 
 def simulate_baseline_on_event(event: dict, rng: random.Random) -> dict:
     """
-    Simulates Razorpay's default fixed-schedule policy (D+1, D+2, D+3 blind retries).
-    Outcomes are drawn stochastically from published Indian FinTech conversion benchmarks
-    (NPCI switch recovery, month-end salary timing, and bank limit failure rates).
+    Simulates a modeled fixed-schedule retry baseline (D+1, D+2, D+3 blind retries).
+    Models standard fixed-interval re-attempts without failure code awareness,
+    salary-window timing, or mandate state verification.
     """
     code = event.get("failure_code", "UNKNOWN")
     amount = float(event.get("amount", 0))
@@ -446,14 +452,23 @@ def run_benchmark(
     return base_res, ai_res
 
 
-def get_canonical_benchmark_summary(n_runs: int = 50) -> dict:
+# ── Canonical Benchmark Cache ────────────────────────────────────────────────
+_BENCHMARK_CACHE: Dict[Tuple, Any] = {}
+
+
+def get_canonical_benchmark_summary(n_runs: int = 50, refresh: bool = False) -> dict:
     """
     Returns canonical verified simulated benchmark metrics for API & documentation parity.
     Guarantees a single source of truth across CLI, API endpoints, and assistants.
+    Subsequent calls reuse the cached benchmark result and avoid rerunning the Monte Carlo simulation.
     """
+    cache_key = ("canonical_summary", n_runs)
+    if not refresh and cache_key in _BENCHMARK_CACHE:
+        return _BENCHMARK_CACHE[cache_key]
+
     base, ai = run_benchmark(n_runs=n_runs)
     up = getattr(ai, "_uplift_stats", {})
-    return {
+    res = {
         "n_runs": n_runs,
         "baseline_revenue_mean": getattr(base, "_base_rec_mean", base.total_recovered),
         "baseline_revenue_std": getattr(base, "_base_rec_std", 0.0),
@@ -478,17 +493,24 @@ def get_canonical_benchmark_summary(n_runs: int = 50) -> dict:
         "max_uplift_revenue": up.get("max_uplift_revenue", 0.0),
         "win_rate_pct": up.get("win_rate_pct", 100.0),
     }
+    _BENCHMARK_CACHE[cache_key] = res
+    return res
 
 
-def run_sensitivity_analysis(n_runs: int = 50, haircut_pct: float = 0.20) -> dict:
+def run_sensitivity_analysis(n_runs: int = 50, haircut_pct: float = 0.20, refresh: bool = False) -> dict:
     """
     Sensitivity Check: Tests if RecoverIQ still significantly outperforms the baseline
-    even if all empirical conversion rates are hair-cutted by 20% (pessimistic bounds).
+    even if all modeled conversion rates are hair-cutted by 20% (pessimistic bounds).
+    Subsequent calls reuse the cached result for matching (n_runs, haircut_pct) parameters.
     """
+    cache_key = ("sensitivity_analysis", n_runs, round(haircut_pct, 4))
+    if not refresh and cache_key in _BENCHMARK_CACHE:
+        return _BENCHMARK_CACHE[cache_key]
+
     pessimistic_rates = {k: v * (1.0 - haircut_pct) for k, v in CONVERSION.items()}
     base_res, ai_pessimistic = run_benchmark(n_runs=n_runs, conversion_rates=pessimistic_rates)
 
-    return {
+    res = {
         "haircut_pct": int(haircut_pct * 100),
         "rates_used": {k: round(v, 3) for k, v in pessimistic_rates.items()},
         "base_recovered": round(base_res.total_recovered, 2),
@@ -500,6 +522,8 @@ def run_sensitivity_analysis(n_runs: int = 50, haircut_pct: float = 0.20) -> dic
         "net_uplift_revenue": round(ai_pessimistic.total_recovered - base_res.total_recovered, 2),
         "net_uplift_rate_pts": round(getattr(ai_pessimistic, "_ai_rate_mean", 0) - getattr(base_res, "_base_rate_mean", 0), 2),
     }
+    _BENCHMARK_CACHE[cache_key] = res
+    return res
 
 
 def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional[dict] = None):
@@ -524,9 +548,9 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
     base_rate_str= f"{base_rate_mean:.1f}% ± {base_rate_std:.1f}%"
 
     print("\n" + "=" * 78)
-    print(" 📊 SYNTHETIC BENCHMARK — NOT PRODUCTION PERFORMANCE (MONTE CARLO, N=50)")
+    print(" 📊 SYNTHETIC BENCHMARK — POLICY SIMULATION (MONTE CARLO, N=50)")
     print(f" Dataset: {base.total_events} Curated Synthetic UPI Autopay Failure Scenarios · {n_runs} Monte Carlo runs")
-    print(f" Conversion models calibrated on Indian FinTech benchmarks (Razorpay, NPCI, Juspay)")
+    print(f" Conversion models: industry-informed assumptions across recovery channels")
     print("=" * 78)
 
     headers = f"{'Metric':<32} | {'Baseline (Fixed Retry)':<22} | {'RecoverIQ (AI Agent)':<22} | {'Delta'}"
@@ -565,10 +589,12 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
         print(f" 📈 STATISTICAL UPLIFT RIGOR ({up['n_runs']} Paired Monte Carlo Simulation Trials)")
         print("─" * 78)
         print(f" • Mean Simulated Net Uplift:     +₹{up['mean_uplift_revenue']:,.0f} ± ₹{up['std_uplift_revenue']:,.0f}")
-        print(f" • 95% Confidence Interval (t={up['n_runs']-1}): [+₹{up['ci_95_revenue'][0]:,.0f}, +₹{up['ci_95_revenue'][1]:,.0f}]")
+        print(f" • 95% CI for Mean Simulated Uplift (t={up['n_runs']-1}): [+₹{up['ci_95_revenue'][0]:,.0f}, +₹{up['ci_95_revenue'][1]:,.0f}]")
         print(f" • Mean Recovery Rate Uplift:     +{up['mean_uplift_rate']:.1f}% pts ± {up['std_uplift_rate']:.1f}% pts")
         print(f" • 95% CI Rate Uplift:            [+{up['ci_95_rate'][0]:.1f}%, +{up['ci_95_rate'][1]:.1f}%]")
-        print(f" • Empirical Win Rate:             {up['win_rate_pct']:.1f}% ({up['positive_runs']}/{up['n_runs']} paired trials with positive uplift)")
+        print(f" • Simulated Win Rate:            {up['win_rate_pct']:.1f}% ({up['positive_runs']}/{up['n_runs']} paired trials with positive uplift)")
+        print("   (Note: The AI won all 50 simulated paired trials under the specified assumptions;")
+        print("    this is an outcome of the policy simulation model and is not presented as a production guarantee.)")
         print()
         print(" 📊 Empirical Distribution of Simulated Uplift (Paired Trials):")
         print(f"   - Minimum observed simulated uplift:  +₹{up['min_uplift_revenue']:,.0f}")
@@ -581,11 +607,11 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
         print("\n" + "─" * 78)
         print(f" 🛡️  SENSITIVITY ANALYSIS: Pessimistic Haircut ({sensitivity['haircut_pct']}% Lower Conversion)")
         print("─" * 78)
-        print(f" Even if true industry conversion rates are {sensitivity['haircut_pct']}% lower than modeled:")
+        print(f" When modeled conversion probabilities are uniformly reduced by {sensitivity['haircut_pct']}%:")
         print(f"   • RecoverIQ Haircut Recovery: ₹{sensitivity['ai_recovered_mean']:,.0f} ± ₹{sensitivity['ai_recovered_std']:,.0f} ({sensitivity['ai_rate_mean']:.1f}%)")
         print(f"   • Baseline Fixed Recovery:    ₹{sensitivity['base_recovered']:,.0f} ({sensitivity['base_rate']:.1f}%)")
         print(f"   • Net Uplift Under Haircut:   +₹{sensitivity['net_uplift_revenue']:,.0f} (+{sensitivity['net_uplift_rate_pts']:.1f} pts uplift)")
-        print(f" Proves that RecoverIQ's architectural advantage is robust to conservative rate shifts.\n")
+        print(f" Shows that the simulated uplift remains positive under a 20% haircut.\n")
 
 
 def generate_markdown_table(base: PolicyResult, ai: PolicyResult) -> str:

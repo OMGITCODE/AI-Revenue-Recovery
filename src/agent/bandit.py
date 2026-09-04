@@ -7,7 +7,7 @@ which intervention channel, timing, and copy yields the highest recovery rate
 for specific failure codes, customer trust scores, and amount tiers.
 
 Key Capabilities:
-  1. Contextual Beta Priors: Initialized with empirical domain priors (e.g. U30 + Salary Window).
+  1. Contextual Beta Priors: Initialized with domain-informed priors (e.g. U30 + Salary Window).
   2. Thompson Sampling: Samples from Beta(alpha, beta) posterior to balance exploration vs exploitation.
   3. Cost-Aware Expected Value: Ranks arms by Expected Revenue (Posterior Win Rate * Value - Channel Cost).
   4. Online Bayesian Updating: Updates alpha/beta parameters in real-time as outcomes arrive.
@@ -176,7 +176,7 @@ class ThompsonSamplingEngine:
         self._init_default_priors()
 
     def _init_default_priors(self):
-        """Pre-populate arms with empirical domain priors across common clusters."""
+        """Pre-populate arms with domain-informed priors across common clusters."""
         tiers = ["bronze", "silver", "gold", "platinum"]
         trusts = ["low", "med", "high"]
 
@@ -195,10 +195,10 @@ class ThompsonSamplingEngine:
                         )
 
     def reset(self):
-        """Reset all context posterior distributions back to initial empirical priors."""
+        """Reset all context posterior distributions back to initial domain-informed priors."""
         self._contexts.clear()
         self._init_default_priors()
-        logger.info("Bandit engine reset to initial empirical priors.")
+        logger.info("Bandit engine reset to initial domain-informed priors.")
 
     def _get_or_create_arm(self, context_key: str, arm: RecoveryArm | str) -> ArmState:
         resolved = resolve_arm(arm)

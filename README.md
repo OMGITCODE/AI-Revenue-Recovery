@@ -16,14 +16,14 @@
 
 ---
 
-## 📊 Synthetic Benchmark — Not Production Performance (Monte Carlo Policy Comparison vs. Razorpay Default)
+## 📊 Synthetic Benchmark — Policy Simulation vs. Fixed-Schedule Retry Baseline
 
 > [!NOTE]
-> **Synthetic Benchmark Disclosure**: All evaluation metrics below are derived from 50 Monte Carlo simulation runs across our 60 curated synthetic failure archetypes, calibrated from published Indian FinTech research (Razorpay, NPCI, Juspay conversion benchmarks). These figures represent controlled policy comparisons against fixed-schedule retries, not live production merchant claims.
+> **Synthetic Benchmark Disclosure**: All evaluation metrics below are derived from 50 Monte Carlo simulation runs across our 60 curated synthetic failure archetypes, calibrated as a policy comparison against a modeled fixed-schedule retry baseline ($D+1, D+2, D+3$). These figures represent controlled policy simulation results, not observed live merchant production performance. The baseline comparator models generic industry fixed-schedule retry behavior and is not intended to represent Razorpay's proprietary internal production retry systems.
 
-To prove measurable revenue recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against **Razorpay's standard fixed-schedule retry policy** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event curated synthetic UPI Autopay failure dataset (modeled on Indian FinTech failure archetypes).
+To evaluate measurable simulated recovery rather than just theoretical rules, we benchmarked **RecoverIQ** against a **modeled fixed-schedule retry baseline** ($D+1, D+2, D+3$ blind re-attempts) across our 60-event curated synthetic UPI Autopay failure dataset (modeled on Indian FinTech failure archetypes).
 
-Outcomes are **probabilistic**, modeled from published Indian FinTech and payment gateway conversion benchmarks. The benchmark executes **$N=50$ Monte Carlo simulation runs** and reports mean ± standard deviation, ensuring all metrics are reproducible and verifiable via `benchmark.py`.
+Outcomes are **probabilistic**, evaluated under modeled conversion assumptions informed by Indian recurring payment failure mechanics. The benchmark executes **$N=50$ Monte Carlo simulation runs** and reports mean ± standard deviation, ensuring all metrics are reproducible and verifiable via `benchmark.py`.
 
 ### 🏆 Simulated Benchmark Results (60 Scenarios · 50 Monte Carlo Runs)
 
@@ -38,14 +38,16 @@ Outcomes are **probabilistic**, modeled from published Indian FinTech and paymen
 | **Total Retries Fired** | 180 (blind flood) | **20 (salary-targeted)** | **-160 wasted retries** |
 | **Net ROI** *(mean ± std, n=50)* | **₹88,973 ± ₹43,728** | **₹281,768 ± ₹77,164** | **+₹192,795 mean uplift** |
 
-### 📈 Statistical Uplift Rigor & Empirical Distribution (50 Paired Simulation Trials)
+### 📈 Statistical Rigor: 95% CI for Mean Simulated Uplift (50 Paired Simulation Trials)
 
 To ensure scientific reproducibility and verify that the uplift is not an artifact of random sampling, `benchmark.py` evaluates paired trials across identical seeds and computes sample standard error with Student's $t$-distribution ($df=49$):
 
 - **Mean Simulated Net Uplift**: **+₹193,091 ± ₹78,177**
-- **95% Confidence Interval ($t=49$)**: **[+₹170,873, +₹215,309]**
+- **95% CI for Mean Simulated Uplift ($t=49$)**: **[+₹170,873, +₹215,309]**
 - **Mean Recovery Rate Uplift**: **+37.8% pts ± 6.8% pts** (95% CI: `[+35.9%, +39.7%]`)
-- **Empirical Win Rate**: **100.0%** (50/50 paired trials with positive uplift)
+- **Simulated Win Rate**: **100.0%** (50/50 paired simulation trials with positive uplift)
+
+*(Note: The 95% CI is a confidence interval for the mean simulated uplift under the specified Monte Carlo model across paired trials, not an empirical guarantee for future merchant revenue. The AI won all 50 simulated paired trials under the specified assumptions; this is an outcome of the policy simulation model and is not presented as a production guarantee.)*
 
 | Distribution Metric (50 Paired Trials) | Simulated Net Revenue Uplift |
 |---|---|
@@ -57,34 +59,28 @@ To ensure scientific reproducibility and verify that the uplift is not an artifa
 
 > 🔬 *Run the benchmark live anytime:* `python -X utf8 benchmark.py` (or `--runs 100 --sensitivity`) · `GET /api/benchmark`
 
-### 📚 Indian FinTech Industry Data Sources & Calibrated Baselines
+### 📋 Modeled Conversion Assumptions & Policy Rationale
 
-The recovery channel baseline probabilities in `benchmark.py` are calibrated from published Indian FinTech conversion studies and regulatory frameworks:
+The recovery channel parameters in `benchmark.py` are defensible as a **policy simulation using industry-informed assumptions**, rather than empirical evidence that these interventions achieve those exact conversion rates in every production merchant environment:
 
-1. **Mandate Renewal Self-Cure (~68% modeled)**:
-   - *Source*: **Juspay Payments Conversion Index & UPI Autopay Reports**.
-   - *Rationale*: Blind recurring retries on revoked (`BT01`) or expired (`BT02`) mandates fail 100% of the time. Dispatching an interactive 1-click WhatsApp/SMS re-registration magic link achieves 65–70% customer self-cure conversion within 48h.
-2. **Salary-Window U30 Smart Retry (~88% modeled)**:
-   - *Source*: **Razorpay 'The Era of Recurring Payments in India' & Subscription Conversion Reports**.
-   - *Rationale*: Blind month-end retries ($D+1, D+2, D+3$) on insufficient funds (`U30`) recover only 12–16% and exhaust retry quotas. Rescheduling retries to the 1st–7th salary window combined with **Setu Account Aggregator (AA)** pre-flight balance verification increases successful debit conversion to 85–90%.
-3. **Transient Technical Error Exponential Backoff (~92% modeled)**:
-   - *Source*: **NPCI UPI Technical Decline & Switch Reliability Circulars (NPCI/UPI-OC/2021-22/004)**.
-   - *Rationale*: Bank gateway timeouts (`TM`) and switch drops are transient. A 15-minute exponential backoff resolves >90% of temporary issuer infrastructure spikes.
-4. **UPI Collect / Push-to-VPA (~65% modeled)**:
-   - *Source*: **NPCI UPI Collect Request Conversion Benchmarks**.
-   - *Rationale*: For daily transaction limits (`U69`) or soft declines, sending an instant UPI collect notification with in-app biometric approval resolves 60–70% within 30 minutes.
-5. **WhatsApp Conversational Nudge (~72% modeled)**:
-   - *Source*: **Twilio & Gupshup Indian FinTech Messaging Conversion Benchmarks**.
-   - *Rationale*: Conversational Hinglish payment reminders with 1-click UPI deep links convert at 70–75%, compared to <8% for standard email dunning.
-6. **Regulatory Compliance Constraints**:
-   - *Source*: **RBI Digital Payments - E-Mandate Framework** (Master Directions RBI/2019-20/47 & circulars on AFA relaxation) and **TRAI Telecom Commercial Communications Customer Preference Regulations (TCCCPR)**.
-   - *Rationale*: Enforces category-aware circuit breakers on silent retries (₹1,00,000 enhanced threshold for insurance premiums, mutual fund subscriptions, and credit card bill payments; standard ₹15,000 ceiling for general merchant categories and education fees) and suppresses outreach during 21:00–08:00 IST DND quiet hours.
+| Intervention Channel | Modeled Probability | Basis & Scenario Mechanics |
+|---|---|---|
+| **Smart Retry (Salary Window)** | **88%** | Scenario assumption informed by transient-failure behavior and salary-window timing (rescheduling U30 retries to 1st–7th of month with Setu AA balance verification). |
+| **Technical Retry** | **92%** | Scenario assumption informed by transient gateway/switch timeout recovery via 15-minute exponential backoff. |
+| **WhatsApp Recovery** | **72%** | Modeled assumption for interactive conversational recovery with 1-click UPI intent links. |
+| **Mandate Renewal** | **68%** | Modeled assumption for expired/revoked mandate (`BT01`/`BT02`) self-cure via interactive re-registration links. |
+| **UPI Collect** | **65%** | Modeled assumption for direct push-to-VPA collect request authorization on limit/decline errors. |
+
+**Regulatory & Constraint References**:
+1. **Transient Switch Decline Recovery**: NPCI UPI Technical Decline & Switch Reliability Circulars (NPCI/UPI-OC/2021-22/004) regarding switch auto-reversal and transient timeout resolution.
+2. **Category-Aware Mandate Thresholds**: RBI Master Directions on Recurring Transactions (RBI/2019-20/47) establishing the ₹15,000 baseline ceiling for silent retries, and enhanced ₹1,00,000 threshold for insurance premiums, mutual fund subscriptions, and credit card bill payments.
+3. **Outreach Quiet Hours**: TRAI Telecom Commercial Communications Customer Preference Regulations (TCCCPR) prohibiting promotional/recovery communication during 21:00–08:00 IST blackout hours.
 
 ### 🛡️ Robustness & Sensitivity Analysis (20% Pessimistic Haircut)
 
-To ensure claims do not rely on fragile or optimistic conversion assumptions, `benchmark.py` includes a built-in sensitivity test that applies an automated **20% pessimistic haircut** across all channel conversion rates:
+To test how RecoverIQ performs if real-world merchant conversion rates are lower than modeled, `benchmark.py` includes a built-in sensitivity test that applies an automated **20% pessimistic haircut** across all channel conversion probabilities:
 
-**Key Takeaway**: Even under a 20% pessimistic haircut across every single channel, RecoverIQ recovers **₹1.26 Lakh+ (~60% recovery rate)** with a **+44.6 pts net gain**, proving that the agent's architectural advantage (NPCI code awareness, salary-window alignment, and guardrails) is completely robust to conservative rate shifts.
+**Key Takeaway**: Even under a 20% pessimistic haircut across every single channel, RecoverIQ recovers **₹1.26 Lakh+ (~60% recovery rate)** with a **+44.6 pts net gain**, showing that the simulated uplift remains positive under a 20% haircut, demonstrating that the simulated advantage is resilient when modeled conversion rates are uniformly reduced by 20%.
 
 
 ---
@@ -135,7 +131,7 @@ RecoverIQ is **not a static if/else rules engine**. It incorporates a **Bayesian
 Action arms (`smart_retry_salary`, `upi_collect`, `whatsapp_nudge`, `mandate_renewal`, `ivr`, `escalation`) maintain independent $(\alpha, \beta)$ parameters partitioned across context clusters:
 $$\text{Context Key} = \text{FailureCategory} \times \text{CustomerTier} \times \text{TrustScoreBucket}$$
 
-- **Domain-Informed Priors**: Initialized with empirical Indian payment data (e.g. `U30` + `SalaryWindow` $\alpha=14.0, \beta=6.0 \implies 70\%$ initial win rate).
+- **Domain-Informed Priors**: Initialized with domain-informed priors (e.g. `U30` + `SalaryWindow` $\alpha=14.0, \beta=6.0 \implies 70\%$ initial win rate).
 - **Sampling**: Draws stochastic probability sample $\theta_i \sim \text{Beta}(\alpha_i, \beta_i)$.
 - **Online Learning**: Real-time Bayesian updating as webhooks and payment confirmations arrive.
 
@@ -299,7 +295,7 @@ RecoverIQ is built as a modular, high-throughput autonomous revenue recovery arc
 |---|---|---|
 | **Proactive Mandate Expiry Interceptor** | `src/agent/mandate_expiry.py` | Proactive $T-72\text{h}$ pre-failure scanner scanning active recurring UPI Autopay mandates nearing validity lapse, dispatching 1-click WhatsApp/SMS renewal magic links before NPCI `BT02` ("Mandate Expired") debit failures can occur, and logging pre-empted recovery to the audit ledger under `recovery_type="proactive"`. |
 | **Customer Identity Registry** | `src/agent/customer_identity.py` | Canonical identity graph resolving and merging fragmented customer identifiers (`customer_id`, multiple VPAs, phone numbers, and emails) into a unified profile. Synchronizes behavioral history, cumulative daily touches, retry counts, and compliance holds. |
-| **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with empirical Indian FinTech conversion data and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
+| **Contextual Thompson Sampling Bandit** | `src/agent/bandit.py` | Bayesian Multi-Armed Bandit balancing exploration vs. exploitation across 48 context clusters (`FailureCategory` × `CustomerTier` × `TrustBucket`). Uses Beta-Bernoulli conjugate priors initialized with domain-informed priors and real-time online posterior updates $(\alpha \leftarrow \alpha+1, \beta \leftarrow \beta+1)$. |
 | **Deterministic Guardrails Engine** | `src/agent/decision_engine.py` | 10 hard deterministic RBI, TRAI & consumer protection guardrails (GR1–GR10): RBI Digital Payments E-Mandate Framework category-aware limits (GR7: ₹1,00,000 for insurance, mutual funds, and credit cards; ₹15,000 baseline ceiling for general/education), TRAI DND (21:00–08:00 IST), max 3 lifetime retries cap, active P2P harassment suppression, compliance blacklists, and **Spend Pattern Anomaly / Critical Spike Protection (GR10)**. |
 | **Spend Pattern & Anomaly Engine** | `src/agent/spend_pattern.py` | Calculates rolling statistical profiles (mean, median, range, std dev) per canonical customer profile and detects sudden upward spikes (e.g. 9x+ multiplier on micro-ticket payers), blocking blind automatic retries to protect customers from unexpected account depletion. |
 | **Promise-to-Pay (P2P) Tracker** | `src/agent/promise_tracker.py` | Tracks customer payment commitments with deadlines + computes continuous **Payer Trust Score (0.0–1.0)** using recency weighting ($2\times$ on latest commitment) and broken promise penalties ($-0.15$), automatically suppressing outbound nudges while promises are active and auto-fulfilling upon recovery. |
@@ -433,8 +429,8 @@ During development and testing, we ran into six real-world failures where our as
 ### 2. The Fake "100% Recovery" Benchmark
 * **The Bug:** Our very first test script showed a "100% recovery rate." But that was fake—it assumed every customer answered WhatsApp, accepted discounts, and that bank networks never went down. In payments, claiming 100% recovery is an obvious red flag showing the system was never tested against reality.
 * **The Fix:**
-  1. We completely rebuilt the testing tool (`benchmark.py`) to run **50 randomized simulations** using real data from Indian payment companies (Razorpay, NPCI, Juspay).
-  2. We added a **20% penalty** to simulate bad economic conditions, giving us an honest, verified **75.8% ± 4.9% recovery rate** that anyone can check by running one command.
+  1. We completely rebuilt the testing tool (`benchmark.py`) to run **50 randomized simulations** using modeled assumptions informed by Indian recurring payment failure mechanics.
+  2. We added a **20% penalty** to simulate bad economic conditions, giving us an honest, verified **43.4% ± 5.8% recovery rate** under stress (maintaining a **+26.4 pts net gain** over the 16.9% baseline) that anyone can check by running one command (`python -X utf8 benchmark.py --sensitivity`).
 
 ### 3. The Month-End "Salary Trap" (Dumb Gateway Retries)
 * **The Bug:** Standard payment gateways blindly retry failed payments on Day 1, Day 2, and Day 3. When a customer's subscription failed on August 28th due to low funds (`U30`), naive retries fired on the 29th, 30th, and 31st. All 3 bounced, the user was charged bank penalty fees for each bounce, and their subscription was cancelled on August 31st—**just 12 hours before their monthly paycheck arrived on September 1st.**
@@ -752,10 +748,10 @@ A dedicated copilot assistant accessible via the dashboard navbar (`✨ 🤖 Ask
   - `b2b_chaser`: Overdue enterprise receivables count, debtor aging, and settled balances.
   - `checkout_agent`: High-intent cart drop-off sessions and recovered GMV.
 - **Zero-Division & Empty-State Resilience**: All aggregations are defensively wrapped with individual `try/except` fallbacks and zero-guarded divisions (`if len(...) else 0`). Even on a fresh server instance with 0 records, `/api/project-chat` is guaranteed never to crash or throw division-by-zero errors.
-- **🛡️ Anti-Hallucination Invariant (Live Session vs. Benchmark Proof)**:
+- **🛡️ Anti-Hallucination Invariant (Live Session vs. Benchmark Simulation Results)**:
   - **Live Active Session Queries** (*"How much have we recovered in this session?"*): Reports strictly what has occurred in the active runtime instance. On a fresh clone, it reports **₹0 recovered** across 0 transactions and invites the user to run a scenario.
-  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo evaluation proof (**₹2,82,154 recovered, 54.7% recovery rate vs. 16.9% baseline $\implies$ +₹1,93,091 mean simulated uplift, 95% CI: [+₹1,70,873, +₹2,15,309]**).
-  - The model and deterministic fallback are strictly prohibited from substituting or blurring benchmark proof numbers into active session responses.
+  - **Published Benchmark Queries** (*"What are the benchmark results?"*): Cites the 50-run Monte Carlo simulation results (**₹2,82,154 recovered, 54.7% recovery rate vs. 16.9% baseline $\implies$ +₹1,93,091 mean simulated uplift, 95% CI: [+₹1,70,873, +₹2,15,309]**).
+  - The model and deterministic fallback are strictly prohibited from substituting or blurring benchmark simulation numbers into active session responses.
 - **Universal Multi-Scenario Context Binding**:
   - Automatically correlates queries against active or recently simulated scenarios in `store._events` (matching VPA, Customer ID, scenario title, or error code).
   - General inquiries (*"Why did this transaction fail?"*, *"What recovery action was taken?"*) automatically bind to the most recent transaction across all archetypes (Rahul U30, Priya BT01, Arjun TM, Vikram BT02, Kavita U69, Sneha ZA, B2B, or custom prompt scenarios).

@@ -3,9 +3,9 @@ test_project_chat_grounding.py — Tests for Live Session Awareness & Full-Platf
 ========================================================================================
 Validates:
 1. Zero-division and empty-state safety on fresh instances.
-2. Anti-hallucination invariant: Fresh session reports ₹0 (never ₹4,47,296 benchmark).
+2. Anti-hallucination invariant: Fresh session reports ₹0 (never blurs benchmark figures).
 3. Live session metrics accurately reflect active ledger transactions.
-4. Benchmark queries correctly cite published 50-run Monte Carlo proof.
+4. Benchmark queries correctly cite published 50-run Monte Carlo simulation results.
 5. Deep grounding for B2B Chaser, Cart Checkout Recovery, Customer Identity Graph, and Mandate Expiry.
 """
 
@@ -83,7 +83,7 @@ class TestLiveSessionSafetyAndGrounding:
         assert "1,499" in reply
         assert "100.0%" in reply or "Session Recovery Rate" in reply
 
-    def test_benchmark_query_returns_published_monte_carlo_proof(self):
+    def test_benchmark_query_returns_published_monte_carlo_simulation_results(self):
         """Verifies that asking about benchmarks cites the published 50-run Monte Carlo evaluation."""
         client = TestClient(app)
         res = client.post("/api/project-chat", json={"message": "What are the benchmark results vs baseline?"})
