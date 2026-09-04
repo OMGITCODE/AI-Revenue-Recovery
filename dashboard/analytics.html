@@ -1,0 +1,321 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecoverIQ — Analytics</title>
+  <script>
+    (function() {
+      var theme = localStorage.getItem('riq-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="icon" type="image/png" href="/static/logo_mark.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css?v=20260902-v3" />
+  <style>
+    .an-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    @media(max-width:860px){.an-grid{grid-template-columns:1fr}}
+    .funnel-wrap{display:flex;align-items:flex-start;gap:0;padding:20px 24px 12px}
+    .funnel-stage{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;text-align:center}
+    .funnel-stage:not(:last-child)::after{content:'›';position:absolute;right:-10px;top:20px;font-size:18px;color:var(--text-3);z-index:1}
+    .funnel-bar-wrap{width:100%;padding:0 8px;display:flex;flex-direction:column;align-items:center;gap:5px}
+    .funnel-bar-track{width:100%;height:7px;background:var(--border);border-radius:99px;overflow:hidden}
+    .funnel-bar-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+    .funnel-value{font-size:18px;font-weight:700;color:var(--text-1);line-height:1.2}
+    .funnel-sub{font-size:10px;color:var(--text-3)}
+    .funnel-label{font-size:9px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+    .chart-wrap{padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px}
+    .chart-row{display:flex;align-items:center;gap:10px}
+    .chart-row-label{width:130px;flex-shrink:0;font-size:11px;font-weight:500;color:var(--text-2);text-align:right;white-space:nowrap}
+    .chart-bar-track{flex:1;height:20px;background:var(--border);border-radius:4px;overflow:hidden}
+    .chart-bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:#fff;transition:width .7s cubic-bezier(.4,0,.2,1);white-space:nowrap;min-width:2px}
+    .chart-row-meta{width:72px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--text-2)}
+    .audit-scroll{max-height:360px;overflow-y:auto}
+    .audit-tbl{width:100%;border-collapse:collapse;font-size:12px}
+    .audit-tbl th{background:var(--tbl-head);color:var(--text-3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
+    .audit-tbl td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-1);vertical-align:middle}
+    .audit-tbl tr:hover td{background:var(--hover)}
+    .audit-tbl tr:last-child td{border-bottom:none}
+    .posterior-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:16px 20px}
+    .posterior-card{background:var(--iv-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px}
+    .posterior-arm{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .posterior-rate{font-size:22px;font-weight:700;color:var(--text-1);margin-bottom:2px}
+    .posterior-ci{font-size:10px;color:var(--text-3)}
+    .posterior-bar-track{height:4px;background:var(--border);border-radius:99px;margin-top:8px;overflow:hidden}
+    .posterior-bar-fill{height:100%;border-radius:99px;background:var(--blue);transition:width .6s ease}
+    .section-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 0;margin-bottom:4px}
+    .section-hd h3{font-size:13px;font-weight:600;color:var(--text-1)}
+    .section-hd span{font-size:11px;color:var(--text-3)}
+    .an-empty{padding:28px 20px;text-align:center;color:var(--text-3);font-size:12px}
+    .an-refresh-btn{margin-left:6px;padding:2px 8px;font-size:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-2);cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
+    .an-refresh-btn:hover{background:var(--hover);color:var(--text-1)}
+    .pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.2px}
+    .pill-green{background:var(--green-lt);color:var(--green)}
+    .pill-red{background:var(--red-lt);color:var(--red)}
+    .pill-blue{background:var(--blue-lt);color:var(--blue)}
+    .pill-amber{background:var(--amber-lt);color:var(--amber)}
+    .pill-gray{background:var(--canvas);color:var(--text-3);border:1px solid var(--border)}
+    .win-prob-wrap{display:flex;align-items:center;gap:6px}
+    .win-prob-track{width:56px;height:5px;background:var(--border);border-radius:99px;overflow:hidden;flex-shrink:0}
+    .win-prob-fill{height:100%;border-radius:99px;background:var(--blue)}
+    .win-prob-val{font-size:11px;font-weight:600;color:var(--text-2);width:30px}
+    .ctx-select{font-family:inherit;font-size:11px;padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1)}
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="/">
+    <img src="/static/logo_mark.png" class="nav-logo-mark-img" alt="RecoverIQ" />
+    <img src="/static/logo_wordmark.png" class="nav-logo-wordmark-img" alt="RecoverIQ" />
+  </a>
+  <div class="nav-links">
+    <a href="/" class="nav-link">Dashboard</a>
+    <a href="/analytics" class="nav-link active">Analytics</a>
+    <a href="/api/events" target="_blank" class="nav-link">Events API</a>
+    <a href="/docs" target="_blank" class="nav-link">API Docs</a>
+  </div>
+  <div class="nav-actions">
+    <span class="nav-badge">Demo Mode</span>
+    <button class="btn-nav" onclick="refreshAll(this)" title="Refresh all panels">&#8635; Refresh</button>
+    <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark / light mode">
+      <span id="theme-icon">&#9728;&#65039;</span>
+    </button>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- Row 1: Funnel + Channel -->
+  <div class="an-grid">
+    <div class="card">
+      <div class="section-hd"><h3>&#9889; Recovery Funnel</h3><span id="funnel-ts">Live session</span></div>
+      <div class="funnel-wrap" id="funnel-wrap"><div class="an-empty">Loading&hellip;</div></div>
+    </div>
+    <div class="card">
+      <div class="section-hd"><h3>&#128202; Intervention Performance</h3><span>by channel</span></div>
+      <div class="chart-wrap" id="channel-chart"><div class="an-empty">Loading&hellip;</div></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Bandit Posterior -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="section-hd">
+      <h3>&#127919; Bandit Posterior &mdash; &#952; ~ Beta(&alpha;, &beta;) per Context</h3>
+      <span id="bandit-ctx-label">insufficient_funds &middot; silver &middot; med</span>
+    </div>
+    <div style="display:flex;gap:8px;padding:8px 20px 0;flex-wrap:wrap">
+      <select class="ctx-select" id="ctx-category" onchange="loadBandit()">
+        <option value="insufficient_funds">insufficient_funds</option>
+        <option value="technical_error">technical_error</option>
+        <option value="mandate_inactive">mandate_inactive</option>
+        <option value="b2b_overdue">b2b_overdue</option>
+      </select>
+      <select class="ctx-select" id="ctx-tier" onchange="loadBandit()">
+        <option value="silver">silver</option>
+        <option value="bronze">bronze</option>
+        <option value="gold">gold</option>
+        <option value="platinum">platinum</option>
+      </select>
+      <select class="ctx-select" id="ctx-trust" onchange="loadBandit()">
+        <option value="med">med trust</option>
+        <option value="high">high trust</option>
+        <option value="low">low trust</option>
+      </select>
+    </div>
+    <div class="posterior-grid" id="posterior-grid"><div class="an-empty" style="grid-column:1/-1">Loading&hellip;</div></div>
+  </div>
+
+  <!-- Row 3: Audit Trail -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-hd">
+      <h3>&#128193; Audit Trail <button class="an-refresh-btn" onclick="loadLedger()">&#8635;</button></h3>
+      <span id="ledger-count">&mdash;</span>
+    </div>
+    <div style="display:flex;gap:8px;padding:8px 20px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      <select class="ctx-select" id="filter-action" onchange="renderLedger()">
+        <option value="">All actions</option>
+        <option value="smart_retry">smart_retry</option>
+        <option value="mandate_renewal">mandate_renewal</option>
+        <option value="whatsapp_nudge">whatsapp_nudge</option>
+        <option value="upi_collect">upi_collect</option>
+        <option value="escalation">escalation</option>
+        <option value="blocked">blocked</option>
+      </select>
+      <select class="ctx-select" id="filter-outcome" onchange="renderLedger()">
+        <option value="">All outcomes</option>
+        <option value="recovered">recovered</option>
+        <option value="failed">failed</option>
+        <option value="pending">pending</option>
+      </select>
+      <input id="filter-search" type="text" placeholder="Search VPA / name&hellip;" oninput="renderLedger()"
+        style="font-family:inherit;font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);color:var(--text-1);width:160px" />
+    </div>
+    <div class="audit-scroll">
+      <table class="audit-tbl">
+        <thead>
+          <tr>
+            <th>Time</th><th>Customer / VPA</th><th>Amount</th><th>Error</th>
+            <th>Action</th><th>Win Prob</th><th>Outcome</th><th>Recovered</th>
+          </tr>
+        </thead>
+        <tbody id="ledger-tbody"><tr><td colspan="8" class="an-empty">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleTheme(){
+  var html=document.documentElement,next=html.getAttribute('data-theme')==='dark'?'light':'dark';
+  html.setAttribute('data-theme',next);localStorage.setItem('riq-theme',next);
+  document.getElementById('theme-icon').textContent=next==='dark'?'☀️':'🌙';
+}
+(function(){var t=localStorage.getItem('riq-theme')||'dark';
+  document.getElementById('theme-icon').textContent=t==='dark'?'☀️':'🌙';})();
+
+function fmtAmt(n){n=parseFloat(n)||0;
+  if(n>=100000)return '₹'+(n/100000).toFixed(2)+'L';
+  if(n>=1000)return '₹'+(n/1000).toFixed(1)+'k';
+  return '₹'+n.toFixed(0);}
+function pct(a,b){return b>0?(a/b*100).toFixed(1):'0.0';}
+function timeAgo(iso){if(!iso)return '—';
+  var s=Math.floor((Date.now()-new Date(iso))/1000);
+  if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}
+var CHAN_COLORS={smart_retry:'#3366FF',mandate_renewal:'#F59E0B',whatsapp_nudge:'#00A86B',upi_collect:'#8B5CF6',escalation:'#E53935'};
+function actionPill(a){var m={smart_retry:'blue',mandate_renewal:'amber',whatsapp_nudge:'green',upi_collect:'blue',escalation:'red'};return m[a]||'gray';}
+function outcomePill(o){var m={recovered:'green',failed:'red',pending:'amber'};return m[o]||'gray';}
+
+async function loadFunnel(){
+  try{
+    var r=await fetch('/api/stats'),s=await r.json();
+    var atRisk=s.total_at_stake||0,recovered=s.total_recovered||0,
+        events=s.total_entries||0,successes=s.recovered_count||0,blocked=s.blocked_count||0;
+    var eligible=events-blocked;
+    var stages=[
+      {label:'At Risk',   val:fmtAmt(atRisk), sub:events+' events',     p:100,                               col:'#3366FF'},
+      {label:'Eligible',  val:eligible,         sub:blocked+' blocked',   p:events>0?pct(eligible,events):100, col:'#8B5CF6'},
+      {label:'Actioned',  val:eligible,         sub:'by AI engine',       p:eligible>0?100:0,                  col:'#F59E0B'},
+      {label:'Recovered', val:fmtAmt(recovered),sub:successes+' payments',p:events>0?pct(successes,events):0,  col:'#00A86B'},
+    ];
+    document.getElementById('funnel-wrap').innerHTML=stages.map(function(st){return(
+      '<div class="funnel-stage"><div class="funnel-bar-wrap">'+
+      '<div class="funnel-value">'+st.val+'</div>'+
+      '<div class="funnel-sub">'+st.sub+'</div>'+
+      '<div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:'+st.p+'%;background:'+st.col+'"></div></div>'+
+      '<span class="pill" style="background:'+st.col+'22;color:'+st.col+'">'+st.p+'%</span>'+
+      '<div class="funnel-label">'+st.label+'</div>'+
+      '</div></div>');}).join('');
+  }catch(e){document.getElementById('funnel-wrap').innerHTML='<div class="an-empty">Seed demo data first.</div>';}
+}
+
+var _ledgerRaw=[];
+async function loadLedger(){
+  try{
+    var r=await fetch('/api/ledger'),data=await r.json();
+    _ledgerRaw=Array.isArray(data)?data:(data.entries||data.ledger||[]);
+    renderLedger();buildChannelChart();
+  }catch(e){document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No ledger data yet.</td></tr>';}
+}
+function buildChannelChart(){
+  var byC={};
+  _ledgerRaw.forEach(function(e){
+    var ch=e.action||e.channel||e.intervention||'unknown';
+    if(!byC[ch])byC[ch]={total:0,recovered:0};
+    byC[ch].total++;
+    if(e.outcome==='recovered'||e.recovered===true||(e.amount_recovered||0)>0)byC[ch].recovered++;
+  });
+  var entries=Object.entries(byC).sort(function(a,b){return b[1].total-a[1].total;});
+  var maxT=Math.max.apply(null,entries.map(function(x){return x[1].total;})||[1]);
+  if(!entries.length){document.getElementById('channel-chart').innerHTML='<div class="an-empty">Run a scenario first.</div>';return;}
+  document.getElementById('channel-chart').innerHTML=entries.map(function(e){
+    var ch=e[0],d=e[1],rate=d.total>0?(d.recovered/d.total*100).toFixed(0):0;
+    var barW=(d.total/maxT*100).toFixed(1),col=CHAN_COLORS[ch]||'#9A9AB0';
+    var rateCls=parseInt(rate)>=60?'pill-green':parseInt(rate)>=30?'pill-amber':'pill-red';
+    return '<div class="chart-row">'+
+      '<div class="chart-row-label">'+ch.replace(/_/g,' ')+'</div>'+
+      '<div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+barW+'%;background:'+col+'">'+
+      (d.total>=3?d.total+' events':'')+'</div></div>'+
+      '<div class="chart-row-meta"><span class="pill '+rateCls+'">'+rate+'% ✓</span></div>'+
+      '</div>';
+  }).join('');
+}
+function renderLedger(){
+  var fa=document.getElementById('filter-action').value;
+  var fo=document.getElementById('filter-outcome').value;
+  var fs=(document.getElementById('filter-search').value||'').toLowerCase();
+  var rows=_ledgerRaw.filter(function(e){
+    var a=e.action||e.channel||e.intervention||'';
+    var o=e.outcome||(e.recovered?'recovered':'pending');
+    var srch=(e.customer_vpa||e.vpa||e.customer_name||e.name||'').toLowerCase();
+    if(fa&&!a.includes(fa))return false;
+    if(fo&&!o.includes(fo))return false;
+    if(fs&&!srch.includes(fs))return false;
+    return true;
+  }).slice(-80).reverse();
+  document.getElementById('ledger-count').textContent=rows.length+' entries';
+  if(!rows.length){document.getElementById('ledger-tbody').innerHTML='<tr><td colspan="8" class="an-empty">No matching entries.</td></tr>';return;}
+  document.getElementById('ledger-tbody').innerHTML=rows.map(function(e){
+    var action=e.action||e.channel||e.intervention||'—';
+    var outcome=e.outcome||(e.recovered?'recovered':'pending');
+    var amt=e.amount||e.mandate_amount||0,recov=e.amount_recovered||(e.recovered?amt:0);
+    var wp=e.win_probability||e.expected_win_rate||null;
+    var code=e.failure_code||e.error_code||'—';
+    var vpa=e.customer_vpa||e.vpa||e.customer_name||'—';
+    var wpHtml=wp!==null?'<div class="win-prob-wrap"><div class="win-prob-track"><div class="win-prob-fill" style="width:'+(wp*100).toFixed(0)+'%"></div></div><span class="win-prob-val">'+(wp*100).toFixed(0)+'%</span></div>':'<span style="color:var(--text-3)">—</span>';
+    return '<tr>'+
+      '<td style="color:var(--text-3);white-space:nowrap">'+timeAgo(e.timestamp||e.created_at)+'</td>'+
+      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+vpa+'">'+vpa+'</td>'+
+      '<td style="font-weight:600">₹'+parseFloat(amt).toLocaleString('en-IN')+'</td>'+
+      '<td><code style="background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:11px">'+code+'</code></td>'+
+      '<td><span class="pill pill-'+actionPill(action)+'">'+action.replace(/_/g,' ')+'</span></td>'+
+      '<td>'+wpHtml+'</td>'+
+      '<td><span class="pill pill-'+outcomePill(outcome)+'">'+outcome+'</span></td>'+
+      '<td style="font-weight:600;color:'+(recov>0?'var(--green)':'var(--text-3)')+'">'+
+      (recov>0?'₹'+parseFloat(recov).toLocaleString('en-IN'):'—')+'</td>'+
+      '</tr>';
+  }).join('');
+}
+
+async function loadBandit(){
+  var cat=document.getElementById('ctx-category').value;
+  var tier=document.getElementById('ctx-tier').value;
+  var trust=document.getElementById('ctx-trust').value;
+  document.getElementById('bandit-ctx-label').textContent=cat+' · '+tier+' · '+trust;
+  try{
+    var r=await fetch('/api/bandit'),data=await r.json();
+    var ctxKey=cat+':'+tier+':'+trust;
+    var contexts=data.contexts||data;
+    var arms=contexts[ctxKey]||contexts[cat+':silver:med']||{};
+    var entries=Object.entries(arms);
+    if(!entries.length){document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">No data for this context &mdash; run a scenario first.</div>';return;}
+    var maxMean=Math.max.apply(null,entries.map(function(x){return x[1].mean||0;}));
+    document.getElementById('posterior-grid').innerHTML=entries
+      .sort(function(a,b){return(b[1].mean||0)-(a[1].mean||0);})
+      .map(function(e){
+        var arm=e[0],st=e[1],mean=st.mean||0,alpha=st.alpha||1,beta=st.beta||1;
+        var ci=st.confidence_interval||[mean-0.1,mean+0.1];
+        var isTop=mean===maxMean;
+        return '<div class="posterior-card" style="'+(isTop?'border-color:var(--blue);':'')+'">'+
+          '<div class="posterior-arm" title="'+arm+'">'+(isTop?'⭐ ':'')+arm.replace(/_/g,' ')+'</div>'+
+          '<div class="posterior-rate">'+(mean*100).toFixed(1)+'%</div>'+
+          '<div class="posterior-ci">&alpha;='+alpha.toFixed(1)+' &beta;='+beta.toFixed(1)+'<br>90% CI ['+(((ci[0]||0)*100).toFixed(1))+'%, '+(((ci[1]||1)*100).toFixed(1))+'%]</div>'+
+          '<div class="posterior-bar-track"><div class="posterior-bar-fill" style="width:'+(mean*100).toFixed(1)+'%"></div></div>'+
+          '</div>';
+      }).join('');
+  }catch(e){document.getElementById('posterior-grid').innerHTML='<div class="an-empty" style="grid-column:1/-1">Could not load bandit state.</div>';}
+}
+
+async function refreshAll(btn){
+  if(btn){btn.textContent='↻ …';btn.disabled=true;}
+  await Promise.all([loadFunnel(),loadLedger(),loadBandit()]);
+  if(btn){btn.textContent='↻ Refresh';btn.disabled=false;}
+}
+refreshAll();
+setInterval(function(){loadFunnel();loadLedger();},15000);
+</script>
+</body>
+</html>

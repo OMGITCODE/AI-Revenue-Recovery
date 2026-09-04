@@ -148,6 +148,7 @@ from starlette.requests import Request as StarletteRequest
 # Exact read-only public endpoints exempt from API Key authentication when RECOVERIQ_API_KEY is configured
 PUBLIC_EXACT_PATHS = {
     "/",
+    "/analytics",
     "/api/health",
     "/api/stats",
     "/api/scenarios",
@@ -254,6 +255,13 @@ app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard():
     html = (DASHBOARD / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(html, headers={"Content-Type": "text/html; charset=utf-8"})
+
+
+@app.get("/analytics", response_class=HTMLResponse, include_in_schema=False)
+async def analytics():
+    """Standalone Analytics page — Recovery funnel, intervention performance, audit trail, bandit posterior."""
+    html = (DASHBOARD / "analytics.html").read_text(encoding="utf-8")
     return HTMLResponse(html, headers={"Content-Type": "text/html; charset=utf-8"})
 
 
