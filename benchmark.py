@@ -322,8 +322,12 @@ def run_single_benchmark(
     """Run one full benchmark pass with a fixed random seed for reproducibility.
 
     Each trial resets the bandit to its initial domain-informed priors, then
-    performs an online Bayesian update after every simulated AI event, making
-    the benchmark genuinely test contextual Thompson Sampling with online learning.
+    performs a posterior tracking update after every simulated AI event within each trial.
+    The benchmark demonstrates contextual Thompson Sampling policy selection with
+    domain-informed Beta priors. Within a 60-event trajectory, posterior shifts are
+    modest; the primary driver of arm selection is the domain-calibrated prior, not
+    learned feedback. The update() calls are included for architectural completeness
+    and to reflect the production system's online update capability.
     """
     rng = random.Random(seed)
 
@@ -353,7 +357,7 @@ def run_single_benchmark(
         else:
             base_res.failed_events += 1
 
-        # 2. Run AI Agent (probabilistic + online learning)
+        # 2. Run AI Agent (probabilistic, contextual Thompson Sampling policy selection)
         a_out = simulate_ai_agent_on_event(ev, rng, conversion_rates=conversion_rates)
 
         # Independent compliance check (post-hoc validator — not circular)
@@ -374,8 +378,9 @@ def run_single_benchmark(
         else:
             ai_res.failed_events += 1
 
-        # Bayesian online update: update bandit posterior from simulated outcome
-        # This makes each run a genuine learning trajectory, not fixed-prior sampling.
+        # Posterior tracking update: records simulated outcome into bandit state.
+        # Note: within a 60-event trajectory the prior dominates; this reflects the
+        # production system's Bayesian update capability, not a proof of learned uplift.
         if ai_action not in ("blocked_by_guardrails", "escalation", None):
             from src.agent.bandit import get_context_key
             failure_cat = ev.get("failure_category") or ev.get("failure_code", "U30")
