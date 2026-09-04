@@ -570,7 +570,7 @@ def print_comparison(base: PolicyResult, ai: PolicyResult, sensitivity: Optional
         ("Total Revenue at Stake",        f"₹{base.total_at_stake:,.0f}",           f"₹{ai.total_at_stake:,.0f}", "—"),
         (f"Revenue Recovered (n={n_runs})", base_rec_str,                           ai_rec_str,             f"+₹{ai_rec_mean - base_rec_mean:,.0f} mean"),
         (f"Recovery Rate (n={n_runs})",   base_rate_str,                          ai_rate_str,            f"+{ai_rate_mean - base_rate_mean:.1f}% pts mean"),
-        ("Compliance Violations",         f"{base.compliance_violations}",           f"{ai.compliance_violations}", f"-{base.compliance_violations} (100% compliant)"),
+        ("Compliance Violations",         f"{base.compliance_violations}",           f"{ai.compliance_violations}", f"-{base.compliance_violations} (0 simulated violations)"),
         ("Total Retries Attempted",       f"{base.retries_fired} (blind)",           f"{ai.retries_fired}",  f"-{base.retries_fired - ai.retries_fired} (efficient)"),
         ("Intervention Channel Costs",    f"₹{base.channel_costs:,.2f}",            f"₹{ai.channel_costs:,.2f}", f"₹{ai.channel_costs - base.channel_costs:+,.2f}"),
         (f"Net ROI (n={n_runs})",         base_roi_str,                           ai_roi_str,             f"+₹{delta_roi_mean:,.0f} mean uplift"),
@@ -637,7 +637,7 @@ def generate_markdown_table(base: PolicyResult, ai: PolicyResult) -> str:
 | **Recovery Rate** *(mean ± std, n={n_runs})* | {base_rate_mean:.1f}% | **{ai_rate_mean:.1f}% ± {ai_rate_std:.1f}%** | **+{rate_uplift:.1f}% pts** |
 | **BT01/BT02 Mandate Renewal** | 0% (blind retry fails) | ~68% (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | ~88% (1st–7th IST + Setu AA) | +74 pts |
-| **Compliance Violations (RBI/DND)** | {base.compliance_violations} | **0 (100% compliant)** | **-{base.compliance_violations} eliminated** |
+| **Compliance Violations (RBI/DND)** | {base.compliance_violations} | **0 simulated violations** | **-{base.compliance_violations} eliminated** |
 | **Total Retries Fired** | {base.retries_fired} (blind flood) | **{ai.retries_fired} (targeted)** | **-{base.retries_fired - ai.retries_fired} wasted** |
 | **Net ROI** *(mean ± std, n={n_runs})* | **₹{base_roi_mean:,.0f}** | **₹{ai_roi_mean:,.0f} ± ₹{ai_roi_std:,.0f}** | **+₹{delta_roi:,.0f} mean uplift** |
 """

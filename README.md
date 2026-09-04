@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)]()
 [![LLM Support](https://img.shields.io/badge/LLM-Google%20Gemini%20%7C%20OpenAI-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-100%25%20Compliant-success.svg)]()
+[![Compliance](https://img.shields.io/badge/RBI%20%2F%20TRAI-Guardrails%20Implemented-blue.svg)]()
 
 ---
 
@@ -34,7 +34,7 @@ Outcomes are **probabilistic**, evaluated under modeled conversion assumptions i
 | **Recovery Rate** *(mean ± std, n=50)* | 16.9% ± 3.8% | **54.7% ± 6.6%** | **+37.8% pts mean** |
 | **BT01/BT02 Mandate Renewal** | 0% (blind retry fails) | **~68%** (WhatsApp magic link) | +68 pts |
 | **U30 Salary-Window Retry** | ~14% (month-end blind) | **~88%** (1st–7th IST + Setu AA) | +74 pts |
-| **Compliance Violations (RBI/DND)** | 7 (silent retries + DND breaches) | **0 (100% compliant)** | **-7 eliminated** |
+| **Compliance Violations (RBI/DND)** | 7 (silent retries + DND breaches) | **0 simulated violations** | **-7 eliminated** |
 | **Total Retries Fired** | 180 (blind flood) | **20 (salary-targeted)** | **-160 wasted retries** |
 | **Net ROI** *(mean ± std, n=50)* | **₹88,973 ± ₹43,728** | **₹281,768 ± ₹77,164** | **+₹192,795 mean uplift** |
 
